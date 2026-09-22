@@ -1,11 +1,14 @@
+use crate::addressing::NatTable;
 use crate::domain::{Project, TopologyHistory};
 use crate::simulation::SimulationEngine;
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 pub struct AppState {
     pub project: Mutex<Project>,
     pub simulation: Mutex<SimulationEngine>,
     pub history: Mutex<TopologyHistory>,
+    pub nat_tables: Mutex<HashMap<String, NatTable>>,
 }
 
 impl Default for AppState {
@@ -23,6 +26,7 @@ impl AppState {
             project: Mutex::new(initial_project),
             simulation: Mutex::new(initial_sim),
             history: Mutex::new(TopologyHistory::new(50)),
+            nat_tables: Mutex::new(HashMap::new()),
         }
     }
 }

@@ -1,5 +1,7 @@
 import {
   Network,
+  Route,
+  Hash,
   PlayCircle,
   Binary,
   BarChart3,
@@ -11,6 +13,8 @@ import { cn } from '../../lib/utils';
 
 export type ActiveTab =
   | 'topology'
+  | 'routing'
+  | 'addressing'
   | 'simulation'
   | 'algorithms'
   | 'qos'
@@ -28,6 +32,8 @@ import type { ComponentType } from 'react';
 export const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
   const navItems: { id: ActiveTab; label: string; icon: ComponentType<{ className?: string }> }[] = [
     { id: 'topology', label: 'Topology Canvas', icon: Network },
+    { id: 'routing', label: 'Routing Studio', icon: Route },
+    { id: 'addressing', label: 'Addressing & NAT', icon: Hash },
     { id: 'simulation', label: 'Simulation & Events', icon: PlayCircle },
     { id: 'algorithms', label: 'Algorithm Studio', icon: Binary },
     { id: 'qos', label: 'QoS Performance', icon: BarChart3 },

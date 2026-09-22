@@ -1258,3 +1258,1210 @@ fn test_phase3_full_acceptance_workflow_18_steps() {
     // Step 18: State consistency
     assert_eq!(proj.nodes.len(), 3);
 }
+
+#[test]
+fn test_routing_dijkstra_linear_and_diamond_topology() {
+    use crate::routing::{compute_dijkstra_shortest_paths, MetricType, RoutingGraph};
+
+    let mut proj = Project::new("Diamond Routing".to_string());
+    let r1 = Node::new(
+        "r1".into(),
+        "Router 1".into(),
+        NodeType::Router,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let r2 = Node::new(
+        "r2".into(),
+        "Router 2".into(),
+        NodeType::Router,
+        Position { x: 100.0, y: -50.0 },
+    );
+    let r3 = Node::new(
+        "r3".into(),
+        "Router 3".into(),
+        NodeType::Router,
+        Position { x: 100.0, y: 50.0 },
+    );
+    let r4 = Node::new(
+        "r4".into(),
+        "Router 4".into(),
+        NodeType::Router,
+        Position { x: 200.0, y: 0.0 },
+    );
+
+    proj.nodes = vec![r1, r2, r3, r4];
+
+    // R1 - R2 (cost 10 us delay)
+    let mut l1 = Link::new(
+        "l1".into(),
+        LinkEndpoint {
+            node_id: "r1".into(),
+            interface_id: "eth0".into(),
+        },
+        LinkEndpoint {
+            node_id: "r2".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    l1.propagation_delay_us = 10;
+
+    // R1 - R3 (cost 30 us delay)
+    let mut l2 = Link::new(
+        "l2".into(),
+        LinkEndpoint {
+            node_id: "r1".into(),
+            interface_id: "eth1".into(),
+        },
+        LinkEndpoint {
+            node_id: "r3".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    l2.propagation_delay_us = 30;
+
+    // R2 - R4 (cost 30 us delay) -> Total R1-R2-R4 = 40
+    let mut l3 = Link::new(
+        "l3".into(),
+        LinkEndpoint {
+            node_id: "r2".into(),
+            interface_id: "eth1".into(),
+        },
+        LinkEndpoint {
+            node_id: "r4".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    l3.propagation_delay_us = 30;
+
+    // R3 - R4 (cost 5 us delay) -> Total R1-R3-R4 = 35 (SHORTEST!)
+    let mut l4 = Link::new(
+        "l4".into(),
+        LinkEndpoint {
+            node_id: "r3".into(),
+            interface_id: "eth1".into(),
+        },
+        LinkEndpoint {
+            node_id: "r4".into(),
+            interface_id: "eth1".into(),
+        },
+    );
+    l4.propagation_delay_us = 5;
+
+    proj.links = vec![l1, l2, l3, l4];
+
+    let graph = RoutingGraph::from_project(&proj, MetricType::PropagationDelay);
+    let table = compute_dijkstra_shortest_paths(&graph, "r1").expect("Dijkstra failed");
+
+    // Route to R4 should be via R3 with metric 35
+    let r4_entry = table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r4")
+        .unwrap();
+    assert_eq!(r4_entry.metric, 35);
+    assert_eq!(r4_entry.next_hop.as_deref(), Some("r3"));
+    assert_eq!(r4_entry.path, vec!["r1", "r3", "r4"]);
+    assert_eq!(r4_entry.interface_id.as_deref(), Some("eth1"));
+
+    // Route to R2 should be direct with metric 10
+    let r2_entry = table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r2")
+        .unwrap();
+    assert_eq!(r2_entry.metric, 10);
+    assert_eq!(r2_entry.next_hop.as_deref(), Some("r2"));
+    assert_eq!(r2_entry.path, vec!["r1", "r2"]);
+    assert_eq!(r2_entry.interface_id.as_deref(), Some("eth0"));
+}
+
+#[test]
+fn test_routing_bidirectional_links_default() {
+    use crate::routing::{compute_dijkstra_shortest_paths, MetricType, RoutingGraph};
+
+    let mut proj = Project::new("Bidirectional Test".to_string());
+    let r1 = Node::new(
+        "r1".into(),
+        "Router 1".into(),
+        NodeType::Router,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let r2 = Node::new(
+        "r2".into(),
+        "Router 2".into(),
+        NodeType::Router,
+        Position { x: 100.0, y: 0.0 },
+    );
+    proj.nodes = vec![r1, r2];
+
+    let mut link = Link::new(
+        "l1".into(),
+        LinkEndpoint {
+            node_id: "r1".into(),
+            interface_id: "eth0".into(),
+        },
+        LinkEndpoint {
+            node_id: "r2".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    link.propagation_delay_us = 25;
+    proj.links = vec![link];
+
+    let graph = RoutingGraph::from_project(&proj, MetricType::PropagationDelay);
+
+    // Edge R1 -> R2
+    let t1 = compute_dijkstra_shortest_paths(&graph, "r1").unwrap();
+    let e1 = t1.entries.iter().find(|e| e.destination == "r2").unwrap();
+    assert_eq!(e1.metric, 25);
+    assert_eq!(e1.next_hop.as_deref(), Some("r2"));
+
+    // Edge R2 -> R1 (verified bidirectional from single link)
+    let t2 = compute_dijkstra_shortest_paths(&graph, "r2").unwrap();
+    let e2 = t2.entries.iter().find(|e| e.destination == "r1").unwrap();
+    assert_eq!(e2.metric, 25);
+    assert_eq!(e2.next_hop.as_deref(), Some("r1"));
+}
+
+#[test]
+fn test_routing_link_status_and_degraded_penalty() {
+    use crate::routing::{compute_dijkstra_shortest_paths, MetricType, RoutingGraph};
+
+    let mut proj = Project::new("Degraded Penalty Test".to_string());
+    let r1 = Node::new(
+        "r1".into(),
+        "Router 1".into(),
+        NodeType::Router,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let r2 = Node::new(
+        "r2".into(),
+        "Router 2".into(),
+        NodeType::Router,
+        Position { x: 100.0, y: 0.0 },
+    );
+    let r3 = Node::new(
+        "r3".into(),
+        "Router 3".into(),
+        NodeType::Router,
+        Position { x: 200.0, y: 0.0 },
+    );
+    proj.nodes = vec![r1, r2, r3];
+
+    // Link 1: Up, delay 20
+    let mut l1 = Link::new(
+        "l1".into(),
+        LinkEndpoint {
+            node_id: "r1".into(),
+            interface_id: "eth0".into(),
+        },
+        LinkEndpoint {
+            node_id: "r2".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    l1.propagation_delay_us = 20;
+    l1.status = LinkStatus::Up;
+
+    // Link 2: Degraded, delay 20 -> penalty = (20 * 3).max(20 + 50) = 70
+    let mut l2 = Link::new(
+        "l2".into(),
+        LinkEndpoint {
+            node_id: "r2".into(),
+            interface_id: "eth1".into(),
+        },
+        LinkEndpoint {
+            node_id: "r3".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    l2.propagation_delay_us = 20;
+    l2.status = LinkStatus::Degraded;
+
+    proj.links = vec![l1, l2];
+
+    let graph = RoutingGraph::from_project(&proj, MetricType::PropagationDelay);
+    let table = compute_dijkstra_shortest_paths(&graph, "r1").unwrap();
+
+    let r2_entry = table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r2")
+        .unwrap();
+    assert_eq!(r2_entry.metric, 20); // Normal
+
+    let r3_entry = table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r3")
+        .unwrap();
+    assert_eq!(r3_entry.metric, 20 + 70); // 20 + 70 = 90
+    assert!(r3_entry.is_reachable);
+
+    // Now set Link 2 to Down: r3 must become unreachable
+    proj.links[1].status = LinkStatus::Down;
+    let graph_down = RoutingGraph::from_project(&proj, MetricType::PropagationDelay);
+    let table_down = compute_dijkstra_shortest_paths(&graph_down, "r1").unwrap();
+    let r3_down = table_down
+        .entries
+        .iter()
+        .find(|e| e.destination == "r3")
+        .unwrap();
+    assert!(!r3_down.is_reachable);
+    assert_eq!(r3_down.metric, u64::MAX);
+}
+
+#[test]
+fn test_l3_transit_1_router_can_act_as_l3_transit() {
+    use crate::routing::{
+        compute_bellman_ford_shortest_paths, compute_dijkstra_shortest_paths, MetricType,
+        RoutingGraph,
+    };
+
+    // R1 <-> R2 <-> R3 where all are Routers
+    let mut proj = Project::new("Router Transit Test".to_string());
+    let r1 = Node::new(
+        "r1".into(),
+        "Router 1".into(),
+        NodeType::Router,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let r2 = Node::new(
+        "r2".into(),
+        "Router 2".into(),
+        NodeType::Router,
+        Position { x: 100.0, y: 0.0 },
+    );
+    let r3 = Node::new(
+        "r3".into(),
+        "Router 3".into(),
+        NodeType::Router,
+        Position { x: 200.0, y: 0.0 },
+    );
+    proj.nodes = vec![r1, r2, r3];
+
+    let l1 = Link::new(
+        "l1".into(),
+        LinkEndpoint {
+            node_id: "r1".into(),
+            interface_id: "eth0".into(),
+        },
+        LinkEndpoint {
+            node_id: "r2".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    let l2 = Link::new(
+        "l2".into(),
+        LinkEndpoint {
+            node_id: "r2".into(),
+            interface_id: "eth1".into(),
+        },
+        LinkEndpoint {
+            node_id: "r3".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    proj.links = vec![l1, l2];
+
+    let graph = RoutingGraph::from_project(&proj, MetricType::HopCount);
+
+    // Dijkstra verification: R2 acts as transit hop to R3
+    let dijkstra_table = compute_dijkstra_shortest_paths(&graph, "r1").unwrap();
+    let r3_dijkstra = dijkstra_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r3")
+        .unwrap();
+    assert!(r3_dijkstra.is_reachable);
+    assert_eq!(r3_dijkstra.metric, 2);
+    assert_eq!(r3_dijkstra.next_hop.as_deref(), Some("r2"));
+    assert_eq!(r3_dijkstra.path, vec!["r1", "r2", "r3"]);
+
+    // Bellman-Ford verification: R2 acts as transit hop to R3
+    let bf_table = compute_bellman_ford_shortest_paths(&graph, "r1").unwrap();
+    let r3_bf = bf_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r3")
+        .unwrap();
+    assert!(r3_bf.is_reachable);
+    assert_eq!(r3_bf.metric, 2);
+    assert_eq!(r3_bf.next_hop.as_deref(), Some("r2"));
+}
+
+#[test]
+fn test_l3_transit_2_pc_cannot_act_as_l3_transit() {
+    use crate::routing::{
+        compute_bellman_ford_shortest_paths, compute_dijkstra_shortest_paths, MetricType,
+        RoutingGraph,
+    };
+
+    // R1 <-> PC1 <-> R2 where PC1 is a PC end-device
+    let mut proj = Project::new("PC Non-transit Test".to_string());
+    let r1 = Node::new(
+        "r1".into(),
+        "Router 1".into(),
+        NodeType::Router,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let pc1 = Node::new(
+        "pc1".into(),
+        "PC 1".into(),
+        NodeType::Pc,
+        Position { x: 100.0, y: 0.0 },
+    );
+    let r2 = Node::new(
+        "r2".into(),
+        "Router 2".into(),
+        NodeType::Router,
+        Position { x: 200.0, y: 0.0 },
+    );
+    proj.nodes = vec![r1, pc1, r2];
+
+    let l1 = Link::new(
+        "l1".into(),
+        LinkEndpoint {
+            node_id: "r1".into(),
+            interface_id: "eth0".into(),
+        },
+        LinkEndpoint {
+            node_id: "pc1".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    let l2 = Link::new(
+        "l2".into(),
+        LinkEndpoint {
+            node_id: "pc1".into(),
+            interface_id: "eth1".into(),
+        },
+        LinkEndpoint {
+            node_id: "r2".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    proj.links = vec![l1, l2];
+
+    let graph = RoutingGraph::from_project(&proj, MetricType::HopCount);
+    assert!(!graph.is_l3_transit_capable("pc1"));
+
+    // Dijkstra: PC1 is reachable (1 hop), but R2 is unreachable through PC1
+    let d_table = compute_dijkstra_shortest_paths(&graph, "r1").unwrap();
+    let pc_entry = d_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "pc1")
+        .unwrap();
+    assert!(pc_entry.is_reachable);
+    let r2_entry = d_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r2")
+        .unwrap();
+    assert!(!r2_entry.is_reachable);
+    assert_eq!(r2_entry.metric, u64::MAX);
+
+    // Bellman-Ford: R2 is unreachable through PC1
+    let bf_table = compute_bellman_ford_shortest_paths(&graph, "r1").unwrap();
+    let r2_bf = bf_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r2")
+        .unwrap();
+    assert!(!r2_bf.is_reachable);
+    assert_eq!(r2_bf.metric, u64::MAX);
+}
+
+#[test]
+fn test_l3_transit_3_server_cannot_act_as_l3_transit() {
+    use crate::routing::{
+        compute_bellman_ford_shortest_paths, compute_dijkstra_shortest_paths, MetricType,
+        RoutingGraph,
+    };
+
+    // R1 <-> SRV1 <-> R2 where SRV1 is a Server end-device
+    let mut proj = Project::new("Server Non-transit Test".to_string());
+    let r1 = Node::new(
+        "r1".into(),
+        "Router 1".into(),
+        NodeType::Router,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let srv1 = Node::new(
+        "srv1".into(),
+        "Server 1".into(),
+        NodeType::Server,
+        Position { x: 100.0, y: 0.0 },
+    );
+    let r2 = Node::new(
+        "r2".into(),
+        "Router 2".into(),
+        NodeType::Router,
+        Position { x: 200.0, y: 0.0 },
+    );
+    proj.nodes = vec![r1, srv1, r2];
+
+    let l1 = Link::new(
+        "l1".into(),
+        LinkEndpoint {
+            node_id: "r1".into(),
+            interface_id: "eth0".into(),
+        },
+        LinkEndpoint {
+            node_id: "srv1".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    let l2 = Link::new(
+        "l2".into(),
+        LinkEndpoint {
+            node_id: "srv1".into(),
+            interface_id: "eth1".into(),
+        },
+        LinkEndpoint {
+            node_id: "r2".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    proj.links = vec![l1, l2];
+
+    let graph = RoutingGraph::from_project(&proj, MetricType::HopCount);
+    assert!(!graph.is_l3_transit_capable("srv1"));
+
+    // Dijkstra: SRV1 reachable, R2 unreachable
+    let d_table = compute_dijkstra_shortest_paths(&graph, "r1").unwrap();
+    assert!(
+        d_table
+            .entries
+            .iter()
+            .find(|e| e.destination == "srv1")
+            .unwrap()
+            .is_reachable
+    );
+    let r2_entry = d_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r2")
+        .unwrap();
+    assert!(!r2_entry.is_reachable);
+    assert_eq!(r2_entry.metric, u64::MAX);
+
+    // Bellman-Ford: R2 unreachable
+    let bf_table = compute_bellman_ford_shortest_paths(&graph, "r1").unwrap();
+    let r2_bf = bf_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r2")
+        .unwrap();
+    assert!(!r2_bf.is_reachable);
+    assert_eq!(r2_bf.metric, u64::MAX);
+}
+
+#[test]
+fn test_l3_transit_4_generic_host_cannot_act_as_l3_transit() {
+    use crate::routing::{
+        compute_bellman_ford_shortest_paths, compute_dijkstra_shortest_paths, MetricType,
+        RoutingGraph,
+    };
+
+    // R1 <-> GEN1 <-> R2 where GEN1 is a Generic host
+    let mut proj = Project::new("Generic Non-transit Test".to_string());
+    let r1 = Node::new(
+        "r1".into(),
+        "Router 1".into(),
+        NodeType::Router,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let gen1 = Node::new(
+        "gen1".into(),
+        "Generic 1".into(),
+        NodeType::Generic,
+        Position { x: 100.0, y: 0.0 },
+    );
+    let r2 = Node::new(
+        "r2".into(),
+        "Router 2".into(),
+        NodeType::Router,
+        Position { x: 200.0, y: 0.0 },
+    );
+    proj.nodes = vec![r1, gen1, r2];
+
+    let l1 = Link::new(
+        "l1".into(),
+        LinkEndpoint {
+            node_id: "r1".into(),
+            interface_id: "eth0".into(),
+        },
+        LinkEndpoint {
+            node_id: "gen1".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    let l2 = Link::new(
+        "l2".into(),
+        LinkEndpoint {
+            node_id: "gen1".into(),
+            interface_id: "eth1".into(),
+        },
+        LinkEndpoint {
+            node_id: "r2".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    proj.links = vec![l1, l2];
+
+    let graph = RoutingGraph::from_project(&proj, MetricType::HopCount);
+    assert!(!graph.is_l3_transit_capable("gen1"));
+
+    let d_table = compute_dijkstra_shortest_paths(&graph, "r1").unwrap();
+    assert!(
+        d_table
+            .entries
+            .iter()
+            .find(|e| e.destination == "gen1")
+            .unwrap()
+            .is_reachable
+    );
+    let r2_entry = d_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r2")
+        .unwrap();
+    assert!(!r2_entry.is_reachable);
+    assert_eq!(r2_entry.metric, u64::MAX);
+
+    let bf_table = compute_bellman_ford_shortest_paths(&graph, "r1").unwrap();
+    let r2_bf = bf_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r2")
+        .unwrap();
+    assert!(!r2_bf.is_reachable);
+    assert_eq!(r2_bf.metric, u64::MAX);
+}
+
+#[test]
+fn test_l3_transit_5_normal_switch_cannot_act_as_l3_transit() {
+    use crate::routing::{
+        compute_bellman_ford_shortest_paths, compute_dijkstra_shortest_paths, MetricType,
+        RoutingGraph,
+    };
+
+    // R1 <-> SW1 <-> R2 where SW1 is a normal Layer 2 Switch
+    let mut proj = Project::new("Switch Non-transit Test".to_string());
+    let r1 = Node::new(
+        "r1".into(),
+        "Router 1".into(),
+        NodeType::Router,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let sw1 = Node::new(
+        "sw1".into(),
+        "Switch 1".into(),
+        NodeType::Switch,
+        Position { x: 100.0, y: 0.0 },
+    );
+    let r2 = Node::new(
+        "r2".into(),
+        "Router 2".into(),
+        NodeType::Router,
+        Position { x: 200.0, y: 0.0 },
+    );
+    proj.nodes = vec![r1, sw1, r2];
+
+    let l1 = Link::new(
+        "l1".into(),
+        LinkEndpoint {
+            node_id: "r1".into(),
+            interface_id: "eth0".into(),
+        },
+        LinkEndpoint {
+            node_id: "sw1".into(),
+            interface_id: "port1".into(),
+        },
+    );
+    let l2 = Link::new(
+        "l2".into(),
+        LinkEndpoint {
+            node_id: "sw1".into(),
+            interface_id: "port2".into(),
+        },
+        LinkEndpoint {
+            node_id: "r2".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    proj.links = vec![l1, l2];
+
+    let graph = RoutingGraph::from_project(&proj, MetricType::HopCount);
+    // Switch is not an L3 transit router by default
+    assert!(!graph.is_l3_transit_capable("sw1"));
+
+    // In Dijkstra: R1 can connect to SW1 directly as an adjacent node in topology,
+    // but SW1 cannot act as an L3 transit router to reach R2.
+    let d_table = compute_dijkstra_shortest_paths(&graph, "r1").unwrap();
+    let sw_entry = d_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "sw1")
+        .unwrap();
+    assert!(sw_entry.is_reachable);
+    let r2_entry = d_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r2")
+        .unwrap();
+    assert!(!r2_entry.is_reachable);
+    assert_eq!(r2_entry.metric, u64::MAX);
+
+    // In Bellman-Ford: SW1 cannot forward transit routes to R2
+    let bf_table = compute_bellman_ford_shortest_paths(&graph, "r1").unwrap();
+    let r2_bf = bf_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r2")
+        .unwrap();
+    assert!(!r2_bf.is_reachable);
+    assert_eq!(r2_bf.metric, u64::MAX);
+}
+
+#[test]
+fn test_l3_transit_6_access_point_cannot_act_as_l3_transit() {
+    use crate::routing::{
+        compute_bellman_ford_shortest_paths, compute_dijkstra_shortest_paths, MetricType,
+        RoutingGraph,
+    };
+
+    // R1 <-> AP1 <-> R2 where AP1 is an AccessPoint
+    let mut proj = Project::new("AP Non-transit Test".to_string());
+    let r1 = Node::new(
+        "r1".into(),
+        "Router 1".into(),
+        NodeType::Router,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let ap1 = Node::new(
+        "ap1".into(),
+        "AP 1".into(),
+        NodeType::AccessPoint,
+        Position { x: 100.0, y: 0.0 },
+    );
+    let r2 = Node::new(
+        "r2".into(),
+        "Router 2".into(),
+        NodeType::Router,
+        Position { x: 200.0, y: 0.0 },
+    );
+    proj.nodes = vec![r1, ap1, r2];
+
+    let l1 = Link::new(
+        "l1".into(),
+        LinkEndpoint {
+            node_id: "r1".into(),
+            interface_id: "eth0".into(),
+        },
+        LinkEndpoint {
+            node_id: "ap1".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    let l2 = Link::new(
+        "l2".into(),
+        LinkEndpoint {
+            node_id: "ap1".into(),
+            interface_id: "wlan0".into(),
+        },
+        LinkEndpoint {
+            node_id: "r2".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    proj.links = vec![l1, l2];
+
+    let graph = RoutingGraph::from_project(&proj, MetricType::HopCount);
+    // AccessPoint is not an L3 transit router by default
+    assert!(!graph.is_l3_transit_capable("ap1"));
+
+    let d_table = compute_dijkstra_shortest_paths(&graph, "r1").unwrap();
+    assert!(
+        d_table
+            .entries
+            .iter()
+            .find(|e| e.destination == "ap1")
+            .unwrap()
+            .is_reachable
+    );
+    let r2_entry = d_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r2")
+        .unwrap();
+    assert!(!r2_entry.is_reachable);
+    assert_eq!(r2_entry.metric, u64::MAX);
+
+    let bf_table = compute_bellman_ford_shortest_paths(&graph, "r1").unwrap();
+    let r2_bf = bf_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r2")
+        .unwrap();
+    assert!(!r2_bf.is_reachable);
+    assert_eq!(r2_bf.metric, u64::MAX);
+}
+
+#[test]
+fn test_l2_switch_route_handling_and_no_l3_routing_table_generation() {
+    use crate::routing::{
+        compute_bellman_ford_shortest_paths, compute_dijkstra_shortest_paths,
+        simulate_distance_vector_convergence, MetricType, RoutingGraph,
+    };
+
+    // Topology: R1 (Router) <-> SW1 (pure L2 Switch)
+    let mut proj = Project::new("L2 Switch Scope Test".to_string());
+    let r1 = Node::new(
+        "r1".into(),
+        "Router 1".into(),
+        NodeType::Router,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let sw1 = Node::new(
+        "sw1".into(),
+        "Switch 1".into(),
+        NodeType::Switch,
+        Position { x: 100.0, y: 0.0 },
+    );
+    proj.nodes = vec![r1, sw1];
+
+    let l1 = Link::new(
+        "l1".into(),
+        LinkEndpoint {
+            node_id: "r1".into(),
+            interface_id: "eth0".into(),
+        },
+        LinkEndpoint {
+            node_id: "sw1".into(),
+            interface_id: "port1".into(),
+        },
+    );
+    proj.links = vec![l1];
+
+    let graph = RoutingGraph::from_project(&proj, MetricType::HopCount);
+
+    // 1. Physical topology model contains SW1 as a connectivity node
+    assert!(graph.nodes.contains_key("sw1"));
+    assert_eq!(graph.adjacency.get("sw1").unwrap().len(), 1);
+    assert_eq!(graph.adjacency.get("r1").unwrap().len(), 1);
+
+    // 2. Device capability checks
+    assert!(!graph.is_routing_device("sw1"));
+    assert!(!graph.is_l3_transit_capable("sw1"));
+    assert!(graph.is_routing_device("r1"));
+    assert!(graph.is_l3_transit_capable("r1"));
+
+    // 3. Router R1 can compute route to SW1
+    let r1_table = compute_dijkstra_shortest_paths(&graph, "r1").unwrap();
+    let sw_entry = r1_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "sw1")
+        .unwrap();
+    assert!(sw_entry.is_reachable);
+    assert_eq!(sw_entry.metric, 1);
+    assert_eq!(sw_entry.next_hop.as_deref(), Some("sw1"));
+
+    // 4. Pure L2 Switch must NOT receive an L3 routing table (rejected with InvalidConfiguration)
+    let d_res = compute_dijkstra_shortest_paths(&graph, "sw1");
+    match d_res {
+        Err(NetSimError::InvalidConfiguration(msg)) => {
+            assert!(msg.contains("not an L3 routing device"));
+        }
+        other => panic!(
+            "Expected InvalidConfiguration error for switch L3 routing table, got {:?}",
+            other
+        ),
+    }
+
+    let bf_res = compute_bellman_ford_shortest_paths(&graph, "sw1");
+    match bf_res {
+        Err(NetSimError::InvalidConfiguration(msg)) => {
+            assert!(msg.contains("not an L3 routing device"));
+        }
+        other => panic!(
+            "Expected InvalidConfiguration error for switch L3 routing table, got {:?}",
+            other
+        ),
+    }
+
+    let dv_res = simulate_distance_vector_convergence(&graph, "sw1");
+    match dv_res {
+        Err(NetSimError::InvalidConfiguration(msg)) => {
+            assert!(msg.contains("not an L3 routing device"));
+        }
+        other => panic!(
+            "Expected InvalidConfiguration error for switch L3 routing convergence, got {:?}",
+            other
+        ),
+    }
+}
+
+#[test]
+fn test_routing_inverse_bandwidth_metric_formula() {
+    use crate::routing::{MetricType, RoutingGraph};
+
+    let mut proj = Project::new("InvBW Test".to_string());
+    let r1 = Node::new(
+        "r1".into(),
+        "R1".into(),
+        NodeType::Router,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let r2 = Node::new(
+        "r2".into(),
+        "R2".into(),
+        NodeType::Router,
+        Position { x: 100.0, y: 0.0 },
+    );
+    proj.nodes = vec![r1, r2];
+
+    // Case 1: 10 Gbps (10_000_000_000 bps) -> Ceil(1G / 10G) = 1, min 1 -> must be 1 (never zero!)
+    let mut link = Link::new(
+        "l1".into(),
+        LinkEndpoint {
+            node_id: "r1".into(),
+            interface_id: "eth0".into(),
+        },
+        LinkEndpoint {
+            node_id: "r2".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    link.bandwidth_bps = 10_000_000_000;
+    proj.links = vec![link];
+
+    let graph = RoutingGraph::from_project(&proj, MetricType::InverseBandwidth);
+    let edge = &graph.adjacency.get("r1").unwrap()[0];
+    assert_eq!(edge.metric, 1);
+
+    // Case 2: 100 Mbps (100_000_000 bps) -> Ceil(1G / 100M) = 10
+    proj.links[0].bandwidth_bps = 100_000_000;
+    let graph2 = RoutingGraph::from_project(&proj, MetricType::InverseBandwidth);
+    let edge2 = &graph2.adjacency.get("r1").unwrap()[0];
+    assert_eq!(edge2.metric, 10);
+}
+
+#[test]
+fn test_routing_bellman_ford_convergence_telemetry() {
+    use crate::routing::{simulate_distance_vector_convergence, MetricType, RoutingGraph};
+
+    let mut proj = Project::new("BF Convergence".to_string());
+    let r1 = Node::new(
+        "r1".into(),
+        "R1".into(),
+        NodeType::Router,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let r2 = Node::new(
+        "r2".into(),
+        "R2".into(),
+        NodeType::Router,
+        Position { x: 100.0, y: 0.0 },
+    );
+    let r3 = Node::new(
+        "r3".into(),
+        "R3".into(),
+        NodeType::Router,
+        Position { x: 200.0, y: 0.0 },
+    );
+    proj.nodes = vec![r1, r2, r3];
+
+    // R1 - R2 (cost 1 hop)
+    let l1 = Link::new(
+        "l1".into(),
+        LinkEndpoint {
+            node_id: "r1".into(),
+            interface_id: "eth0".into(),
+        },
+        LinkEndpoint {
+            node_id: "r2".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    // R2 - R3 (cost 1 hop)
+    let l2 = Link::new(
+        "l2".into(),
+        LinkEndpoint {
+            node_id: "r2".into(),
+            interface_id: "eth1".into(),
+        },
+        LinkEndpoint {
+            node_id: "r3".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    proj.links = vec![l1, l2];
+
+    let graph = RoutingGraph::from_project(&proj, MetricType::HopCount);
+    let telemetry = simulate_distance_vector_convergence(&graph, "r1").unwrap();
+
+    assert!(telemetry.converged);
+    assert!(telemetry.total_rounds >= 2);
+    assert!(!telemetry.rounds.is_empty());
+
+    // Destination R3 reached with 2 hops via next hop R2
+    let r3_entry = telemetry
+        .final_routing_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r3")
+        .unwrap();
+    assert_eq!(r3_entry.metric, 2);
+    assert_eq!(r3_entry.next_hop.as_deref(), Some("r2"));
+    assert_eq!(r3_entry.path, vec!["r1", "r2", "r3"]);
+}
+
+#[test]
+fn test_ipv4_subnetting_calculations_and_edge_cases() {
+    use crate::addressing::calculate_subnet;
+
+    // Standard /24
+    let sub24 = calculate_subnet("192.168.1.10/24").unwrap();
+    assert_eq!(sub24.network_address, "192.168.1.0");
+    assert_eq!(sub24.broadcast_address, "192.168.1.255");
+    assert_eq!(sub24.first_usable_ip, "192.168.1.1");
+    assert_eq!(sub24.last_usable_ip, "192.168.1.254");
+    assert_eq!(sub24.total_hosts, 256);
+    assert_eq!(sub24.usable_hosts, 254);
+    assert_eq!(sub24.subnet_mask, "255.255.255.0");
+    assert_eq!(sub24.wildcard_mask, "0.0.0.255");
+    assert_eq!(sub24.ip_class, "Class C");
+    assert_eq!(sub24.scope, "Private (RFC 1918 192.168.0.0/16)");
+
+    // Point-to-point /30
+    let sub30 = calculate_subnet("10.0.0.1/30").unwrap();
+    assert_eq!(sub30.network_address, "10.0.0.0");
+    assert_eq!(sub30.broadcast_address, "10.0.0.3");
+    assert_eq!(sub30.first_usable_ip, "10.0.0.1");
+    assert_eq!(sub30.last_usable_ip, "10.0.0.2");
+    assert_eq!(sub30.usable_hosts, 2);
+
+    // RFC 3021 /31 (both are usable host addresses)
+    let sub31 = calculate_subnet("172.16.0.4/31").unwrap();
+    assert_eq!(sub31.total_hosts, 2);
+    assert_eq!(sub31.usable_hosts, 2);
+    assert_eq!(sub31.first_usable_ip, "172.16.0.4");
+    assert_eq!(sub31.last_usable_ip, "172.16.0.5");
+
+    // Single host /32
+    let sub32 = calculate_subnet("8.8.8.8/32").unwrap();
+    assert_eq!(sub32.total_hosts, 1);
+    assert_eq!(sub32.usable_hosts, 1);
+    assert_eq!(sub32.first_usable_ip, "8.8.8.8");
+    assert_eq!(sub32.last_usable_ip, "8.8.8.8");
+    assert_eq!(sub32.scope, "Public Internet");
+
+    // Loopback
+    let sub_loop = calculate_subnet("127.0.0.1/8").unwrap();
+    assert_eq!(sub_loop.scope, "Loopback (127.0.0.0/8)");
+}
+
+#[test]
+fn test_equal_prefix_splitting_vs_true_vlsm() {
+    use crate::addressing::{allocate_vlsm, split_equal_subnets, VlsmSubnetRequirement};
+
+    // Equal-prefix splitting: 192.168.1.0/24 into /26 yields 4 equal subnets
+    let equal_res = split_equal_subnets("192.168.1.0/24", 26).unwrap();
+    assert_eq!(equal_res.subnets_count, 4);
+    assert_eq!(equal_res.subnets[0].network_address, "192.168.1.0");
+    assert_eq!(equal_res.subnets[1].network_address, "192.168.1.64");
+    assert_eq!(equal_res.subnets[2].network_address, "192.168.1.128");
+    assert_eq!(equal_res.subnets[3].network_address, "192.168.1.192");
+
+    // True VLSM allocation: heterogeneous requirements
+    let requirements = vec![
+        VlsmSubnetRequirement {
+            name: "Branch WAN".into(),
+            needed_hosts: 2,
+        },
+        VlsmSubnetRequirement {
+            name: "Sales Dept".into(),
+            needed_hosts: 50,
+        },
+        VlsmSubnetRequirement {
+            name: "Eng Dept".into(),
+            needed_hosts: 100,
+        },
+    ];
+
+    let vlsm_res = allocate_vlsm("10.0.0.0/24", requirements).unwrap();
+    assert_eq!(vlsm_res.subnets.len(), 3);
+
+    // Sorted descending:
+    // 1. Eng Dept (100 hosts) -> /25 (126 usable) at 10.0.0.0/25
+    assert_eq!(vlsm_res.subnets[0].name, "Eng Dept");
+    assert_eq!(vlsm_res.subnets[0].allocated_prefix, 25);
+    assert_eq!(vlsm_res.subnets[0].subnet_info.network_address, "10.0.0.0");
+    assert_eq!(vlsm_res.subnets[0].wasted_hosts, 26);
+
+    // 2. Sales Dept (50 hosts) -> /26 (62 usable) at 10.0.0.128/26
+    assert_eq!(vlsm_res.subnets[1].name, "Sales Dept");
+    assert_eq!(vlsm_res.subnets[1].allocated_prefix, 26);
+    assert_eq!(
+        vlsm_res.subnets[1].subnet_info.network_address,
+        "10.0.0.128"
+    );
+    assert_eq!(vlsm_res.subnets[1].wasted_hosts, 12);
+
+    // 3. Branch WAN (2 hosts) -> /30 (2 usable) at 10.0.0.192/30
+    assert_eq!(vlsm_res.subnets[2].name, "Branch WAN");
+    assert_eq!(vlsm_res.subnets[2].allocated_prefix, 30);
+    assert_eq!(
+        vlsm_res.subnets[2].subnet_info.network_address,
+        "10.0.0.192"
+    );
+    assert_eq!(vlsm_res.subnets[2].wasted_hosts, 0);
+
+    // Overflow check: allocating 300 hosts in /24 must fail
+    let overflow_req = vec![VlsmSubnetRequirement {
+        name: "Too Big".into(),
+        needed_hosts: 300,
+    }];
+    assert!(allocate_vlsm("192.168.1.0/24", overflow_req).is_err());
+}
+
+#[test]
+fn test_duplicate_ip_detection() {
+    use crate::addressing::detect_duplicate_ips;
+
+    let mut proj = Project::new("Conflict Test".to_string());
+    let mut pc1 = Node::new(
+        "pc1".into(),
+        "PC 1".into(),
+        NodeType::Pc,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let mut pc2 = Node::new(
+        "pc2".into(),
+        "PC 2".into(),
+        NodeType::Pc,
+        Position { x: 100.0, y: 0.0 },
+    );
+
+    pc1.interfaces[0].ipv4 = Some("192.168.1.50/24".to_string());
+    pc2.interfaces[0].ipv4 = Some("192.168.1.50".to_string()); // Duplicate!
+
+    proj.nodes = vec![pc1, pc2];
+
+    let conflicts = detect_duplicate_ips(&proj);
+    assert_eq!(conflicts.len(), 1);
+    assert_eq!(conflicts[0].ip, "192.168.1.50");
+    assert_eq!(conflicts[0].occurrences.len(), 2);
+}
+
+#[test]
+fn test_ipv6_parsing_rfc5952_and_scopes() {
+    use crate::addressing::parse_and_validate_ipv6;
+
+    // RFC 5952 canonical compression of longest consecutive zero-hextets
+    let v6_1 = parse_and_validate_ipv6("2001:0db8:0000:0000:0000:0000:0000:0001/64").unwrap();
+    assert_eq!(v6_1.canonical_address, "2001:db8::1");
+    assert_eq!(
+        v6_1.expanded_address,
+        "2001:0db8:0000:0000:0000:0000:0000:0001"
+    );
+    assert_eq!(v6_1.scope, "Global Unicast (2000::/3)");
+
+    // Link-local
+    let v6_ll = parse_and_validate_ipv6("fe80::1ff:fe00:1").unwrap();
+    assert_eq!(v6_ll.scope, "Link-Local Unicast (fe80::/10)");
+
+    // Loopback
+    let v6_loop = parse_and_validate_ipv6("::1").unwrap();
+    assert_eq!(v6_loop.canonical_address, "::1");
+    assert_eq!(v6_loop.scope, "Loopback (::1/128)");
+}
+
+#[test]
+fn test_nat_napt_stateful_forward_and_reverse_translation() {
+    use crate::addressing::{NatMappingType, NatProtocol, NatTable};
+
+    let mut nat = NatTable::new("r1", "198.51.100.1");
+
+    // Static DNAT rule: Forward external port 80 -> 192.168.1.10:8080 (TCP)
+    nat.add_static_dnat_rule(NatProtocol::Tcp, 80, "192.168.1.10", 8080, "Web Server")
+        .unwrap();
+
+    // Outbound packet from PC1: 192.168.1.50:50000 -> 93.184.216.34:443 (TCP)
+    let out_res = nat
+        .translate_outbound(
+            "192.168.1.50",
+            50000,
+            "93.184.216.34",
+            443,
+            NatProtocol::Tcp,
+            1_000_000,
+        )
+        .unwrap();
+    assert!(out_res.created_new_mapping);
+    assert_eq!(out_res.translated_src_ip, "198.51.100.1");
+    assert_eq!(out_res.translated_src_port, 49152); // First dynamic port
+    assert_eq!(out_res.entry.mapping_type, NatMappingType::DynamicSnat);
+
+    // Same socket sends second packet: must reuse existing mapping!
+    let out_res2 = nat
+        .translate_outbound(
+            "192.168.1.50",
+            50000,
+            "93.184.216.34",
+            443,
+            NatProtocol::Tcp,
+            2_000_000,
+        )
+        .unwrap();
+    assert!(!out_res2.created_new_mapping);
+    assert_eq!(out_res2.translated_src_port, 49152);
+
+    // Inbound reverse reply: 93.184.216.34:443 -> 198.51.100.1:49152 (TCP)
+    let in_res = nat
+        .translate_inbound(
+            "93.184.216.34",
+            443,
+            "198.51.100.1",
+            49152,
+            NatProtocol::Tcp,
+            3_000_000,
+        )
+        .unwrap();
+    assert_eq!(in_res.translated_dst_ip, "192.168.1.50");
+    assert_eq!(in_res.translated_dst_port, 50000);
+
+    // Inbound packet to Static DNAT: External -> 198.51.100.1:80 (TCP)
+    let static_res = nat
+        .translate_inbound(
+            "1.2.3.4",
+            34567,
+            "198.51.100.1",
+            80,
+            NatProtocol::Tcp,
+            4_000_000,
+        )
+        .unwrap();
+    assert_eq!(static_res.translated_dst_ip, "192.168.1.10");
+    assert_eq!(static_res.translated_dst_port, 8080);
+
+    // Inbound unmapped packet: must be rejected with RouteUnreachable error
+    assert!(nat
+        .translate_inbound(
+            "1.2.3.4",
+            9999,
+            "198.51.100.1",
+            9999,
+            NatProtocol::Tcp,
+            5_000_000
+        )
+        .is_err());
+
+    // Expiration: advance time past TCP timeout (7200s = 7_200_000_000 us)
+    nat.expire_entries(10_000_000_000);
+    assert_eq!(nat.entries.len(), 0); // Dynamic entry evicted
+}

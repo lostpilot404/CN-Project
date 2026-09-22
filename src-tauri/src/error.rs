@@ -30,6 +30,15 @@ pub enum NetSimError {
     #[error("Algorithm error: {0}")]
     AlgorithmError(String),
 
+    #[error("Invalid configuration: {0}")]
+    InvalidConfiguration(String),
+
+    #[error("Route unreachable: {0}")]
+    RouteUnreachable(String),
+
+    #[error("Internal error: {0}")]
+    Internal(String),
+
     #[error("Project persistence error: {0}")]
     PersistenceError(String),
 

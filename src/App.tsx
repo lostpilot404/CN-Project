@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar, ActiveTab } from './components/layout/Sidebar';
 import { TopologyCanvas } from './components/topology/TopologyCanvas';
+import { RoutingWorkspace } from './components/routing/RoutingWorkspace';
+import { AddressingWorkspace } from './components/addressing/AddressingWorkspace';
 import { ControlBar } from './components/simulation/ControlBar';
 import { TimelineDrawer } from './components/timeline/TimelineDrawer';
 import { api } from './lib/tauri';
@@ -305,6 +307,10 @@ export function App() {
               onUndo={handleUndo}
               onRedo={handleRedo}
             />
+          ) : activeTab === 'routing' ? (
+            <RoutingWorkspace project={project} />
+          ) : activeTab === 'addressing' ? (
+            <AddressingWorkspace project={project} />
           ) : (
             <div className="flex-1 flex items-center justify-center bg-slate-950 text-slate-400 p-8 text-center">
               <div>
@@ -312,8 +318,7 @@ export function App() {
                   {activeTab.replace('_', ' ')} Workspace
                 </h3>
                 <p className="text-xs text-slate-400 mt-1 max-w-md">
-                  Phase 2 simulation core is active. Discrete event engine executes with virtual
-                  clock, deterministic RNG, and drop-tail queue dynamics.
+                  Phase 4A authoritative networking algorithms active: Dijkstra Link-State, Bellman-Ford Distance-Vector, IPv4/CIDR, VLSM, Duplicate IP detection, IPv6 RFC 5952, and stateful NAT/NAPT.
                 </p>
               </div>
             </div>

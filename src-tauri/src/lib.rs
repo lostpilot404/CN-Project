@@ -1,6 +1,8 @@
+pub mod addressing;
 pub mod commands;
 pub mod domain;
 pub mod error;
+pub mod routing;
 pub mod simulation;
 pub mod state;
 
@@ -43,6 +45,17 @@ pub fn run() {
             commands::simulation::get_packet_details,
             commands::simulation::schedule_demo_packet,
             commands::algorithms::calculate_simple_checksum,
+            commands::algorithms::calculate_routing_table,
+            commands::algorithms::simulate_routing_convergence,
+            commands::algorithms::calculate_ipv4_subnet,
+            commands::algorithms::split_ipv4_subnet,
+            commands::algorithms::allocate_vlsm_subnets,
+            commands::algorithms::detect_duplicate_ips_command,
+            commands::algorithms::validate_ipv6_address,
+            commands::algorithms::get_or_create_nat_table,
+            commands::algorithms::add_static_dnat_rule,
+            commands::algorithms::simulate_nat_outbound,
+            commands::algorithms::simulate_nat_inbound,
         ])
         .run(tauri::generate_context!())
         .expect("error while running NetSim application");

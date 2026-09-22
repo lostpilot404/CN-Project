@@ -10,6 +10,23 @@ import {
   HistoryStatus,
 } from '../types/topology';
 import { SimulationStateSnapshot, SimEvent } from '../types/simulation';
+import {
+  MetricType,
+  RoutingAlgorithm,
+  RoutingTable,
+  ConvergenceTelemetry,
+} from '../types/routing';
+import {
+  Ipv4SubnetInfo,
+  SubnetSplitResult,
+  VlsmSubnetRequirement,
+  VlsmAllocationResult,
+  DuplicateIpConflict,
+  Ipv6Info,
+  NatProtocol,
+  NatTable,
+  NatTranslationResult,
+} from '../types/addressing';
 
 // Check if running inside Tauri window
 export const isTauri = (): boolean => {
@@ -95,6 +112,22 @@ let mockProject: Project = {
           mac_address: '02:00:00:00:00:04',
           ipv4: '10.0.0.100',
           subnet_mask: '255.255.255.0',
+          status: 'up',
+        },
+      ],
+      state: 'up',
+    },
+    {
+      id: 'node-4',
+      label: 'Workgroup Switch SW1',
+      node_type: 'switch',
+      position: { x: 500, y: 320 },
+      interfaces: [
+        {
+          id: 'if-4a',
+          name: 'port1',
+          node_id: 'node-4',
+          mac_address: '02:00:00:00:00:05',
           status: 'up',
         },
       ],
@@ -558,6 +591,290 @@ function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
       return Promise.resolve(mockSimTimeUs as unknown as T);
     }
 
+    case 'calculate_routing_table': {
+      const nodeId = args?.nodeId as string;
+      const algorithm = (args?.algorithm as string) || 'dijkstra';
+      const metricType = (args?.metricType as string) || 'hop_count';
+      const node = mockProject.nodes.find((n) => n.id === nodeId);
+      if (node && node.node_type !== 'router') {
+        return Promise.reject(
+          new Error(
+            `Node '${node.label}' (${node.node_type}) is not an L3 routing device. Routing tables are only generated for Routers.`
+          )
+        );
+      }
+      const entries = mockProject.nodes.map((n) => ({
+        destination: n.id,
+        destination_label: n.label,
+        next_hop: n.id === nodeId ? null : n.id,
+        interface_id: n.id === nodeId ? null : 'eth0',
+        metric: n.id === nodeId ? 0 : 1,
+        path: n.id === nodeId ? [nodeId] : [nodeId, n.id],
+        is_reachable: true,
+        protocol: algorithm === 'dijkstra' ? 'Dijkstra' : 'Bellman-Ford',
+      }));
+      return Promise.resolve({
+        node_id: nodeId,
+        node_label: node?.label || nodeId,
+        algorithm: algorithm === 'dijkstra' ? 'Dijkstra (Link-State)' : 'Bellman-Ford (Distance-Vector)',
+        metric_type: metricType,
+        entries,
+      } as unknown as T);
+    }
+
+    case 'simulate_routing_convergence': {
+      const sourceNodeId = args?.sourceNodeId as string;
+      const node = mockProject.nodes.find((n) => n.id === sourceNodeId);
+      if (node && node.node_type !== 'router') {
+        return Promise.reject(
+          new Error(
+            `Node '${node.label}' (${node.node_type}) is not an L3 routing device. Routing tables are only generated for Routers.`
+          )
+        );
+      }
+      const distances: Record<string, number> = {};
+      mockProject.nodes.forEach((n) => {
+        distances[n.id] = n.id === sourceNodeId ? 0 : 1;
+      });
+      return Promise.resolve({
+        algorithm: 'Bellman-Ford (Distance-Vector)',
+        source_node_id: sourceNodeId,
+        total_rounds: 2,
+        converged: true,
+        rounds: [
+          {
+            round_number: 0,
+            source_distances: distances,
+            changes: ['Initial neighbor discovery'],
+            changed: true,
+          },
+          {
+            round_number: 1,
+            source_distances: distances,
+            changes: [],
+            changed: false,
+          },
+        ],
+        final_routing_table: {
+          node_id: sourceNodeId,
+          node_label: node?.label || sourceNodeId,
+          algorithm: 'Bellman-Ford (Distance-Vector)',
+          metric_type: 'hop_count',
+          entries: mockProject.nodes.map((n) => ({
+            destination: n.id,
+            destination_label: n.label,
+            next_hop: n.id === sourceNodeId ? null : n.id,
+            interface_id: n.id === sourceNodeId ? null : 'eth0',
+            metric: n.id === sourceNodeId ? 0 : 1,
+            path: n.id === sourceNodeId ? [sourceNodeId] : [sourceNodeId, n.id],
+            is_reachable: true,
+            protocol: 'Bellman-Ford',
+          })),
+        },
+      } as unknown as T);
+    }
+
+    case 'calculate_ipv4_subnet': {
+      const input = (args?.input as string) || '192.168.1.0/24';
+      const [ipPart, prefixPart] = input.split('/');
+      const prefix = prefixPart ? parseInt(prefixPart, 10) : 24;
+      const totalHosts = prefix === 0 ? 4294967296 : Math.pow(2, 32 - prefix);
+      const usableHosts = prefix >= 31 ? (prefix === 31 ? 2 : 1) : Math.max(0, totalHosts - 2);
+      return Promise.resolve({
+        input,
+        ip_address: ipPart,
+        prefix_length: prefix,
+        subnet_mask: '255.255.255.0',
+        wildcard_mask: '0.0.0.255',
+        network_address: ipPart,
+        broadcast_address: ipPart,
+        first_usable_ip: ipPart,
+        last_usable_ip: ipPart,
+        total_hosts: totalHosts,
+        usable_hosts: usableHosts,
+        ip_binary: '11000000.10101000.00000001.00000000',
+        mask_binary: '11111111.11111111.11111111.00000000',
+        ip_class: 'Class C',
+        scope: 'Private (RFC 1918 192.168.0.0/16)',
+      } as unknown as T);
+    }
+
+    case 'split_ipv4_subnet': {
+      const baseCidr = (args?.baseCidr as string) || '192.168.1.0/24';
+      const newPrefix = (args?.newPrefix as number) || 26;
+      return Promise.resolve({
+        base_cidr: baseCidr,
+        original_prefix: 24,
+        new_prefix: newPrefix,
+        subnets_count: 4,
+        subnets: [],
+      } as unknown as T);
+    }
+
+    case 'allocate_vlsm_subnets': {
+      const baseCidr = (args?.baseCidr as string) || '10.0.0.0/24';
+      const reqs = (args?.requirements as VlsmSubnetRequirement[]) || [];
+      return Promise.resolve({
+        base_cidr: baseCidr,
+        base_network: '10.0.0.0',
+        base_prefix: 24,
+        total_base_hosts: 256,
+        total_needed_hosts: reqs.reduce((acc, r) => acc + r.needed_hosts, 0),
+        total_allocated_hosts: 200,
+        total_wasted_hosts: 20,
+        utilization_percent: 78.12,
+        subnets: [],
+        free_address_space: [],
+      } as unknown as T);
+    }
+
+    case 'detect_duplicate_ips_command': {
+      const ipCounts: Record<string, { node_id: string; node_label: string; interface_id: string; interface_name: string }[]> = {};
+      mockProject.nodes.forEach((n) => {
+        n.interfaces.forEach((iface) => {
+          if (iface.ipv4) {
+            const ip = iface.ipv4.split('/')[0];
+            if (!ipCounts[ip]) ipCounts[ip] = [];
+            ipCounts[ip].push({
+              node_id: n.id,
+              node_label: n.label,
+              interface_id: iface.id,
+              interface_name: iface.name,
+            });
+          }
+        });
+      });
+      const conflicts: DuplicateIpConflict[] = [];
+      Object.entries(ipCounts).forEach(([ip, occurrences]) => {
+        if (occurrences.length > 1) {
+          conflicts.push({ ip, occurrences });
+        }
+      });
+      return Promise.resolve(conflicts as unknown as T);
+    }
+
+    case 'validate_ipv6_address': {
+      const input = (args?.input as string) || '2001:db8::1';
+      return Promise.resolve({
+        input,
+        canonical_address: '2001:db8::1',
+        expanded_address: '2001:0db8:0000:0000:0000:0000:0000:0001',
+        prefix_length: 64,
+        scope: 'Global Unicast (2000::/3)',
+        is_valid: true,
+        network_prefix: '2001:0db8:0000:0000::/64',
+        interface_identifier: '0000:0000:0000:0001',
+      } as unknown as T);
+    }
+
+    case 'get_or_create_nat_table': {
+      const routerNodeId = (args?.routerNodeId as string) || 'node-2';
+      const publicIp = (args?.publicIp as string) || '203.0.113.1';
+      return Promise.resolve({
+        router_node_id: routerNodeId,
+        public_ip: publicIp,
+        port_range_start: 49152,
+        port_range_end: 65535,
+        next_dynamic_port: 49152,
+        entries: [],
+        static_rules: [],
+        next_entry_id: 1,
+      } as unknown as T);
+    }
+
+    case 'add_static_dnat_rule': {
+      const routerNodeId = (args?.routerNodeId as string) || 'node-2';
+      const publicIp = (args?.publicIp as string) || '203.0.113.1';
+      const protocol = (args?.protocol as NatProtocol) || 'TCP';
+      const publicPort = (args?.publicPort as number) || 80;
+      const privateIp = (args?.privateIp as string) || '192.168.1.10';
+      const privatePort = (args?.privatePort as number) || 8080;
+      const description = (args?.description as string) || 'Web Server';
+      return Promise.resolve({
+        router_node_id: routerNodeId,
+        public_ip: publicIp,
+        port_range_start: 49152,
+        port_range_end: 65535,
+        next_dynamic_port: 49152,
+        entries: [],
+        static_rules: [
+          {
+            id: 'dnat-1',
+            protocol,
+            public_port: publicPort,
+            private_ip: privateIp,
+            private_port: privatePort,
+            description,
+          },
+        ],
+        next_entry_id: 1,
+      } as unknown as T);
+    }
+
+    case 'simulate_nat_outbound': {
+      const srcIp = (args?.srcIp as string) || '192.168.1.10';
+      const srcPort = (args?.srcPort as number) || 50000;
+      const dstIp = (args?.dstIp as string) || '93.184.216.34';
+      const dstPort = (args?.dstPort as number) || 443;
+      const protocol = (args?.protocol as NatProtocol) || 'TCP';
+      const publicIp = (args?.publicIp as string) || '203.0.113.1';
+      return Promise.resolve({
+        original_src_ip: srcIp,
+        original_src_port: srcPort,
+        original_dst_ip: dstIp,
+        original_dst_port: dstPort,
+        translated_src_ip: publicIp,
+        translated_src_port: 49152,
+        translated_dst_ip: dstIp,
+        translated_dst_port: dstPort,
+        entry: {
+          id: 'nat-1',
+          protocol,
+          private_ip: srcIp,
+          private_port: srcPort,
+          public_ip: publicIp,
+          public_port: 49152,
+          mapping_type: 'dynamic_snat',
+          created_at_us: 1000,
+          last_used_at_us: 1000,
+          timeout_us: 7200000000,
+        },
+        created_new_mapping: true,
+        direction: 'outbound (SNAT)',
+      } as unknown as T);
+    }
+
+    case 'simulate_nat_inbound': {
+      const srcIp = (args?.srcIp as string) || '93.184.216.34';
+      const srcPort = (args?.srcPort as number) || 443;
+      const dstIp = (args?.dstIp as string) || '203.0.113.1';
+      const dstPort = (args?.dstPort as number) || 49152;
+      return Promise.resolve({
+        original_src_ip: srcIp,
+        original_src_port: srcPort,
+        original_dst_ip: dstIp,
+        original_dst_port: dstPort,
+        translated_src_ip: srcIp,
+        translated_src_port: srcPort,
+        translated_dst_ip: '192.168.1.10',
+        translated_dst_port: 50000,
+        entry: {
+          id: 'nat-1',
+          protocol: 'TCP',
+          private_ip: '192.168.1.10',
+          private_port: 50000,
+          public_ip: dstIp,
+          public_port: dstPort,
+          mapping_type: 'dynamic_snat',
+          created_at_us: 1000,
+          last_used_at_us: 1000,
+          timeout_us: 7200000000,
+        },
+        created_new_mapping: false,
+        direction: 'inbound (Dynamic Reverse NAPT)',
+      } as unknown as T);
+    }
+
     default:
       return Promise.reject(new Error(`Command ${cmd} not implemented in mock mode`));
   }
@@ -667,4 +984,75 @@ export const api = {
     invokeTauri<unknown>('get_packet_details', { packetId }),
   scheduleDemoPacket: (srcNodeId: string, dstNodeId: string) =>
     invokeTauri<number>('schedule_demo_packet', { srcNodeId, dstNodeId }),
+  // Phase 4A: Routing & Addressing Authoritative APIs
+  calculateRoutingTable: (nodeId: string, algorithm: RoutingAlgorithm, metricType: MetricType) =>
+    invokeTauri<RoutingTable>('calculate_routing_table', { nodeId, algorithm, metricType }),
+  simulateRoutingConvergence: (sourceNodeId: string, metricType: MetricType) =>
+    invokeTauri<ConvergenceTelemetry>('simulate_routing_convergence', { sourceNodeId, metricType }),
+  calculateIpv4Subnet: (input: string) =>
+    invokeTauri<Ipv4SubnetInfo>('calculate_ipv4_subnet', { input }),
+  splitIpv4Subnet: (baseCidr: string, newPrefix: number) =>
+    invokeTauri<SubnetSplitResult>('split_ipv4_subnet', { baseCidr, newPrefix }),
+  allocateVlsmSubnets: (baseCidr: string, requirements: VlsmSubnetRequirement[]) =>
+    invokeTauri<VlsmAllocationResult>('allocate_vlsm_subnets', { baseCidr, requirements }),
+  detectDuplicateIps: () =>
+    invokeTauri<DuplicateIpConflict[]>('detect_duplicate_ips_command'),
+  validateIpv6Address: (input: string) =>
+    invokeTauri<Ipv6Info>('validate_ipv6_address', { input }),
+  getOrCreateNatTable: (routerNodeId: string, publicIp: string) =>
+    invokeTauri<NatTable>('get_or_create_nat_table', { routerNodeId, publicIp }),
+  addStaticDnatRule: (
+    routerNodeId: string,
+    publicIp: string,
+    protocol: NatProtocol,
+    publicPort: number,
+    privateIp: string,
+    privatePort: number,
+    description: string
+  ) =>
+    invokeTauri<NatTable>('add_static_dnat_rule', {
+      routerNodeId,
+      publicIp,
+      protocol,
+      publicPort,
+      privateIp,
+      privatePort,
+      description,
+    }),
+  simulateNatOutbound: (
+    routerNodeId: string,
+    publicIp: string,
+    srcIp: string,
+    srcPort: number,
+    dstIp: string,
+    dstPort: number,
+    protocol: NatProtocol
+  ) =>
+    invokeTauri<NatTranslationResult>('simulate_nat_outbound', {
+      routerNodeId,
+      publicIp,
+      srcIp,
+      srcPort,
+      dstIp,
+      dstPort,
+      protocol,
+    }),
+  simulateNatInbound: (
+    routerNodeId: string,
+    publicIp: string,
+    srcIp: string,
+    srcPort: number,
+    dstIp: string,
+    dstPort: number,
+    protocol: NatProtocol
+  ) =>
+    invokeTauri<NatTranslationResult>('simulate_nat_inbound', {
+      routerNodeId,
+      publicIp,
+      srcIp,
+      srcPort,
+      dstIp,
+      dstPort,
+      protocol,
+    }),
 };
