@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="netGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#netGrad)"/>
+  <line x1="128" y1="64" x2="64" y2="176" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+  <line x1="64" y1="176" x2="192" y2="176" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+  <line x1="192" y1="176" x2="128" y2="64" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="128" cy="64" r="24" fill="#0b1120" stroke="#38bdf8" stroke-width="8"/>
+  <circle cx="64" cy="176" r="24" fill="#0b1120" stroke="#38bdf8" stroke-width="8"/>
+  <circle cx="192" cy="176" r="24" fill="#0b1120" stroke="#38bdf8" stroke-width="8"/>
+</svg>

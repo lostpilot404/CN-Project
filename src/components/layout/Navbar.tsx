@@ -1,0 +1,98 @@
+import { Activity, Cpu, FileDown, FolderPlus, RotateCcw, ShieldCheck } from 'lucide-react';
+import { Project } from '../../types/project';
+import { formatTimeUs } from '../../lib/utils';
+
+interface NavbarProps {
+  project: Project | null;
+  currentTimeUs: number;
+  onNewProject: () => void;
+  onSaveProject: () => void;
+  onResetProject: () => void;
+}
+
+export const Navbar = ({
+  project,
+  currentTimeUs,
+  onNewProject,
+  onSaveProject,
+  onResetProject,
+}: NavbarProps) => {
+  return (
+    <header className="h-14 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 select-none z-20">
+      {/* Brand & Project Info */}
+      <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-brand-500/20">
+            <Activity className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="font-bold tracking-tight text-white text-base">NetSim</span>
+              <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-brand-950 text-brand-400 border border-brand-800">
+                v1.0 Desktop
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="h-4 w-px bg-slate-800" />
+
+        <div className="text-xs">
+          <span className="text-slate-400">Project: </span>
+          <span className="font-medium text-slate-200">{project?.metadata.name || 'Untitled'}</span>
+          <span className="ml-2 text-[11px] text-slate-500 font-mono">
+            (Seed: {project?.simulation_config.seed || 42891})
+          </span>
+        </div>
+      </div>
+
+      {/* Center: Authoritative Virtual Clock */}
+      <div className="flex items-center space-x-3 bg-slate-950/80 px-3.5 py-1.5 rounded-md border border-slate-800">
+        <Cpu className="w-4 h-4 text-cyan-400 animate-pulse" />
+        <div className="flex items-baseline space-x-2">
+          <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Virtual Clock:</span>
+          <span className="text-sm font-mono font-semibold text-cyan-300">
+            {formatTimeUs(currentTimeUs)}
+          </span>
+        </div>
+      </div>
+
+      {/* Right Controls */}
+      <div className="flex items-center space-x-2">
+        <button
+          onClick={onNewProject}
+          className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-md transition-colors"
+          title="Create New Project"
+        >
+          <FolderPlus className="w-3.5 h-3.5" />
+          <span>New</span>
+        </button>
+
+        <button
+          onClick={onSaveProject}
+          className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-md transition-colors"
+          title="Export Project JSON"
+        >
+          <FileDown className="w-3.5 h-3.5" />
+          <span>Export JSON</span>
+        </button>
+
+        <button
+          onClick={onResetProject}
+          className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-rose-300 hover:text-rose-200 bg-rose-950/40 hover:bg-rose-950/60 border border-rose-900/50 rounded-md transition-colors"
+          title="Reset Simulation State"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+          <span>Reset</span>
+        </button>
+
+        <div className="h-4 w-px bg-slate-800 mx-1" />
+
+        <div className="flex items-center space-x-1 text-[11px] text-emerald-400 bg-emerald-950/40 border border-emerald-900/60 px-2 py-1 rounded">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Rust Authoritative</span>
+        </div>
+      </div>
+    </header>
+  );
+};
