@@ -1,5 +1,6 @@
 pub mod addressing;
 pub mod commands;
+pub mod datalink;
 pub mod domain;
 pub mod error;
 pub mod routing;
@@ -56,6 +57,12 @@ pub fn run() {
             commands::algorithms::add_static_dnat_rule,
             commands::algorithms::simulate_nat_outbound,
             commands::algorithms::simulate_nat_inbound,
+            commands::algorithms::calculate_hamming_encode,
+            commands::algorithms::verify_and_correct_hamming,
+            commands::algorithms::calculate_crc,
+            commands::algorithms::verify_crc,
+            commands::algorithms::calculate_internet_checksum,
+            commands::algorithms::verify_internet_checksum,
         ])
         .run(tauri::generate_context!())
         .expect("error while running NetSim application");

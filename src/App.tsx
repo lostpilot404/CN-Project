@@ -4,6 +4,7 @@ import { Sidebar, ActiveTab } from './components/layout/Sidebar';
 import { TopologyCanvas } from './components/topology/TopologyCanvas';
 import { RoutingWorkspace } from './components/routing/RoutingWorkspace';
 import { AddressingWorkspace } from './components/addressing/AddressingWorkspace';
+import { DataLinkWorkspace } from './components/datalink/DataLinkWorkspace';
 import { ControlBar } from './components/simulation/ControlBar';
 import { TimelineDrawer } from './components/timeline/TimelineDrawer';
 import { api } from './lib/tauri';
@@ -311,6 +312,8 @@ export function App() {
             <RoutingWorkspace project={project} />
           ) : activeTab === 'addressing' ? (
             <AddressingWorkspace project={project} />
+          ) : activeTab === 'algorithms' ? (
+            <DataLinkWorkspace />
           ) : (
             <div className="flex-1 flex items-center justify-center bg-slate-950 text-slate-400 p-8 text-center">
               <div>

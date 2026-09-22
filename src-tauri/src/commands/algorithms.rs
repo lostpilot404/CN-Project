@@ -244,3 +244,67 @@ pub fn simulate_nat_inbound(
         current_time_us,
     )
 }
+
+// =========================================================================
+// Phase 4B: Data Link Error Detection & Correction Commands
+// =========================================================================
+
+use crate::datalink::{
+    calculate_crc as calc_crc, calculate_internet_checksum as calc_checksum,
+    encode_hamming as enc_hamming, parse_hex_to_16bit_words,
+    verify_and_correct_hamming as ver_hamming, verify_crc as ver_crc,
+    verify_internet_checksum as ver_checksum, ChecksumCalculationResult, ChecksumVerifyResult,
+    CrcCalculationResult, CrcVerifyResult, HammingEncodeResult, HammingVerifyResult, ParityMode,
+};
+
+#[tauri::command]
+pub fn calculate_hamming_encode(
+    data_bits: String,
+    parity_mode: ParityMode,
+) -> Result<HammingEncodeResult> {
+    enc_hamming(&data_bits, parity_mode)
+}
+
+#[tauri::command]
+pub fn verify_and_correct_hamming(
+    codeword: String,
+    parity_mode: ParityMode,
+) -> Result<HammingVerifyResult> {
+    ver_hamming(&codeword, parity_mode)
+}
+
+#[tauri::command]
+pub fn calculate_crc(
+    data_bits: String,
+    polynomial: String,
+    poly_name: Option<String>,
+) -> Result<CrcCalculationResult> {
+    calc_crc(&data_bits, &polynomial, poly_name.as_deref())
+}
+
+#[tauri::command]
+pub fn verify_crc(
+    codeword: String,
+    polynomial: String,
+    poly_name: Option<String>,
+) -> Result<CrcVerifyResult> {
+    ver_crc(&codeword, &polynomial, poly_name.as_deref())
+}
+
+#[tauri::command]
+pub fn calculate_internet_checksum(input_hex: String) -> Result<ChecksumCalculationResult> {
+    let words = parse_hex_to_16bit_words(&input_hex)?;
+    calc_checksum(&words)
+}
+
+#[tauri::command]
+pub fn verify_internet_checksum(
+    payload_hex: String,
+    checksum_hex: String,
+) -> Result<ChecksumVerifyResult> {
+    let payload_words = parse_hex_to_16bit_words(&payload_hex)?;
+    let clean_csum = checksum_hex.trim().trim_start_matches("0x");
+    let checksum = u16::from_str_radix(clean_csum, 16)
+        .map_err(|e| NetSimError::InvalidConfiguration(format!("Invalid checksum hex: {}", e)))?;
+    ver_checksum(&payload_words, checksum)
+}

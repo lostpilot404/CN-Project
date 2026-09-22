@@ -2599,3 +2599,305 @@ fn test_nat_napt_stateful_forward_and_reverse_translation() {
     nat.expire_entries(10_000_000_000);
     assert_eq!(nat.entries.len(), 0); // Dynamic entry evicted
 }
+
+// =========================================================================
+// Phase 4B: Data Link Error Detection & Correction Tests
+// =========================================================================
+
+use crate::datalink::{
+    calculate_crc, calculate_internet_checksum, encode_hamming, inject_bit_errors,
+    parse_bytes_to_16bit_words, parse_hex_to_16bit_words, verify_and_correct_hamming, verify_crc,
+    verify_internet_checksum, ParityMode, CRC16_CCITT_POLY, CRC16_IBM_POLY, CRC32_IEEE_POLY,
+    CRC8_DEFAULT_POLY,
+};
+
+#[test]
+fn test_hamming_encode_even_parity_4bit() {
+    let res = encode_hamming("1011", ParityMode::Even).expect("Encoding should succeed");
+    assert_eq!(res.raw_data_bits, "1011");
+    assert_eq!(res.data_bit_count, 4);
+    assert_eq!(res.parity_bit_count, 3);
+    assert_eq!(res.total_bit_count, 7);
+    // Codeword: P1='0', P2='1', D1='1', P3='0', D2='0', D3='1', D4='1'
+    assert_eq!(res.encoded_bits, "0110011");
+    // Parity bit calculations trace
+    assert_eq!(res.parity_details.len(), 3);
+    assert_eq!(res.parity_details[0].parity_index, 1);
+    assert_eq!(res.parity_details[0].parity_value, 0);
+    assert_eq!(res.parity_details[1].parity_index, 2);
+    assert_eq!(res.parity_details[1].parity_value, 1);
+    assert_eq!(res.parity_details[2].parity_index, 4);
+    assert_eq!(res.parity_details[2].parity_value, 0);
+    // SECDED overall parity: count of 1s in "0110011" is 4 (even) -> P8 = 0
+    assert_eq!(res.overall_parity, 0);
+    assert_eq!(res.encoded_bits_secded, "00110011");
+}
+
+#[test]
+fn test_hamming_encode_odd_parity_4bit() {
+    let res = encode_hamming("1011", ParityMode::Odd).expect("Encoding should succeed");
+    assert_eq!(res.raw_data_bits, "1011");
+    // P1 covers 1, 3, 5, 7 -> '1', '0', '1' (two 1s) -> Odd parity -> P1 = 1
+    // P2 covers 2, 3, 6, 7 -> '1', '1', '1' (three 1s) -> Odd parity -> P2 = 0
+    // P3 covers 4, 5, 6, 7 -> '0', '1', '1' (two 1s) -> Odd parity -> P3 = 1
+    assert_eq!(res.encoded_bits, "1011011");
+    assert_eq!(res.parity_details[0].parity_value, 1);
+    assert_eq!(res.parity_details[1].parity_value, 0);
+    assert_eq!(res.parity_details[2].parity_index, 4);
+    assert_eq!(res.parity_details[2].parity_value, 1);
+}
+
+#[test]
+fn test_hamming_correction_every_single_bit_position() {
+    let original_data = "1011";
+    let encoded = encode_hamming(original_data, ParityMode::Even).unwrap();
+    let codeword = encoded.encoded_bits; // "0110011"
+
+    // Verify error-free codeword
+    let no_error = verify_and_correct_hamming(&codeword, ParityMode::Even).unwrap();
+    assert!(!no_error.has_error);
+    assert_eq!(no_error.syndrome_value, 0);
+    assert_eq!(no_error.error_position, None);
+    assert_eq!(
+        no_error.extracted_data_bits,
+        Some(original_data.to_string())
+    );
+
+    // Test flipping each bit from position 1 to 7 (1-indexed)
+    for pos in 1..=7 {
+        let mut corrupted_chars: Vec<char> = codeword.chars().collect();
+        corrupted_chars[pos - 1] = if corrupted_chars[pos - 1] == '0' {
+            '1'
+        } else {
+            '0'
+        };
+        let corrupted: String = corrupted_chars.into_iter().collect();
+
+        let res = verify_and_correct_hamming(&corrupted, ParityMode::Even).unwrap();
+        assert!(res.has_error, "Bit {} should be detected as error", pos);
+        assert!(res.is_correctable);
+        assert_eq!(
+            res.error_position,
+            Some(pos),
+            "Detected error position must be {}",
+            pos
+        );
+        assert_eq!(res.corrected_bits, Some(codeword.clone()));
+        assert_eq!(res.extracted_data_bits, Some(original_data.to_string()));
+    }
+}
+
+#[test]
+fn test_hamming_multiple_bit_errors() {
+    // 1. Two-bit corruption on valid codeword detects an error
+    let original_data = "1011";
+    let encoded = encode_hamming(original_data, ParityMode::Even).unwrap();
+    let codeword = encoded.encoded_bits; // "0110011"
+    let mut chars: Vec<char> = codeword.chars().collect();
+    chars[0] = if chars[0] == '0' { '1' } else { '0' }; // Flip bit 1
+    chars[1] = if chars[1] == '0' { '1' } else { '0' }; // Flip bit 2
+    let corrupted: String = chars.into_iter().collect();
+    let res = verify_and_correct_hamming(&corrupted, ParityMode::Even).unwrap();
+    assert!(res.has_error);
+
+    // 2. Unrecoverable multiple-bit error where syndrome points beyond codeword length
+    // Codeword length 5 with syndrome 6 > 5: "01010"
+    let unrecoverable = verify_and_correct_hamming("01010", ParityMode::Even).unwrap();
+    assert!(unrecoverable.has_error);
+    assert!(!unrecoverable.is_correctable);
+    assert_eq!(unrecoverable.error_type, "multiple_bit_unrecoverable");
+    assert_eq!(unrecoverable.syndrome_value, 6);
+}
+
+#[test]
+fn test_hamming_invalid_inputs() {
+    assert!(encode_hamming("", ParityMode::Even).is_err());
+    assert!(encode_hamming("10201", ParityMode::Even).is_err());
+    assert!(encode_hamming("abc", ParityMode::Even).is_err());
+    assert!(verify_and_correct_hamming("01", ParityMode::Even).is_err());
+    assert!(verify_and_correct_hamming("01x001", ParityMode::Even).is_err());
+}
+
+#[test]
+fn test_crc_generator_validation() {
+    // Non-binary
+    assert!(calculate_crc("1101", "1021", None).is_err());
+    // Leading zero
+    assert!(calculate_crc("1101", "0101", None).is_err());
+    // Degree 0 (single bit '1')
+    assert!(calculate_crc("1101", "1", None).is_err());
+    // Empty
+    assert!(calculate_crc("1101", "", None).is_err());
+    assert!(calculate_crc("", "1011", None).is_err());
+}
+
+#[test]
+fn test_crc_modulo2_division_known_vector() {
+    // Known textbook vector: Data = 11010011101100, Poly = 1011 (x^3 + x + 1)
+    let data = "11010011101100";
+    let poly = "1011";
+    let res = calculate_crc(data, poly, None).expect("CRC calculation should succeed");
+
+    assert_eq!(res.input_bits, data);
+    assert_eq!(res.generator_polynomial, poly);
+    assert_eq!(res.degree, 3);
+    assert_eq!(res.remainder.len(), 3);
+    assert_eq!(
+        res.transmitted_codeword,
+        format!("{}{}", data, res.remainder)
+    );
+    assert!(!res.division_steps.is_empty());
+
+    // Verify transmitted frame with receiver division
+    let ver =
+        verify_crc(&res.transmitted_codeword, poly, None).expect("Verification should succeed");
+    assert!(ver.is_valid, "Transmitted frame should verify as valid");
+    assert_eq!(ver.remainder, "000");
+
+    // Check step trace contents
+    let first_step = &res.division_steps[0];
+    assert_eq!(first_step.step_index, 1);
+    assert_eq!(first_step.current_window.len(), poly.len());
+}
+
+#[test]
+fn test_crc_presets_and_corruption() {
+    let presets = [
+        ("CRC-8", CRC8_DEFAULT_POLY, 8),
+        ("CRC-16-IBM", CRC16_IBM_POLY, 16),
+        ("CRC-16-CCITT", CRC16_CCITT_POLY, 16),
+        ("CRC-32-IEEE", CRC32_IEEE_POLY, 32),
+    ];
+
+    let test_data = "11010110111001011101";
+
+    for (name, poly, expected_degree) in presets {
+        let calc = calculate_crc(test_data, poly, Some(name))
+            .unwrap_or_else(|e| panic!("Failed calculating {}: {}", name, e));
+        assert_eq!(calc.degree, expected_degree);
+        assert_eq!(calc.remainder.len(), expected_degree);
+
+        // Verification of untampered transmitted frame
+        let ver = verify_crc(&calc.transmitted_codeword, poly, Some(name))
+            .unwrap_or_else(|e| panic!("Failed verifying {}: {}", name, e));
+        assert!(ver.is_valid, "{} valid frame must verify to true", name);
+        assert_eq!(ver.remainder, "0".repeat(expected_degree));
+
+        // Corrupt bit 5 using deterministic injector
+        let corrupted_frame =
+            inject_bit_errors(&calc.transmitted_codeword, &[5]).expect("Injection should succeed");
+        assert_ne!(corrupted_frame, calc.transmitted_codeword);
+
+        let corrupt_ver = verify_crc(&corrupted_frame, poly, Some(name))
+            .unwrap_or_else(|e| panic!("Failed verifying corrupted {}: {}", name, e));
+        assert!(
+            !corrupt_ver.is_valid,
+            "Corrupted {} frame must be detected",
+            name
+        );
+        assert_ne!(
+            corrupt_ver.remainder,
+            "0".repeat(expected_degree),
+            "Corrupted remainder must be non-zero"
+        );
+    }
+}
+
+#[test]
+fn test_internet_checksum_rfc1071_known_vector() {
+    // RFC 1071 standard example:
+    // Words: 0x0001, 0xf203, 0xf4f5, 0xf6f7
+    // Sum: 0x0001 + 0xf203 + 0xf4f5 + 0xf6f7 = 0x2ddf0
+    // Fold carry: 0x0002 + 0xddf0 = 0xddf2
+    // Checksum (~0xddf2): 0x220d
+    let words = vec![0x0001, 0xf203, 0xf4f5, 0xf6f7];
+    let calc = calculate_internet_checksum(&words).expect("Calculation should succeed");
+
+    assert_eq!(calc.checksum_hex, "220D");
+    assert_eq!(calc.checksum, 0x220d);
+    assert_eq!(calc.uncomplemented_sum, 0xddf2);
+    assert_eq!(calc.words, words);
+    assert_eq!(calc.addition_steps.len(), 4);
+
+    // Verify: verify with the checksum word included
+    let ver = verify_internet_checksum(&words, calc.checksum).expect("Verification should succeed");
+    assert!(ver.is_valid);
+    assert_eq!(ver.inverted_result, 0x0000);
+    assert_eq!(ver.total_accumulated_sum, 0xFFFF);
+}
+
+#[test]
+fn test_internet_checksum_odd_length_bytes() {
+    // Byte sequence with odd length 3: [0x01, 0x02, 0x03]
+    // Word 1: 0x0102
+    // Word 2: 0x0300 (RFC 1071 padded low byte with 0x00)
+    let bytes = vec![0x01, 0x02, 0x03];
+    let words = parse_bytes_to_16bit_words(&bytes);
+    assert_eq!(words, vec![0x0102, 0x0300]);
+
+    let calc = calculate_internet_checksum(&words).unwrap();
+    // 0x0102 + 0x0300 = 0x0402 -> checksum is ~0x0402 = 0xfbfd
+    assert_eq!(calc.checksum, 0xfbfd);
+
+    let ver = verify_internet_checksum(&words, calc.checksum).unwrap();
+    assert!(ver.is_valid);
+}
+
+#[test]
+fn test_internet_checksum_parse_hex() {
+    let hex_input = "0x0001, 0xF203, 0xF4F5, 0xF6F7";
+    let words = parse_hex_to_16bit_words(hex_input).expect("Hex parsing should succeed");
+    assert_eq!(words, vec![0x0001, 0xf203, 0xf4f5, 0xf6f7]);
+
+    let spaced_hex = "0001 f203 f4f5 f6f7";
+    let words2 = parse_hex_to_16bit_words(spaced_hex).expect("Spaced hex parsing should succeed");
+    assert_eq!(words2, vec![0x0001, 0xf203, 0xf4f5, 0xf6f7]);
+
+    // Corrupted hex word
+    assert!(parse_hex_to_16bit_words("0001 GGGG").is_err());
+    // Empty
+    assert!(parse_hex_to_16bit_words("").is_err());
+}
+
+#[test]
+fn test_internet_checksum_corruption_detection() {
+    let words = vec![0x4500, 0x003c, 0x1c46, 0x4000, 0x4006];
+    let calc = calculate_internet_checksum(&words).unwrap();
+
+    assert!(
+        verify_internet_checksum(&words, calc.checksum)
+            .unwrap()
+            .is_valid
+    );
+
+    // Corrupt one bit in word 2
+    let mut corrupted = words.clone();
+    corrupted[2] ^= 0x0001;
+    let corrupt_ver = verify_internet_checksum(&corrupted, calc.checksum).unwrap();
+    assert!(!corrupt_ver.is_valid);
+    assert_ne!(corrupt_ver.inverted_result, 0x0000);
+}
+
+#[test]
+fn test_datalink_serialization_and_determinism() {
+    // Hamming determinism
+    let enc1 = encode_hamming("1101001", ParityMode::Even).unwrap();
+    let enc2 = encode_hamming("1101001", ParityMode::Even).unwrap();
+    let json1 = serde_json::to_string(&enc1).unwrap();
+    let json2 = serde_json::to_string(&enc2).unwrap();
+    assert_eq!(json1, json2);
+
+    // CRC determinism
+    let crc1 = calculate_crc("11010011101100", "1011", None).unwrap();
+    let crc2 = calculate_crc("11010011101100", "1011", None).unwrap();
+    let json_crc1 = serde_json::to_string(&crc1).unwrap();
+    let json_crc2 = serde_json::to_string(&crc2).unwrap();
+    assert_eq!(json_crc1, json_crc2);
+
+    // Checksum determinism
+    let cs1 = calculate_internet_checksum(&[0x1234, 0x5678, 0x9abc]).unwrap();
+    let cs2 = calculate_internet_checksum(&[0x1234, 0x5678, 0x9abc]).unwrap();
+    let json_cs1 = serde_json::to_string(&cs1).unwrap();
+    let json_cs2 = serde_json::to_string(&cs2).unwrap();
+    assert_eq!(json_cs1, json_cs2);
+}

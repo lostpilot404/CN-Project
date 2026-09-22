@@ -27,6 +27,15 @@ import {
   NatTable,
   NatTranslationResult,
 } from '../types/addressing';
+import {
+  ParityMode,
+  HammingEncodeResult,
+  HammingVerifyResult,
+  CrcCalculationResult,
+  CrcVerifyResult,
+  ChecksumCalculationResult,
+  ChecksumVerifyResult,
+} from '../types/datalink';
 
 // Check if running inside Tauri window
 export const isTauri = (): boolean => {
@@ -875,6 +884,125 @@ function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
       } as unknown as T);
     }
 
+    case 'calculate_hamming_encode': {
+      const dataBits = (args?.dataBits as string) || '1011';
+      const parityMode = (args?.parityMode as ParityMode) || 'Even';
+      // Deterministic mock for "1011"
+      return Promise.resolve({
+        raw_data_bits: dataBits,
+        data_bit_count: 4,
+        parity_bit_count: 3,
+        total_bit_count: 7,
+        parity_mode: parityMode,
+        encoded_bits: parityMode === 'Even' ? '0110011' : '1011011',
+        bit_positions: [
+          { position: 1, is_parity: true, bit_value: parityMode === 'Even' ? 0 : 1, label: 'p1' },
+          { position: 2, is_parity: true, bit_value: parityMode === 'Even' ? 1 : 0, label: 'p2' },
+          { position: 3, is_parity: false, bit_value: 1, label: 'd1' },
+          { position: 4, is_parity: true, bit_value: parityMode === 'Even' ? 0 : 1, label: 'p4' },
+          { position: 5, is_parity: false, bit_value: 0, label: 'd2' },
+          { position: 6, is_parity: false, bit_value: 1, label: 'd3' },
+          { position: 7, is_parity: false, bit_value: 1, label: 'd4' },
+        ],
+        parity_details: [
+          { parity_index: 1, label: 'p1', covered_indices: [1, 3, 5, 7], covered_bits: [parityMode === 'Even' ? 0 : 1, 1, 0, 1], parity_value: parityMode === 'Even' ? 0 : 1, formula: 'p1 = XOR(positions [3, 5, 7])' },
+          { parity_index: 2, label: 'p2', covered_indices: [2, 3, 6, 7], covered_bits: [parityMode === 'Even' ? 1 : 0, 1, 1, 1], parity_value: parityMode === 'Even' ? 1 : 0, formula: 'p2 = XOR(positions [3, 6, 7])' },
+          { parity_index: 4, label: 'p4', covered_indices: [4, 5, 6, 7], covered_bits: [parityMode === 'Even' ? 0 : 1, 0, 1, 1], parity_value: parityMode === 'Even' ? 0 : 1, formula: 'p4 = XOR(positions [5, 6, 7])' },
+        ],
+        overall_parity: parityMode === 'Even' ? 0 : 1,
+        encoded_bits_secded: parityMode === 'Even' ? '00110011' : '11011011',
+      } as unknown as T);
+    }
+
+    case 'verify_and_correct_hamming': {
+      const codeword = (args?.codeword as string) || '0110011';
+      const parityMode = (args?.parityMode as ParityMode) || 'Even';
+      const isClean = codeword === '0110011';
+      return Promise.resolve({
+        received_bits: codeword,
+        parity_mode: parityMode,
+        syndrome_bits: isClean ? '000' : '001',
+        syndrome_value: isClean ? 0 : 1,
+        has_error: !isClean,
+        is_correctable: true,
+        error_type: isClean ? 'none' : 'single_bit',
+        error_position: isClean ? null : 1,
+        corrected_bits: '0110011',
+        extracted_data_bits: '1011',
+        syndrome_details: [],
+        status_message: isClean ? 'Codeword is valid. No bit errors detected.' : 'Single-bit error detected and corrected at position 1.',
+      } as unknown as T);
+    }
+
+    case 'calculate_crc': {
+      const dataBits = (args?.dataBits as string) || '11010011101100';
+      const polynomial = (args?.polynomial as string) || '1011';
+      const polyName = (args?.polyName as string) || 'Custom';
+      return Promise.resolve({
+        input_bits: dataBits,
+        generator_polynomial: polynomial,
+        polynomial_name: polyName,
+        degree: polynomial.length - 1,
+        augmented_bits: dataBits + '000',
+        remainder: '100',
+        transmitted_codeword: dataBits + '100',
+        division_steps: [
+          { step_index: 1, bit_position: 3, current_window: '1101', divisor_applied: polynomial, xor_result: '0110', next_bit_brought_down: '0', explanation: 'Step 1' },
+        ],
+      } as unknown as T);
+    }
+
+    case 'verify_crc': {
+      const codeword = (args?.codeword as string) || '11010011101100100';
+      const polynomial = (args?.polynomial as string) || '1011';
+      const isValid = codeword.endsWith('100');
+      return Promise.resolve({
+        received_bits: codeword,
+        generator_polynomial: polynomial,
+        polynomial_name: 'CRC',
+        remainder: isValid ? '000' : '011',
+        is_valid: isValid,
+        error_detected: !isValid,
+        division_steps: [],
+        status_message: isValid ? 'Frame verified successfully. Remainder is 0.' : 'CRC Error Detected! Frame corrupted.',
+      } as unknown as T);
+    }
+
+    case 'calculate_internet_checksum': {
+      const inputHex = (args?.inputHex as string) || '0001 F203 F4F5 F6F7';
+      return Promise.resolve({
+        input_hex: inputHex,
+        words: [0x0001, 0xF203, 0xF4F5, 0xF6F7],
+        word_hex_list: ['0001', 'F203', 'F4F5', 'F6F7'],
+        total_words: 4,
+        addition_steps: [
+          { step_index: 1, word_hex: '0001', word_value: 1, sum_before_addition: 0, sum_after_addition: 1, carry_detected: 0, sum_after_carry_fold: 1, explanation: 'Step 1' },
+          { step_index: 2, word_hex: 'F203', word_value: 0xF203, sum_before_addition: 1, sum_after_addition: 0xF204, carry_detected: 0, sum_after_carry_fold: 0xF204, explanation: 'Step 2' },
+        ],
+        uncomplemented_sum: 0xDDF2,
+        checksum: 0x220D,
+        checksum_hex: '220D',
+        checksum_binary: '0010001000001101',
+      } as unknown as T);
+    }
+
+    case 'verify_internet_checksum': {
+      const payloadHex = (args?.payloadHex as string) || '0001 F203 F4F5 F6F7';
+      const checksumHex = (args?.checksumHex as string) || '220D';
+      const isClean = payloadHex.length > 0 && checksumHex.toUpperCase().includes('220D');
+      return Promise.resolve({
+        payload_words: [0x0001, 0xF203, 0xF4F5, 0xF6F7],
+        checksum_tested: 0x220D,
+        words_with_checksum: [0x0001, 0xF203, 0xF4F5, 0xF6F7, 0x220D],
+        total_accumulated_sum: isClean ? 0xFFFF : 0xFFFE,
+        inverted_result: isClean ? 0x0000 : 0x0001,
+        is_valid: isClean,
+        error_detected: !isClean,
+        verification_steps: [],
+        status_message: isClean ? 'Checksum verified successfully. No corruption.' : 'Checksum verification FAILED! Corruption detected.',
+      } as unknown as T);
+    }
+
     default:
       return Promise.reject(new Error(`Command ${cmd} not implemented in mock mode`));
   }
@@ -1055,4 +1183,16 @@ export const api = {
       dstPort,
       protocol,
     }),
+  calculateHammingEncode: (dataBits: string, parityMode: ParityMode) =>
+    invokeTauri<HammingEncodeResult>('calculate_hamming_encode', { dataBits, parityMode }),
+  verifyAndCorrectHamming: (codeword: string, parityMode: ParityMode) =>
+    invokeTauri<HammingVerifyResult>('verify_and_correct_hamming', { codeword, parityMode }),
+  calculateCrc: (dataBits: string, polynomial: string, polyName?: string) =>
+    invokeTauri<CrcCalculationResult>('calculate_crc', { dataBits, polynomial, polyName }),
+  verifyCrc: (codeword: string, polynomial: string, polyName?: string) =>
+    invokeTauri<CrcVerifyResult>('verify_crc', { codeword, polynomial, polyName }),
+  calculateInternetChecksum: (inputHex: string) =>
+    invokeTauri<ChecksumCalculationResult>('calculate_internet_checksum', { inputHex }),
+  verifyInternetChecksum: (payloadHex: string, checksumHex: string) =>
+    invokeTauri<ChecksumVerifyResult>('verify_internet_checksum', { payloadHex, checksumHex }),
 };
