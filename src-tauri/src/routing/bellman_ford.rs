@@ -127,17 +127,18 @@ pub fn simulate_distance_vector_convergence(
                 let v = &edge.target;
                 let link_cost = edge.metric;
 
-                // Transit constraint: If neighbor v is not an L3 transit-capable router,
-                // it can only be a destination itself, not an intermediary for other destinations d != v.
-                let v_can_transit = graph.is_l3_transit_capable(v);
+                // Forwarding constraint:
+                // An L3 transit router OR L2 transparent forwarding switch can forward routes/connectivity.
+                // End hosts (PC, Server, Generic) cannot forward routes for other destinations d != v.
+                let v_can_forward = graph.can_forward_traffic(v);
 
                 for d in &all_node_ids {
                     if d == u {
                         continue;
                     }
 
-                    // If v cannot transit, we can only reach v itself through v, not any other node d
-                    if !v_can_transit && d != v {
+                    // If v cannot forward traffic, we can only reach v itself through v, not any other node d
+                    if !v_can_forward && d != v {
                         continue;
                     }
 
@@ -255,10 +256,6 @@ fn build_routing_table_from_vectors(
         .get(source_node_id)
         .ok_or_else(|| NetSimError::NodeNotFound(source_node_id.to_string()))?;
 
-    let source_nh = next_hop
-        .get(source_node_id)
-        .ok_or_else(|| NetSimError::NodeNotFound(source_node_id.to_string()))?;
-
     for dest_id in sorted_destinations {
         let dest_node = graph.nodes.get(&dest_id).unwrap();
         let cost = *source_dist.get(&dest_id).unwrap_or(&u64::MAX);
@@ -291,10 +288,8 @@ fn build_routing_table_from_vectors(
             continue;
         }
 
-        let nh = source_nh.get(&dest_id).and_then(|opt| opt.clone());
-
-        // Reconstruct path by following next hops
-        let mut path = vec![source_node_id.to_string()];
+        // Reconstruct physical path by following next hops
+        let mut physical_path = vec![source_node_id.to_string()];
         let mut curr = source_node_id.to_string();
         let mut visited = std::collections::HashSet::new();
         visited.insert(curr.clone());
@@ -313,16 +308,27 @@ fn build_routing_table_from_vectors(
                 break;
             }
             visited.insert(next.clone());
-            path.push(next.clone());
+            physical_path.push(next.clone());
             curr = next;
         }
 
-        // Outbound interface from source to immediate next hop
-        let egress_interface = if let Some(ref immediate_nh) = nh {
+        // Normalize physical path to Layer 3 routing path (intermediate L2 switches omitted from L3 hops)
+        let l3_path = graph.normalize_to_l3_path(&physical_path);
+
+        // Next-hop at Layer 3 is the first L3 device after source
+        let l3_next_hop = if l3_path.len() >= 2 {
+            Some(l3_path[1].clone())
+        } else {
+            None
+        };
+
+        // Outbound interface from source to immediate physical next hop
+        let egress_interface = if physical_path.len() >= 2 {
+            let first_physical_hop = &physical_path[1];
             graph
                 .adjacency
                 .get(source_node_id)
-                .and_then(|edges| edges.iter().find(|e| &e.target == immediate_nh))
+                .and_then(|edges| edges.iter().find(|e| &e.target == first_physical_hop))
                 .map(|e| e.source_interface_id.clone())
         } else {
             None
@@ -331,10 +337,10 @@ fn build_routing_table_from_vectors(
         entries.push(RouteTableEntry {
             destination: dest_id.clone(),
             destination_label: dest_node.label.clone(),
-            next_hop: nh,
+            next_hop: l3_next_hop,
             interface_id: egress_interface,
             metric: cost,
-            path,
+            path: l3_path,
             is_reachable: true,
             protocol: "Bellman-Ford".to_string(),
         });

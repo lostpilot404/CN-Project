@@ -1842,14 +1842,15 @@ fn test_l3_transit_4_generic_host_cannot_act_as_l3_transit() {
 }
 
 #[test]
-fn test_l3_transit_5_normal_switch_cannot_act_as_l3_transit() {
+fn test_l3_transit_5_router_switch_router_l2_connectivity_and_l3_routing_validation() {
     use crate::routing::{
-        compute_bellman_ford_shortest_paths, compute_dijkstra_shortest_paths, MetricType,
-        RoutingGraph,
+        compute_bellman_ford_shortest_paths, compute_dijkstra_shortest_paths,
+        simulate_distance_vector_convergence, MetricType, RoutingGraph,
     };
 
-    // R1 <-> SW1 <-> R2 where SW1 is a normal Layer 2 Switch
-    let mut proj = Project::new("Switch Non-transit Test".to_string());
+    // Topology: R1 ── SW1 ── R2
+    // R1, R2 are Routers; SW1 is a standard Layer 2 Switch.
+    let mut proj = Project::new("Switch L2 Connectivity Test".to_string());
     let r1 = Node::new(
         "r1".into(),
         "Router 1".into(),
@@ -1895,35 +1896,168 @@ fn test_l3_transit_5_normal_switch_cannot_act_as_l3_transit() {
     proj.links = vec![l1, l2];
 
     let graph = RoutingGraph::from_project(&proj, MetricType::HopCount);
-    // Switch is not an L3 transit router by default
-    assert!(!graph.is_l3_transit_capable("sw1"));
 
-    // In Dijkstra: R1 can connect to SW1 directly as an adjacent node in topology,
-    // but SW1 cannot act as an L3 transit router to reach R2.
+    // 1. Physical connectivity exists
+    assert!(graph.nodes.contains_key("r1"));
+    assert!(graph.nodes.contains_key("sw1"));
+    assert!(graph.nodes.contains_key("r2"));
+    assert_eq!(graph.adjacency.get("r1").unwrap().len(), 1);
+    assert_eq!(graph.adjacency.get("sw1").unwrap().len(), 2);
+    assert_eq!(graph.adjacency.get("r2").unwrap().len(), 1);
+
+    // 2. Switch has no L3 routing table (rejected with InvalidConfiguration)
+    assert!(!graph.is_routing_device("sw1"));
+    assert!(compute_dijkstra_shortest_paths(&graph, "sw1").is_err());
+    assert!(compute_bellman_ford_shortest_paths(&graph, "sw1").is_err());
+    assert!(simulate_distance_vector_convergence(&graph, "sw1").is_err());
+
+    // 3. Switch is not treated as an L3 transit router
+    assert!(!graph.is_l3_transit_capable("sw1"));
+    assert!(graph.is_l2_transparent_forwarder("sw1"));
+
+    // 4. Router A can resolve/reach Router B through the L2 connectivity model (Dijkstra)
     let d_table = compute_dijkstra_shortest_paths(&graph, "r1").unwrap();
-    let sw_entry = d_table
-        .entries
-        .iter()
-        .find(|e| e.destination == "sw1")
-        .unwrap();
-    assert!(sw_entry.is_reachable);
-    let r2_entry = d_table
+    let r2_dijkstra = d_table
         .entries
         .iter()
         .find(|e| e.destination == "r2")
         .unwrap();
-    assert!(!r2_entry.is_reachable);
-    assert_eq!(r2_entry.metric, u64::MAX);
+    assert!(r2_dijkstra.is_reachable);
+    assert_eq!(r2_dijkstra.metric, 2);
+    // 5. The resulting L3 route does NOT falsely classify the switch as an L3 routing hop
+    assert_eq!(r2_dijkstra.next_hop.as_deref(), Some("r2")); // Next L3 hop is R2, NOT SW1
+    assert_eq!(r2_dijkstra.path, vec!["r1", "r2"]); // L3 path contains only L3 devices, NOT SW1
+    assert_eq!(r2_dijkstra.interface_id.as_deref(), Some("eth0")); // Outbound interface on R1
 
-    // In Bellman-Ford: SW1 cannot forward transit routes to R2
+    // 6. Router A can resolve/reach Router B through the L2 connectivity model (Bellman-Ford)
     let bf_table = compute_bellman_ford_shortest_paths(&graph, "r1").unwrap();
     let r2_bf = bf_table
         .entries
         .iter()
         .find(|e| e.destination == "r2")
         .unwrap();
-    assert!(!r2_bf.is_reachable);
-    assert_eq!(r2_bf.metric, u64::MAX);
+    assert!(r2_bf.is_reachable);
+    assert_eq!(r2_bf.metric, 2);
+    assert_eq!(r2_bf.next_hop.as_deref(), Some("r2")); // Next L3 hop is R2, NOT SW1
+    assert_eq!(r2_bf.path, vec!["r1", "r2"]); // L3 path contains only L3 devices, NOT SW1
+    assert_eq!(r2_bf.interface_id.as_deref(), Some("eth0")); // Outbound interface on R1
+
+    // 7. Dijkstra and Bellman-Ford produce consistent L3 routing behavior
+    assert_eq!(r2_dijkstra.metric, r2_bf.metric);
+    assert_eq!(r2_dijkstra.next_hop, r2_bf.next_hop);
+    assert_eq!(r2_dijkstra.path, r2_bf.path);
+    assert_eq!(r2_dijkstra.interface_id, r2_bf.interface_id);
+
+    // 8. Direct reachability to the switch itself from Router A
+    let sw_entry = d_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "sw1")
+        .unwrap();
+    assert!(sw_entry.is_reachable);
+    assert_eq!(sw_entry.metric, 1);
+    assert_eq!(sw_entry.next_hop.as_deref(), Some("sw1"));
+}
+
+#[test]
+fn test_multi_hop_l3_routing_through_l2_switch_and_transit_router() {
+    use crate::routing::{
+        compute_bellman_ford_shortest_paths, compute_dijkstra_shortest_paths, MetricType,
+        RoutingGraph,
+    };
+
+    // Topology: R1 ── SW1 ── R2 ── R3
+    let mut proj = Project::new("Multi-hop Switch Routing Test".to_string());
+    let r1 = Node::new(
+        "r1".into(),
+        "Router 1".into(),
+        NodeType::Router,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let sw1 = Node::new(
+        "sw1".into(),
+        "Switch 1".into(),
+        NodeType::Switch,
+        Position { x: 100.0, y: 0.0 },
+    );
+    let r2 = Node::new(
+        "r2".into(),
+        "Router 2".into(),
+        NodeType::Router,
+        Position { x: 200.0, y: 0.0 },
+    );
+    let r3 = Node::new(
+        "r3".into(),
+        "Router 3".into(),
+        NodeType::Router,
+        Position { x: 300.0, y: 0.0 },
+    );
+    proj.nodes = vec![r1, sw1, r2, r3];
+
+    let l1 = Link::new(
+        "l1".into(),
+        LinkEndpoint {
+            node_id: "r1".into(),
+            interface_id: "eth0".into(),
+        },
+        LinkEndpoint {
+            node_id: "sw1".into(),
+            interface_id: "port1".into(),
+        },
+    );
+    let l2 = Link::new(
+        "l2".into(),
+        LinkEndpoint {
+            node_id: "sw1".into(),
+            interface_id: "port2".into(),
+        },
+        LinkEndpoint {
+            node_id: "r2".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    let l3 = Link::new(
+        "l3".into(),
+        LinkEndpoint {
+            node_id: "r2".into(),
+            interface_id: "eth1".into(),
+        },
+        LinkEndpoint {
+            node_id: "r3".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    proj.links = vec![l1, l2, l3];
+
+    let graph = RoutingGraph::from_project(&proj, MetricType::HopCount);
+
+    // Dijkstra route from R1 to R3:
+    // Physical path: R1 -> SW1 -> R2 -> R3
+    // L3 path: R1 -> R2 -> R3 (SW1 is transparent, R2 is L3 transit router)
+    let d_table = compute_dijkstra_shortest_paths(&graph, "r1").unwrap();
+    let r3_d = d_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r3")
+        .unwrap();
+    assert!(r3_d.is_reachable);
+    assert_eq!(r3_d.metric, 3);
+    assert_eq!(r3_d.next_hop.as_deref(), Some("r2"));
+    assert_eq!(r3_d.path, vec!["r1", "r2", "r3"]);
+    assert_eq!(r3_d.interface_id.as_deref(), Some("eth0"));
+
+    // Bellman-Ford route from R1 to R3:
+    let bf_table = compute_bellman_ford_shortest_paths(&graph, "r1").unwrap();
+    let r3_bf = bf_table
+        .entries
+        .iter()
+        .find(|e| e.destination == "r3")
+        .unwrap();
+    assert!(r3_bf.is_reachable);
+    assert_eq!(r3_bf.metric, 3);
+    assert_eq!(r3_bf.next_hop.as_deref(), Some("r2"));
+    assert_eq!(r3_bf.path, vec!["r1", "r2", "r3"]);
+    assert_eq!(r3_bf.interface_id.as_deref(), Some("eth0"));
 }
 
 #[test]

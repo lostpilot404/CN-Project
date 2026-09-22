@@ -77,10 +77,10 @@ pub fn compute_dijkstra_shortest_paths(
             continue;
         }
 
-        // Transit rule: Only the source router itself OR transit-capable L3 routers
-        // can forward traffic out to other neighbors. End hosts (PC, Server, Generic)
-        // and L2 devices (Switch, AccessPoint) cannot act as L3 transit routers.
-        if node_id != source_node_id && !graph.is_l3_transit_capable(&node_id) {
+        // Forwarding rule: Only the source router itself OR forward-capable nodes
+        // (L3 transit routers or L2 transparent forwarding switches) can forward traffic
+        // out to other neighbors. End hosts (PC, Server, Generic) cannot forward traffic.
+        if node_id != source_node_id && !graph.can_forward_traffic(&node_id) {
             continue;
         }
 
@@ -156,34 +156,38 @@ pub fn compute_dijkstra_shortest_paths(
             continue;
         }
 
-        // Reconstruct path backwards from dest_id to source_node_id
-        let mut path = Vec::new();
+        // Reconstruct physical path backwards from dest_id to source_node_id
+        let mut physical_path = Vec::new();
         let mut curr = dest_id.clone();
-        path.push(curr.clone());
+        physical_path.push(curr.clone());
 
         while curr != source_node_id {
             if let Some(p) = prev.get(&curr) {
                 curr = p.prev_node.clone();
-                path.push(curr.clone());
+                physical_path.push(curr.clone());
             } else {
                 break;
             }
         }
-        path.reverse();
+        physical_path.reverse();
 
-        // Next-hop is the immediate neighbor of source on this path
-        let next_hop = if path.len() >= 2 {
-            Some(path[1].clone())
+        // Normalize physical path to Layer 3 routing path (intermediate L2 switches omitted from L3 hops)
+        let l3_path = graph.normalize_to_l3_path(&physical_path);
+
+        // Next-hop at Layer 3 is the first L3 device after source
+        let next_hop = if l3_path.len() >= 2 {
+            Some(l3_path[1].clone())
         } else {
             None
         };
 
-        // Outbound interface is the interface on source node that connects to path[1]
-        let egress_interface = if let Some(ref nh) = next_hop {
+        // Outbound interface is the physical interface on source node that connects to the first physical hop
+        let egress_interface = if physical_path.len() >= 2 {
+            let first_physical_hop = &physical_path[1];
             graph
                 .adjacency
                 .get(source_node_id)
-                .and_then(|edges| edges.iter().find(|e| &e.target == nh))
+                .and_then(|edges| edges.iter().find(|e| &e.target == first_physical_hop))
                 .map(|e| e.source_interface_id.clone())
         } else {
             None
@@ -195,7 +199,7 @@ pub fn compute_dijkstra_shortest_paths(
             next_hop,
             interface_id: egress_interface,
             metric: cost,
-            path,
+            path: l3_path,
             is_reachable: true,
             protocol: "Dijkstra".to_string(),
         });

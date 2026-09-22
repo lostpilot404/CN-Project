@@ -177,4 +177,66 @@ impl RoutingGraph {
             false
         }
     }
+
+    /// Determines if a node acts as a Layer 2 transparent forwarding device (e.g. standard Switch).
+    ///
+    /// Layer 2 devices forward frames across their interfaces within a physical/L2 broadcast domain,
+    /// providing L2 connectivity between connected devices without terminating or routing IP packets.
+    /// They do NOT act as Layer 3 routers and do NOT receive Layer 3 routing tables.
+    pub fn is_l2_transparent_forwarder(&self, node_id: &str) -> bool {
+        if let Some(node) = self.nodes.get(node_id) {
+            match node.node_type {
+                NodeType::Switch => true,
+                // AccessPoint is currently modeled as not forwarding by default (extensible)
+                NodeType::AccessPoint => false,
+                NodeType::Router | NodeType::Pc | NodeType::Server | NodeType::Generic => false,
+            }
+        } else {
+            false
+        }
+    }
+
+    /// Determines if a node is allowed to forward connectivity/traffic in graph traversal.
+    ///
+    /// Allowed forwarders:
+    /// - Layer 3 transit-capable routers (`NodeType::Router`)
+    /// - Layer 2 transparent forwarding switches (`NodeType::Switch`)
+    ///
+    /// Prohibited forwarders:
+    /// - Terminal end hosts (`Pc`, `Server`, `Generic`) cannot act as transit devices.
+    pub fn can_forward_traffic(&self, node_id: &str) -> bool {
+        self.is_l3_transit_capable(node_id) || self.is_l2_transparent_forwarder(node_id)
+    }
+
+    /// Normalizes a physical topology hop sequence into an authoritative Layer 3 routing path.
+    ///
+    /// In an L3 routing table:
+    /// - The source router and destination node are always preserved.
+    /// - Intermediate L3 transit routers are preserved as routing hops.
+    /// - Intermediate Layer 2 transparent forwarders (e.g. Switches) are omitted from the L3 hop list,
+    ///   ensuring that switches are NOT falsely classified as L3 routing hops.
+    pub fn normalize_to_l3_path(&self, physical_path: &[String]) -> Vec<String> {
+        if physical_path.is_empty() {
+            return Vec::new();
+        }
+        if physical_path.len() <= 2 {
+            return physical_path.to_vec();
+        }
+
+        let last_idx = physical_path.len() - 1;
+        physical_path
+            .iter()
+            .enumerate()
+            .filter(|(idx, hop)| {
+                // Keep the source (first) and final destination (last).
+                // Filter out intermediate L2 transparent forwarders.
+                if *idx == 0 || *idx == last_idx {
+                    true
+                } else {
+                    !self.is_l2_transparent_forwarder(hop)
+                }
+            })
+            .map(|(_, hop)| hop.clone())
+            .collect()
+    }
 }
