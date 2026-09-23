@@ -6,6 +6,7 @@ import { RoutingWorkspace } from './components/routing/RoutingWorkspace';
 import { AddressingWorkspace } from './components/addressing/AddressingWorkspace';
 import { DataLinkWorkspace } from './components/datalink/DataLinkWorkspace';
 import { TransportWorkspace } from './components/transport/TransportWorkspace';
+import { SimulationStudio } from './components/simulation/SimulationStudio';
 import { ControlBar } from './components/simulation/ControlBar';
 import { TimelineDrawer } from './components/timeline/TimelineDrawer';
 import { api } from './lib/tauri';
@@ -317,6 +318,8 @@ export function App() {
             <DataLinkWorkspace />
           ) : activeTab === 'transport' ? (
             <TransportWorkspace project={project} />
+          ) : activeTab === 'simulation' ? (
+            <SimulationStudio project={project} />
           ) : (
             <div className="flex-1 flex items-center justify-center bg-slate-950 text-slate-400 p-8 text-center">
               <div>
@@ -324,32 +327,36 @@ export function App() {
                   {activeTab.replace('_', ' ')} Workspace
                 </h3>
                 <p className="text-xs text-slate-400 mt-1 max-w-md">
-                  Phase 4A authoritative networking algorithms active: Dijkstra Link-State, Bellman-Ford Distance-Vector, IPv4/CIDR, VLSM, Duplicate IP detection, IPv6 RFC 5952, and stateful NAT/NAPT.
+                  Phase 5 authoritative packet and protocol visualization active: 5-layer OSI encapsulation viewer, packet inspector, packet journey visualizer, and chronological event timeline.
                 </p>
               </div>
             </div>
           )}
 
-          {/* Bottom Timeline Drawer */}
-          <TimelineDrawer
-            events={events}
-            isOpen={isTimelineOpen}
-            onToggle={() => setIsTimelineOpen(!isTimelineOpen)}
-          />
+          {/* Bottom Timeline Drawer (visible on topology canvas) */}
+          {activeTab === 'topology' && (
+            <>
+              <TimelineDrawer
+                events={events}
+                isOpen={isTimelineOpen}
+                onToggle={() => setIsTimelineOpen(!isTimelineOpen)}
+              />
 
-          {/* Simulation Control Bar */}
-          <ControlBar
-            status={simStatus}
-            onStep={handleStep}
-            onRunBurst={handleRunBurst}
-            onRunAll={handleRunAll}
-            onPause={handlePause}
-            onReset={handleResetProject}
-            onSendDemoPacket={handleSendDemoPacket}
-            eventsCount={events.length}
-            pendingCount={pendingEventsCount}
-            metrics={metrics}
-          />
+              {/* Simulation Control Bar */}
+              <ControlBar
+                status={simStatus}
+                onStep={handleStep}
+                onRunBurst={handleRunBurst}
+                onRunAll={handleRunAll}
+                onPause={handlePause}
+                onReset={handleResetProject}
+                onSendDemoPacket={handleSendDemoPacket}
+                eventsCount={events.length}
+                pendingCount={pendingEventsCount}
+                metrics={metrics}
+              />
+            </>
+          )}
           {/* Toast Notification */}
           {toast && (
             <div

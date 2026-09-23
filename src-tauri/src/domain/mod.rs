@@ -10,7 +10,7 @@ pub use interface::{Interface, InterfaceStatus};
 pub use link::{Link, LinkEndpoint, LinkStatus};
 pub use node::{Node, NodeState, NodeType, Position};
 pub use packet::{
-    AppHeader, DataLinkHeader, EncapsulationStack, NetworkHeader, Packet, PacketState,
-    TransportHeader,
+    AppHeader, DataLinkHeader, EncapsulationStack, NetworkHeader, Packet, PacketHopRecord,
+    PacketState, PhysicalLayerInfo, TransportHeader,
 };
 pub use project::{Project, ProjectMetadata, SimulationConfig};

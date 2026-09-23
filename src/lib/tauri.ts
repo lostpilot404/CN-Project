@@ -9,7 +9,7 @@ import {
   Interface,
   HistoryStatus,
 } from '../types/topology';
-import { SimulationStateSnapshot, SimEvent } from '../types/simulation';
+import { SimulationStateSnapshot, SimEvent, Packet } from '../types/simulation';
 import {
   MetricType,
   RoutingAlgorithm,
@@ -190,6 +190,104 @@ let mockProject: Project = {
 
 let mockSimTimeUs = 0;
 let mockEvents: SimEvent[] = [];
+
+function createDefaultMockPackets(): Packet[] {
+  return [
+    {
+      id: 'pkt-1',
+      src_node_id: 'node-1',
+      dst_node_id: 'node-2',
+      size_bytes: 1000,
+      created_at_us: 0,
+      current_node_id: 'node-1',
+      next_hop_node_id: 'node-2',
+      state: 'created',
+      headers: {
+        application: {
+          protocol: 'HTTP',
+          payload_preview: 'GET /index.html HTTP/1.1 (1000 bytes)',
+          message_type: 'HTTP Request',
+        },
+        transport: {
+          protocol: 'TCP',
+          src_port: 49152,
+          dst_port: 80,
+          seq_num: 1000,
+          ack_num: 1,
+          window_size: 65535,
+          flags: ['SYN', 'ACK'],
+          payload_length: 1000,
+          is_retransmission: false,
+          connection_state: 'ESTABLISHED',
+        },
+        network: {
+          version: 4,
+          src_ip: '192.168.1.10',
+          dst_ip: '10.0.0.100',
+          ttl: 64,
+          protocol_num: 6,
+          checksum: 0xa4f2,
+        },
+        datalink: {
+          src_mac: '02:00:00:01:01:01',
+          dst_mac: '02:00:00:02:01:01',
+          ether_type: 0x0800,
+          crc_fcs: 0x3bc1a920,
+          frame_type: 'Ethernet II (DIX)',
+          fcs_valid: true,
+        },
+        physical: {
+          link_id: 'link-1',
+          bandwidth_bps: 100_000_000,
+          propagation_delay_us: 10_000,
+          tx_start_us: 5,
+          tx_finish_us: 85,
+          bit_count: 8000,
+          preamble_bits: '10101010...',
+          signal_encoding: 'Manchester',
+        },
+      },
+      journey_hops: ['node-1'],
+      planned_route: ['node-1', 'node-2'],
+      hop_history: [
+        {
+          hop_index: 0,
+          node_id: 'node-1',
+          link_id: null,
+          timestamp_us: 0,
+          state: 'created',
+          description: 'Packet pkt-1 created at node node-1',
+        },
+        {
+          hop_index: 1,
+          node_id: 'node-1',
+          link_id: 'link-1',
+          timestamp_us: 5,
+          state: 'queued',
+          description: 'Packet pkt-1 entered queue for link-1',
+        },
+        {
+          hop_index: 2,
+          node_id: 'node-1',
+          link_id: 'link-1',
+          timestamp_us: 5,
+          state: 'transmitting',
+          description: 'Packet pkt-1 began transmission on link-1',
+        },
+        {
+          hop_index: 3,
+          node_id: 'node-2',
+          link_id: 'link-1',
+          timestamp_us: 10085,
+          state: 'delivered',
+          description: 'Packet pkt-1 delivered to destination node-2',
+        },
+      ],
+    },
+  ];
+}
+
+let mockPackets: Packet[] = createDefaultMockPackets();
 
 let mockUndoStack: Project[] = [];
 let mockRedoStack: Project[] = [];
@@ -505,6 +603,7 @@ function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
           total_enqueued: 1,
           total_dropped_overflow: 0,
         })),
+        packets: mockPackets,
       };
       return Promise.resolve(snapshot as unknown as T);
     }
@@ -516,6 +615,10 @@ function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
         timestamp: mockSimTimeUs,
         event_type: { packet_created: { packet_id: `pkt-${mockEvents.length + 1}`, node_id: 'node-1' } },
         description: `Simulated step event at ${mockSimTimeUs} us`,
+        packet_id: `pkt-${mockEvents.length + 1}`,
+        node_id: 'node-1',
+        layer: 'Application',
+        protocol: 'HTTP',
       };
       mockEvents.push(ev);
       return Promise.resolve(ev as unknown as T);
@@ -553,6 +656,7 @@ function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
           max_latency_us: null,
         },
         queues: [],
+        packets: mockPackets,
       };
       return Promise.resolve(snap as unknown as T);
     }
@@ -560,6 +664,7 @@ function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
     case 'reset_simulation': {
       mockSimTimeUs = 0;
       mockEvents = [];
+      mockPackets = createDefaultMockPackets();
       const snapshot: SimulationStateSnapshot = {
         current_time_us: 0,
         status: 'ready',
@@ -580,6 +685,7 @@ function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
           max_latency_us: null,
         },
         queues: [],
+        packets: mockPackets,
       };
       return Promise.resolve(snapshot as unknown as T);
     }
@@ -587,19 +693,98 @@ function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
     case 'inject_packet': {
       const src = (args?.srcNodeId as string) || 'node-1';
       const dst = (args?.dstNodeId as string) || 'node-2';
-      const pktId = `pkt-${mockEvents.length + 1}`;
+      const sizeBytes = (args?.sizeBytes as number) || 1000;
+      const appProtocol = (args?.appProtocol as string) || 'HTTP';
+      const transportProtocol = (args?.transportProtocol as string) || 'TCP';
+      const pktId = `pkt-${mockPackets.length + 1}`;
+
+      const newPkt: Packet = {
+        id: pktId,
+        src_node_id: src,
+        dst_node_id: dst,
+        size_bytes: sizeBytes,
+        created_at_us: mockSimTimeUs,
+        current_node_id: src,
+        next_hop_node_id: dst,
+        state: 'created',
+        headers: {
+          application: {
+            protocol: appProtocol,
+            payload_preview: `Payload (${sizeBytes} bytes)`,
+            message_type: `${appProtocol} Data`,
+          },
+          transport: {
+            protocol: transportProtocol,
+            src_port: 49152,
+            dst_port: appProtocol === 'HTTP' ? 80 : 53,
+            seq_num: 100,
+            ack_num: null,
+            window_size: 65535,
+            flags: transportProtocol === 'TCP' ? ['ACK'] : [],
+            payload_length: sizeBytes,
+            is_retransmission: false,
+            connection_state: transportProtocol === 'TCP' ? 'ESTABLISHED' : null,
+          },
+          network: {
+            version: 4,
+            src_ip: '192.168.1.10',
+            dst_ip: '10.0.0.100',
+            ttl: 64,
+            protocol_num: transportProtocol === 'TCP' ? 6 : 17,
+            checksum: 0xa4f2,
+          },
+          datalink: {
+            src_mac: '02:00:00:01:01:01',
+            dst_mac: '02:00:00:02:01:01',
+            ether_type: 0x0800,
+            crc_fcs: 0x3bc1a920,
+            frame_type: 'Ethernet II (DIX)',
+            fcs_valid: true,
+          },
+          physical: {
+            link_id: 'link-1',
+            bandwidth_bps: 10_000_000,
+            propagation_delay_us: 10_000,
+            tx_start_us: mockSimTimeUs,
+            tx_finish_us: mockSimTimeUs + 800,
+            bit_count: sizeBytes * 8,
+            preamble_bits: '10101010...',
+            signal_encoding: 'Manchester',
+          },
+        },
+        journey_hops: [src],
+        planned_route: [src, dst],
+        hop_history: [
+          {
+            hop_index: 0,
+            node_id: src,
+            link_id: null,
+            timestamp_us: mockSimTimeUs,
+            state: 'created',
+            description: `Packet ${pktId} created at node ${src}`,
+          },
+        ],
+      };
+      mockPackets.push(newPkt);
+
       const ev: SimEvent = {
         id: mockEvents.length + 1,
         timestamp: mockSimTimeUs,
-        event_type: { PacketCreated: { packet_id: pktId, node_id: src, size_bytes: 1000 } },
+        event_type: { PacketCreated: { packet_id: pktId, node_id: src, size_bytes: sizeBytes } },
         description: `Injected packet ${pktId} (${src} -> ${dst})`,
+        packet_id: pktId,
+        node_id: src,
+        layer: 'Application',
+        protocol: appProtocol,
       };
       mockEvents.push(ev);
       return Promise.resolve(pktId as unknown as T);
     }
 
     case 'get_packet_details': {
-      return Promise.resolve(null as unknown as T);
+      const pktId = args?.packetId as string;
+      const found = mockPackets.find((p) => p.id === pktId) || mockPackets[0] || null;
+      return Promise.resolve(found as unknown as T);
     }
 
     case 'schedule_demo_packet': {
@@ -608,6 +793,10 @@ function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
         timestamp: mockSimTimeUs + 500,
         event_type: { packet_created: { packet_id: `pkt-demo`, node_id: 'node-1' } },
         description: 'Scheduled demo packet between PC1 and Server S1',
+        packet_id: 'pkt-demo',
+        node_id: 'node-1',
+        layer: 'Application',
+        protocol: 'HTTP',
       };
       mockEvents.push(ev);
       return Promise.resolve(mockSimTimeUs as unknown as T);
@@ -1646,7 +1835,7 @@ export const api = {
       transportProtocol,
     }),
   getPacketDetails: (packetId: string) =>
-    invokeTauri<unknown>('get_packet_details', { packetId }),
+    invokeTauri<Packet | null>('get_packet_details', { packetId }),
   scheduleDemoPacket: (srcNodeId: string, dstNodeId: string) =>
     invokeTauri<number>('schedule_demo_packet', { srcNodeId, dstNodeId }),
   // Phase 4A: Routing & Addressing Authoritative APIs

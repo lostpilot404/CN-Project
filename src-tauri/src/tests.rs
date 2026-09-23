@@ -3904,3 +3904,450 @@ fn test_transport_invariants() {
     // Invariant 3: Delivered bytes equals requested payload on completion
     assert_eq!(res.metrics.bytes_delivered, 6000);
 }
+
+#[test]
+fn test_phase5_five_layer_packet_serialization_and_deserialization() {
+    use crate::domain::{
+        AppHeader, DataLinkHeader, EncapsulationStack, NetworkHeader, Packet, PacketHopRecord,
+        PacketState, PhysicalLayerInfo, TransportHeader,
+    };
+
+    let packet = Packet {
+        id: "pkt-phase5".into(),
+        src_node_id: "host-1".into(),
+        dst_node_id: "host-2".into(),
+        size_bytes: 1460,
+        created_at_us: 100_000,
+        current_node_id: "host-1".into(),
+        next_hop_node_id: Some("router-1".into()),
+        state: PacketState::Created,
+        headers: EncapsulationStack {
+            application: AppHeader {
+                protocol: "HTTP".into(),
+                payload_preview: "GET /index.html HTTP/1.1".into(),
+                message_type: Some("HTTP Request".into()),
+            },
+            transport: TransportHeader {
+                protocol: "TCP".into(),
+                src_port: 52000,
+                dst_port: 80,
+                seq_num: Some(1000),
+                ack_num: Some(1),
+                window_size: Some(65535),
+                flags: vec!["SYN".into(), "ACK".into()],
+                payload_length: Some(1460),
+                is_retransmission: Some(false),
+                connection_state: Some("ESTABLISHED".into()),
+            },
+            network: NetworkHeader {
+                version: 4,
+                src_ip: "192.168.1.10".into(),
+                dst_ip: "10.0.0.100".into(),
+                ttl: 64,
+                protocol_num: 6,
+                checksum: 0xBEEF,
+            },
+            datalink: DataLinkHeader {
+                src_mac: "02:00:00:01:00:01".into(),
+                dst_mac: "02:00:00:02:00:01".into(),
+                ether_type: 0x0800,
+                crc_fcs: 0x12345678,
+                frame_type: Some("Ethernet II".into()),
+                fcs_valid: Some(true),
+            },
+            physical: Some(PhysicalLayerInfo {
+                link_id: Some("link-1".into()),
+                bandwidth_bps: Some(1_000_000_000),
+                propagation_delay_us: Some(5_000),
+                tx_start_us: Some(100_005),
+                tx_finish_us: Some(100_017),
+                bit_count: 1460 * 8,
+                preamble_bits: Some("10101010".into()),
+                signal_encoding: Some("Manchester".into()),
+            }),
+        },
+        journey_hops: vec!["host-1".into()],
+        planned_route: vec!["host-1".into(), "router-1".into(), "host-2".into()],
+        hop_history: vec![PacketHopRecord {
+            hop_index: 0,
+            node_id: "host-1".into(),
+            link_id: None,
+            timestamp_us: 100_000,
+            state: PacketState::Created,
+            description: "Packet created at host-1".into(),
+        }],
+    };
+
+    let serialized = serde_json::to_string(&packet).expect("Must serialize Packet");
+    let deserialized: Packet = serde_json::from_str(&serialized).expect("Must deserialize Packet");
+
+    assert_eq!(deserialized.id, "pkt-phase5");
+    assert_eq!(deserialized.headers.application.protocol, "HTTP");
+    assert_eq!(deserialized.headers.transport.protocol, "TCP");
+    assert_eq!(deserialized.headers.network.version, 4);
+    assert_eq!(deserialized.headers.datalink.ether_type, 0x0800);
+    assert!(deserialized.headers.physical.is_some());
+    assert_eq!(
+        deserialized
+            .headers
+            .physical
+            .as_ref()
+            .unwrap()
+            .bandwidth_bps,
+        Some(1_000_000_000)
+    );
+    assert_eq!(deserialized.hop_history.len(), 1);
+}
+
+#[test]
+fn test_phase5_backward_compatible_deserialization_missing_optional_fields() {
+    use crate::domain::Packet;
+
+    // JSON payload from older phases without physical, planned_route, or hop_history
+    let legacy_json = r#"{
+        "id": "pkt-legacy",
+        "src_node_id": "n1",
+        "dst_node_id": "n2",
+        "size_bytes": 1000,
+        "created_at_us": 500,
+        "current_node_id": "n1",
+        "next_hop_node_id": null,
+        "state": "created",
+        "headers": {
+            "application": {
+                "protocol": "HTTP",
+                "payload_preview": "preview"
+            },
+            "transport": {
+                "protocol": "TCP",
+                "src_port": 80,
+                "dst_port": 8080,
+                "seq_num": 1,
+                "ack_num": null,
+                "window_size": null,
+                "flags": []
+            },
+            "network": {
+                "version": 4,
+                "src_ip": "1.1.1.1",
+                "dst_ip": "2.2.2.2",
+                "ttl": 64,
+                "protocol_num": 6,
+                "checksum": 0
+            },
+            "datalink": {
+                "src_mac": "00:00:00:00:00:01",
+                "dst_mac": "00:00:00:00:00:02",
+                "ether_type": 2048,
+                "crc_fcs": 0
+            }
+        },
+        "journey_hops": ["n1"]
+    }"#;
+
+    let pkt: Packet = serde_json::from_str(legacy_json)
+        .expect("Must deserialize legacy packet with backward-compatible defaults");
+    assert_eq!(pkt.id, "pkt-legacy");
+    assert!(pkt.headers.physical.is_none());
+    assert!(pkt.planned_route.is_empty());
+    assert!(pkt.hop_history.is_empty());
+}
+
+#[test]
+fn test_phase5_simulation_engine_physical_layer_and_hop_history() {
+    use crate::domain::{Link, LinkEndpoint};
+    use crate::simulation::SimulationEngine;
+
+    let mut engine = SimulationEngine::new(42);
+
+    let mut link = Link::new(
+        "link-1".into(),
+        LinkEndpoint {
+            node_id: "node-a".into(),
+            interface_id: "eth0".into(),
+        },
+        LinkEndpoint {
+            node_id: "node-b".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    link.bandwidth_bps = 10_000_000;
+    link.propagation_delay_us = 5_000;
+    link.queue_capacity = 10;
+    let links = vec![link];
+    engine.update_links(&links);
+
+    let pkt_id = engine.inject_packet(
+        "node-a".into(),
+        "node-b".into(),
+        1000,
+        "HTTP".into(),
+        "TCP".into(),
+    );
+
+    // Initial hop record exists
+    let initial_pkt = engine.get_packet(&pkt_id).expect("Packet must exist");
+    assert_eq!(initial_pkt.hop_history.len(), 1);
+    assert_eq!(initial_pkt.hop_history[0].hop_index, 0);
+    assert_eq!(initial_pkt.hop_history[0].node_id, "node-a");
+
+    // Run simulation to delivery
+    engine.run_all().expect("Simulation must run to completion");
+
+    let final_pkt = engine.get_packet(&pkt_id).expect("Packet must exist");
+    assert_eq!(final_pkt.state, crate::domain::PacketState::Delivered);
+
+    // Hops: 0 (Created) -> 1 (Queued) -> 2 (Transmitting) -> 3 (InFlight) -> 4 (Delivered)
+    assert!(
+        final_pkt.hop_history.len() >= 4,
+        "Hop history must record traversal steps: {:?}",
+        final_pkt.hop_history
+    );
+
+    // Physical layer was populated during transmission
+    assert!(final_pkt.headers.physical.is_some());
+    let phys = final_pkt.headers.physical.as_ref().unwrap();
+    assert_eq!(phys.link_id, Some("link-1".into()));
+    assert_eq!(phys.bandwidth_bps, Some(10_000_000));
+    assert_eq!(phys.propagation_delay_us, Some(5_000));
+    assert!(phys.tx_start_us.is_some());
+    assert!(phys.tx_finish_us.is_some());
+}
+
+#[test]
+fn test_phase5_packet_drop_history_preservation() {
+    use crate::domain::{Link, LinkEndpoint, PacketState};
+    use crate::simulation::SimulationEngine;
+
+    let mut engine = SimulationEngine::new(42);
+
+    // Queue capacity of 1 so second packet drops on drop-tail
+    let mut link = Link::new(
+        "link-tight".into(),
+        LinkEndpoint {
+            node_id: "node-a".into(),
+            interface_id: "eth0".into(),
+        },
+        LinkEndpoint {
+            node_id: "node-b".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    link.bandwidth_bps = 100_000;
+    link.propagation_delay_us = 100_000;
+    link.queue_capacity = 1;
+    let links = vec![link];
+    engine.update_links(&links);
+
+    let _pkt1 = engine.inject_packet(
+        "node-a".into(),
+        "node-b".into(),
+        1000,
+        "HTTP".into(),
+        "TCP".into(),
+    );
+    let _pkt2 = engine.inject_packet(
+        "node-a".into(),
+        "node-b".into(),
+        1000,
+        "HTTP".into(),
+        "TCP".into(),
+    );
+    let pkt3 = engine.inject_packet(
+        "node-a".into(),
+        "node-b".into(),
+        1000,
+        "HTTP".into(),
+        "TCP".into(),
+    );
+
+    engine.run_all().expect("Must complete");
+
+    let p3 = engine.get_packet(&pkt3).expect("pkt3 must exist");
+    assert_eq!(p3.state, PacketState::DroppedQueueFull);
+
+    // Confirm drop was recorded in hop history with reason
+    let drop_record = p3
+        .hop_history
+        .iter()
+        .find(|h| h.state == PacketState::DroppedQueueFull);
+    assert!(
+        drop_record.is_some(),
+        "Drop must be recorded in hop history"
+    );
+    assert!(drop_record.unwrap().description.contains("dropped"));
+}
+
+#[test]
+fn test_phase5_event_metadata_enrichment_and_layer_identification() {
+    use crate::domain::{Link, LinkEndpoint};
+    use crate::simulation::SimulationEngine;
+
+    let mut engine = SimulationEngine::new(100);
+    let mut link = Link::new(
+        "l1".into(),
+        LinkEndpoint {
+            node_id: "n1".into(),
+            interface_id: "eth0".into(),
+        },
+        LinkEndpoint {
+            node_id: "n2".into(),
+            interface_id: "eth0".into(),
+        },
+    );
+    link.bandwidth_bps = 10_000_000;
+    link.propagation_delay_us = 10_000;
+    link.queue_capacity = 50;
+    let links = vec![link];
+    engine.update_links(&links);
+
+    let pkt_id = engine.inject_packet("n1".into(), "n2".into(), 500, "DNS".into(), "UDP".into());
+    engine.run_all().expect("Simulation must run");
+
+    let snap = engine.get_snapshot();
+    assert!(!snap.recent_events.is_empty());
+
+    // Check packet created event metadata
+    let created_ev = snap
+        .recent_events
+        .iter()
+        .find(|e| matches!(e.event_type, crate::simulation::SimEventType::PacketCreated { .. }))
+        .expect("PacketCreated event must exist");
+
+    assert_eq!(created_ev.packet_id, Some(pkt_id.clone()));
+    assert_eq!(created_ev.node_id, Some("n1".into()));
+    assert_eq!(created_ev.layer, Some("Application".into()));
+
+    // Check transmission event metadata
+    let tx_ev = snap
+        .recent_events
+        .iter()
+        .find(|e| matches!(e.event_type, crate::simulation::SimEventType::TransmissionStarted { .. }))
+        .expect("TransmissionStarted event must exist");
+
+    assert_eq!(tx_ev.packet_id, Some(pkt_id.clone()));
+    assert_eq!(tx_ev.link_id, Some("l1".into()));
+    assert_eq!(tx_ev.layer, Some("Physical".into()));
+}
+
+#[test]
+fn test_phase5_protocol_events_without_packet_id() {
+    use crate::simulation::clock::SimTime;
+    use crate::simulation::event::{SimEvent, SimEventType};
+
+    let ev = SimEvent::new(
+        1,
+        SimTime::from_micros(500),
+        SimEventType::RouteUpdated {
+            node_id: "router-core".into(),
+            algorithm: "Dijkstra Link-State".into(),
+        },
+        "Routing table converged on node router-core".into(),
+    );
+
+    assert_eq!(ev.packet_id, None);
+    assert_eq!(ev.node_id, Some("router-core".into()));
+    assert_eq!(ev.layer, Some("Network".into()));
+    assert_eq!(ev.protocol, Some("Routing".into()));
+
+    let json = serde_json::to_string(&ev).expect("Must serialize");
+    let deser: SimEvent = serde_json::from_str(&json).expect("Must deserialize");
+    assert_eq!(deser.packet_id, None);
+    assert_eq!(deser.node_id, Some("router-core".into()));
+}
+
+#[test]
+fn test_phase5_planned_route_vs_actual_hop_history_distinction() {
+    use crate::domain::{
+        AppHeader, DataLinkHeader, EncapsulationStack, NetworkHeader, Packet, PacketHopRecord,
+        PacketState, TransportHeader,
+    };
+
+    // Packet with planned route across 3 routers, but actual hop history ends early due to link fault
+    let packet = Packet {
+        id: "pkt-fault-route".into(),
+        src_node_id: "host-a".into(),
+        dst_node_id: "host-b".into(),
+        size_bytes: 1000,
+        created_at_us: 0,
+        current_node_id: "router-1".into(),
+        next_hop_node_id: Some("router-2".into()),
+        state: PacketState::DroppedLinkDown,
+        headers: EncapsulationStack {
+            application: AppHeader {
+                protocol: "HTTP".into(),
+                payload_preview: "test".into(),
+                message_type: None,
+            },
+            transport: TransportHeader {
+                protocol: "TCP".into(),
+                src_port: 80,
+                dst_port: 80,
+                seq_num: None,
+                ack_num: None,
+                window_size: None,
+                flags: vec![],
+                payload_length: None,
+                is_retransmission: None,
+                connection_state: None,
+            },
+            network: NetworkHeader {
+                version: 4,
+                src_ip: "10.0.0.1".into(),
+                dst_ip: "10.0.0.2".into(),
+                ttl: 64,
+                protocol_num: 6,
+                checksum: 0,
+            },
+            datalink: DataLinkHeader {
+                src_mac: "00:00:00:00:00:01".into(),
+                dst_mac: "00:00:00:00:00:02".into(),
+                ether_type: 2048,
+                crc_fcs: 0,
+                frame_type: None,
+                fcs_valid: None,
+            },
+            physical: None,
+        },
+        journey_hops: vec!["host-a".into(), "router-1".into()],
+        planned_route: vec![
+            "host-a".into(),
+            "router-1".into(),
+            "router-2".into(),
+            "host-b".into(),
+        ],
+        hop_history: vec![
+            PacketHopRecord {
+                hop_index: 0,
+                node_id: "host-a".into(),
+                link_id: None,
+                timestamp_us: 0,
+                state: PacketState::Created,
+                description: "Created".into(),
+            },
+            PacketHopRecord {
+                hop_index: 1,
+                node_id: "router-1".into(),
+                link_id: Some("link-a-r1".into()),
+                timestamp_us: 1000,
+                state: PacketState::InFlight,
+                description: "Arrived at router-1".into(),
+            },
+            PacketHopRecord {
+                hop_index: 2,
+                node_id: "router-1".into(),
+                link_id: Some("link-r1-r2".into()),
+                timestamp_us: 1005,
+                state: PacketState::DroppedLinkDown,
+                description: "Dropped: link is down".into(),
+            },
+        ],
+    };
+
+    // Planned route has 4 hops
+    assert_eq!(packet.planned_route.len(), 4);
+    // Actual traversal only reached router-1 (3 hop events) and NEVER reached router-2 or host-b
+    assert_eq!(packet.hop_history.len(), 3);
+    assert_eq!(packet.hop_history[2].state, PacketState::DroppedLinkDown);
+    assert!(!packet.hop_history.iter().any(|h| h.node_id == "host-b"));
+}

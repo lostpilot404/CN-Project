@@ -1,23 +1,9 @@
+import { Packet, PacketState } from './packet';
+import { SimEvent } from './events';
+
+export type { Packet, PacketState, SimEvent };
+
 export type SimulationStatus = 'ready' | 'running' | 'paused' | 'completed';
-
-export type PacketState =
-  | 'created'
-  | 'queued'
-  | 'transmitting'
-  | 'in_transit'
-  | 'delivered'
-  | 'dropped_queue_full'
-  | 'dropped_link_down'
-  | 'dropped_bit_error'
-  | 'dropped_ttl_expired'
-  | 'retransmitted';
-
-export interface SimEvent {
-  id: number;
-  timestamp: { 0: number } | number; // SimTime (micros)
-  event_type: Record<string, unknown>;
-  description: string;
-}
 
 export interface SimulationMetrics {
   packets_created: number;
@@ -50,16 +36,6 @@ export interface SimulationStateSnapshot {
   recent_events: SimEvent[];
   metrics: SimulationMetrics;
   queues: QueueSnapshot[];
+  packets?: Packet[];
 }
 
-export interface Packet {
-  id: string;
-  src_node_id: string;
-  dst_node_id: string;
-  size_bytes: number;
-  created_at_us: number;
-  current_node_id: string;
-  next_hop_node_id?: string | null;
-  state: PacketState;
-  journey_hops: string[];
-}

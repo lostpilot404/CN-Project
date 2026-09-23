@@ -8,8 +8,8 @@ use super::metrics::SimulationMetrics;
 use super::queue::{LinkQueue, QueueSnapshot};
 use super::rng::DeterministicRng;
 use crate::domain::{
-    AppHeader, DataLinkHeader, EncapsulationStack, Link, NetworkHeader, Packet, PacketState,
-    TransportHeader,
+    AppHeader, DataLinkHeader, EncapsulationStack, Link, NetworkHeader, Packet, PacketHopRecord,
+    PacketState, PhysicalLayerInfo, TransportHeader,
 };
 use crate::error::Result;
 
@@ -31,6 +31,8 @@ pub struct SimulationStateSnapshot {
     pub recent_events: Vec<SimEvent>,
     pub metrics: SimulationMetrics,
     pub queues: Vec<QueueSnapshot>,
+    #[serde(default)]
+    pub packets: Vec<Packet>,
 }
 
 pub struct SimulationEngine {
@@ -105,12 +107,8 @@ impl SimulationEngine {
     ) {
         let id = self.next_event_id;
         self.next_event_id += 1;
-        self.event_queue.push(SimEvent {
-            id,
-            timestamp,
-            event_type,
-            description,
-        });
+        self.event_queue
+            .push(SimEvent::new(id, timestamp, event_type, description));
     }
 
     /// Injects a new packet into the network simulation
@@ -125,6 +123,31 @@ impl SimulationEngine {
         let packet_id = format!("pkt-{}", self.next_packet_id);
         self.next_packet_id += 1;
 
+        let planned_route =
+            if let Some(link) = self.find_link_for_packet(&src_node_id, &dst_node_id) {
+                let target = if link.source.node_id == src_node_id {
+                    link.target.node_id.clone()
+                } else {
+                    link.source.node_id.clone()
+                };
+                if target == dst_node_id {
+                    vec![src_node_id.clone(), dst_node_id.clone()]
+                } else {
+                    vec![src_node_id.clone(), target, dst_node_id.clone()]
+                }
+            } else {
+                vec![src_node_id.clone(), dst_node_id.clone()]
+            };
+
+        let initial_hop = PacketHopRecord {
+            hop_index: 0,
+            node_id: src_node_id.clone(),
+            link_id: None,
+            timestamp_us: self.current_time.as_micros(),
+            state: PacketState::Created,
+            description: format!("Packet {} created at node {}", packet_id, src_node_id),
+        };
+
         let packet = Packet {
             id: packet_id.clone(),
             src_node_id: src_node_id.clone(),
@@ -138,6 +161,7 @@ impl SimulationEngine {
                 application: AppHeader {
                     protocol: app_protocol.clone(),
                     payload_preview: format!("Data payload ({} bytes)", size_bytes),
+                    message_type: Some(format!("{} Data", app_protocol)),
                 },
                 transport: TransportHeader {
                     protocol: transport_protocol.clone(),
@@ -150,6 +174,13 @@ impl SimulationEngine {
                         vec!["ACK".to_string()]
                     } else {
                         vec![]
+                    },
+                    payload_length: Some(size_bytes),
+                    is_retransmission: Some(false),
+                    connection_state: if transport_protocol == "TCP" {
+                        Some("ESTABLISHED".to_string())
+                    } else {
+                        None
                     },
                 },
                 network: NetworkHeader {
@@ -165,9 +196,23 @@ impl SimulationEngine {
                     dst_mac: "02:00:00:00:00:02".to_string(),
                     ether_type: 0x0800,
                     crc_fcs: 0x3BC1A920,
+                    frame_type: Some("Ethernet II (DIX)".to_string()),
+                    fcs_valid: Some(true),
                 },
+                physical: Some(PhysicalLayerInfo {
+                    link_id: None,
+                    bandwidth_bps: None,
+                    propagation_delay_us: None,
+                    tx_start_us: None,
+                    tx_finish_us: None,
+                    bit_count: size_bytes * 8,
+                    preamble_bits: None,
+                    signal_encoding: None,
+                }),
             },
             journey_hops: vec![src_node_id.clone()],
+            planned_route,
+            hop_history: vec![initial_hop],
         };
 
         self.packets.insert(packet_id.clone(), packet);
@@ -316,6 +361,18 @@ impl SimulationEngine {
                     if link.status != crate::domain::LinkStatus::Up {
                         if let Some(pkt) = self.packets.get_mut(packet_id) {
                             pkt.state = PacketState::DroppedLinkDown;
+                            let hop_idx = pkt.hop_history.len();
+                            pkt.hop_history.push(PacketHopRecord {
+                                hop_index: hop_idx,
+                                node_id: pkt.current_node_id.clone(),
+                                link_id: Some(link_id.clone()),
+                                timestamp_us: self.current_time.as_micros(),
+                                state: PacketState::DroppedLinkDown,
+                                description: format!(
+                                    "Packet {} dropped: link {} is down",
+                                    packet_id, link_id
+                                ),
+                            });
                         }
                         self.metrics.record_dropped_link_down();
                         self.schedule_event(
@@ -340,6 +397,18 @@ impl SimulationEngine {
                         Ok(()) => {
                             if let Some(pkt) = self.packets.get_mut(packet_id) {
                                 pkt.state = PacketState::Queued;
+                                let hop_idx = pkt.hop_history.len();
+                                pkt.hop_history.push(PacketHopRecord {
+                                    hop_index: hop_idx,
+                                    node_id: pkt.current_node_id.clone(),
+                                    link_id: Some(link_id.clone()),
+                                    timestamp_us: self.current_time.as_micros(),
+                                    state: PacketState::Queued,
+                                    description: format!(
+                                        "Packet {} entered queue for link {}",
+                                        packet_id, link_id
+                                    ),
+                                });
                             }
                             // If link is idle, begin transmission immediately
                             if !queue.is_transmitting {
@@ -350,6 +419,21 @@ impl SimulationEngine {
                             // Drop-Tail: Queue is full
                             if let Some(pkt) = self.packets.get_mut(packet_id) {
                                 pkt.state = PacketState::DroppedQueueFull;
+                                let hop_idx = pkt.hop_history.len();
+                                pkt.hop_history.push(PacketHopRecord {
+                                    hop_index: hop_idx,
+                                    node_id: pkt.current_node_id.clone(),
+                                    link_id: Some(link_id.clone()),
+                                    timestamp_us: self.current_time.as_micros(),
+                                    state: PacketState::DroppedQueueFull,
+                                    description: format!(
+                                        "Packet {} dropped: queue for link {} is full ({}/{})",
+                                        packet_id,
+                                        link_id,
+                                        link.queue_capacity,
+                                        link.queue_capacity
+                                    ),
+                                });
                             }
                             self.metrics.record_dropped_overflow();
                             self.schedule_event(
@@ -373,12 +457,24 @@ impl SimulationEngine {
                 // State recorded when transmission was scheduled
             }
 
-            SimEventType::TransmissionFinished {
-                packet_id: _,
-                link_id,
-            } => {
+            SimEventType::TransmissionFinished { packet_id, link_id } => {
                 if let Some(queue) = self.link_queues.get_mut(link_id) {
                     queue.is_transmitting = false;
+                }
+                if let Some(pkt) = self.packets.get_mut(packet_id) {
+                    pkt.state = PacketState::InFlight;
+                    let hop_idx = pkt.hop_history.len();
+                    pkt.hop_history.push(PacketHopRecord {
+                        hop_index: hop_idx,
+                        node_id: pkt.current_node_id.clone(),
+                        link_id: Some(link_id.clone()),
+                        timestamp_us: self.current_time.as_micros(),
+                        state: PacketState::InFlight,
+                        description: format!(
+                            "Packet {} completed transmission onto link {}, in-flight",
+                            packet_id, link_id
+                        ),
+                    });
                 }
                 // If more packets are waiting in the FIFO queue, start next transmission
                 self.trigger_link_transmission(link_id);
@@ -406,12 +502,31 @@ impl SimulationEngine {
                     .map(|p| p.dst_node_id.clone())
                     .unwrap_or_default();
 
+                let is_final = node_id == &dst_node_id || dst_node_id.is_empty();
+
                 if let Some(pkt) = self.packets.get_mut(packet_id) {
                     pkt.current_node_id = node_id.clone();
                     pkt.journey_hops.push(node_id.clone());
+                    let hop_idx = pkt.hop_history.len();
+                    pkt.hop_history.push(PacketHopRecord {
+                        hop_index: hop_idx,
+                        node_id: node_id.clone(),
+                        link_id: None,
+                        timestamp_us: self.current_time.as_micros(),
+                        state: if is_final {
+                            PacketState::Delivered
+                        } else {
+                            PacketState::InFlight
+                        },
+                        description: if is_final {
+                            format!("Packet {} delivered to destination {}", packet_id, node_id)
+                        } else {
+                            format!("Packet {} arrived at transit node {}", packet_id, node_id)
+                        },
+                    });
                 }
 
-                if node_id == &dst_node_id || dst_node_id.is_empty() {
+                if is_final {
                     if let Some(pkt) = self.packets.get_mut(packet_id) {
                         pkt.state = PacketState::Delivered;
                     }
@@ -463,7 +578,11 @@ impl SimulationEngine {
                 }
             }
 
-            SimEventType::PacketDropped { packet_id, .. } => {
+            SimEventType::PacketDropped {
+                packet_id,
+                reason,
+                location_id,
+            } => {
                 if let Some(pkt) = self.packets.get_mut(packet_id) {
                     if pkt.state != PacketState::DroppedQueueFull
                         && pkt.state != PacketState::DroppedLinkDown
@@ -471,6 +590,15 @@ impl SimulationEngine {
                     {
                         pkt.state = PacketState::DroppedBitError;
                     }
+                    let hop_idx = pkt.hop_history.len();
+                    pkt.hop_history.push(PacketHopRecord {
+                        hop_index: hop_idx,
+                        node_id: pkt.current_node_id.clone(),
+                        link_id: Some(location_id.clone()),
+                        timestamp_us: self.current_time.as_micros(),
+                        state: pkt.state,
+                        description: format!("Packet {} dropped: {}", packet_id, reason),
+                    });
                 }
             }
 
@@ -510,6 +638,25 @@ impl SimulationEngine {
 
             if let Some(pkt) = self.packets.get_mut(&next_pkt_id) {
                 pkt.state = PacketState::Transmitting;
+                let hop_idx = pkt.hop_history.len();
+                pkt.hop_history.push(PacketHopRecord {
+                    hop_index: hop_idx,
+                    node_id: pkt.current_node_id.clone(),
+                    link_id: Some(link_id.to_string()),
+                    timestamp_us: self.current_time.as_micros(),
+                    state: PacketState::Transmitting,
+                    description: format!(
+                        "Packet {} began transmission on link {} (tx_delay: {} µs)",
+                        next_pkt_id, link_id, tx_delay_us
+                    ),
+                });
+                if let Some(ref mut phys) = pkt.headers.physical {
+                    phys.link_id = Some(link_id.to_string());
+                    phys.bandwidth_bps = Some(link.bandwidth_bps);
+                    phys.propagation_delay_us = Some(link.propagation_delay_us);
+                    phys.tx_start_us = Some(self.current_time.as_micros());
+                    phys.tx_finish_us = Some(self.current_time.add_micros(tx_delay_us).as_micros());
+                }
             }
             self.metrics.record_tx(size_bytes);
 
@@ -639,6 +786,9 @@ impl SimulationEngine {
             .values()
             .map(|q| q.get_snapshot())
             .collect();
+        let mut packets_list: Vec<Packet> = self.packets.values().cloned().collect();
+        packets_list.sort_by_key(|p| p.created_at_us);
+
         SimulationStateSnapshot {
             current_time_us: self.current_time.as_micros(),
             status: self.status,
@@ -647,6 +797,7 @@ impl SimulationEngine {
             recent_events: recent,
             metrics: self.metrics.clone(),
             queues,
+            packets: packets_list,
         }
     }
 }
