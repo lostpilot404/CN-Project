@@ -1,6 +1,7 @@
 use crate::domain::{LinkStatus, Node, NodeType, Project};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashMap};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -238,5 +239,126 @@ impl RoutingGraph {
             })
             .map(|(_, hop)| hop.clone())
             .collect()
+    }
+
+    /// Finds the shortest physical path between two nodes in the graph, respecting forwarding capabilities.
+    /// Intermediate nodes must be capable of forwarding (L3 transit router or L2 switch).
+    /// Terminal end hosts (PC, Server) cannot act as intermediate transit nodes.
+    pub fn find_path(
+        &self,
+        source_node_id: &str,
+        target_node_id: &str,
+    ) -> Option<(Vec<String>, Vec<GraphEdge>)> {
+        if !self.nodes.contains_key(source_node_id) || !self.nodes.contains_key(target_node_id) {
+            return None;
+        }
+
+        if source_node_id == target_node_id {
+            return Some((vec![source_node_id.to_string()], Vec::new()));
+        }
+
+        let mut dist: HashMap<String, u64> = HashMap::new();
+        let mut prev: HashMap<String, (String, GraphEdge)> = HashMap::new();
+        let mut heap = BinaryHeap::new();
+
+        for node_id in self.nodes.keys() {
+            if node_id == source_node_id {
+                dist.insert(node_id.clone(), 0);
+                heap.push(PathHeapState {
+                    cost: 0,
+                    node_id: node_id.clone(),
+                });
+            } else {
+                dist.insert(node_id.clone(), u64::MAX);
+            }
+        }
+
+        while let Some(PathHeapState { cost, node_id }) = heap.pop() {
+            if cost > *dist.get(&node_id).unwrap_or(&u64::MAX) {
+                continue;
+            }
+
+            if node_id == target_node_id {
+                break;
+            }
+
+            // Intermediate nodes must be forward-capable
+            if node_id != source_node_id && !self.can_forward_traffic(&node_id) {
+                continue;
+            }
+
+            if let Some(edges) = self.adjacency.get(&node_id) {
+                for edge in edges {
+                    let next_cost = cost.saturating_add(edge.metric);
+                    let current_best = *dist.get(&edge.target).unwrap_or(&u64::MAX);
+
+                    let should_update = if next_cost < current_best {
+                        true
+                    } else if next_cost == current_best && current_best < u64::MAX {
+                        if let Some((prev_node, _)) = prev.get(&edge.target) {
+                            node_id < *prev_node
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+
+                    if should_update {
+                        dist.insert(edge.target.clone(), next_cost);
+                        prev.insert(edge.target.clone(), (node_id.clone(), edge.clone()));
+                        heap.push(PathHeapState {
+                            cost: next_cost,
+                            node_id: edge.target.clone(),
+                        });
+                    }
+                }
+            }
+        }
+
+        if !prev.contains_key(target_node_id) {
+            return None;
+        }
+
+        // Reconstruct path
+        let mut path_nodes = Vec::new();
+        let mut path_edges = Vec::new();
+        let mut curr = target_node_id.to_string();
+
+        while curr != source_node_id {
+            if let Some((p_node, p_edge)) = prev.get(&curr) {
+                path_nodes.push(curr.clone());
+                path_edges.push(p_edge.clone());
+                curr = p_node.clone();
+            } else {
+                return None;
+            }
+        }
+        path_nodes.push(source_node_id.to_string());
+        path_nodes.reverse();
+        path_edges.reverse();
+
+        Some((path_nodes, path_edges))
+    }
+}
+
+#[derive(Clone, Eq, PartialEq)]
+struct PathHeapState {
+    cost: u64,
+    node_id: String,
+}
+
+impl Ord for PathHeapState {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other
+            .cost
+            .cmp(&self.cost)
+            .then_with(|| other.node_id.cmp(&self.node_id))
+    }
+}
+
+impl PartialOrd for PathHeapState {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }

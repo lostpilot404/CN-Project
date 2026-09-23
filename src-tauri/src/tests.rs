@@ -3435,3 +3435,472 @@ fn test_mac_invalid_configuration() {
     assert!(simulate_pure_aloha(config2.clone()).is_err());
     assert!(simulate_slotted_aloha(config2).is_err());
 }
+
+// ==========================================
+// PHASE 4D TESTS: TRANSPORT LAYER & CONGESTION CONTROL
+// ==========================================
+
+#[test]
+fn test_tcp_handshake_state_transitions() {
+    use crate::transport::{
+        simulate_tcp, ConnectionState, TcpFlag, TransportConfig, TransportEventType,
+    };
+
+    let config = TransportConfig {
+        payload_bytes: 2000,
+        segment_size_bytes: 1000,
+        initial_sequence_number: 1000,
+        ..Default::default()
+    };
+
+    let result = simulate_tcp(config, None).expect("Simulation must succeed");
+    assert!(result.completed);
+
+    // Verify 3-way handshake transitions
+    let syn_event = result
+        .events
+        .iter()
+        .find(|e| e.event_type == TransportEventType::SynSent)
+        .expect("SYN sent must be recorded");
+    assert_eq!(syn_event.connection_state, ConnectionState::SynSent);
+    let syn_seg = syn_event.segment.as_ref().unwrap();
+    assert_eq!(syn_seg.sequence_number, 1000);
+    assert!(syn_seg.has_flag(TcpFlag::Syn));
+    assert_eq!(syn_seg.payload_length, 0);
+
+    let syn_rx_event = result
+        .events
+        .iter()
+        .find(|e| e.event_type == TransportEventType::SynReceived)
+        .expect("SYN received must be recorded");
+    assert_eq!(syn_rx_event.connection_state, ConnectionState::SynReceived);
+
+    // Both endpoints become established
+    let est_events: Vec<_> = result
+        .events
+        .iter()
+        .filter(|e| e.event_type == TransportEventType::ConnectionEstablished)
+        .collect();
+    assert!(est_events.len() >= 2);
+    assert_eq!(est_events[0].connection_state, ConnectionState::Established);
+}
+
+#[test]
+fn test_tcp_byte_oriented_sequence_progression_and_cumulative_acks() {
+    use crate::transport::{simulate_tcp, TransportConfig, TransportEventType};
+
+    let config = TransportConfig {
+        payload_bytes: 3500,
+        segment_size_bytes: 1000,
+        initial_sequence_number: 2000,
+        ..Default::default()
+    };
+
+    let result = simulate_tcp(config, None).expect("Simulation must succeed");
+    assert!(result.completed);
+    assert_eq!(result.metrics.bytes_delivered, 3500);
+
+    // Sent data segments should have byte-oriented sequence numbers:
+    // ISN=2000. SYN consumes 1 seq -> Data starts at 2001.
+    // Segment 1: seq=2001, len=1000
+    // Segment 2: seq=3001, len=1000
+    // Segment 3: seq=4001, len=1000
+    // Segment 4: seq=5001, len=500
+    let data_events: Vec<_> = result
+        .events
+        .iter()
+        .filter(|e| e.event_type == TransportEventType::DataSegmentSent)
+        .collect();
+    assert_eq!(data_events.len(), 4);
+    assert_eq!(
+        data_events[0].segment.as_ref().unwrap().sequence_number,
+        2001
+    );
+    assert_eq!(
+        data_events[0].segment.as_ref().unwrap().payload_length,
+        1000
+    );
+    assert_eq!(
+        data_events[1].segment.as_ref().unwrap().sequence_number,
+        3001
+    );
+    assert_eq!(
+        data_events[1].segment.as_ref().unwrap().payload_length,
+        1000
+    );
+    assert_eq!(
+        data_events[2].segment.as_ref().unwrap().sequence_number,
+        4001
+    );
+    assert_eq!(
+        data_events[2].segment.as_ref().unwrap().payload_length,
+        1000
+    );
+    assert_eq!(
+        data_events[3].segment.as_ref().unwrap().sequence_number,
+        5001
+    );
+    assert_eq!(data_events[3].segment.as_ref().unwrap().payload_length, 500);
+
+    // A cumulative ACK acknowledging all 3500 bytes (2001 + 3500 = 5501) must exist
+    let has_data_ack = result.events.iter().any(|e| {
+        e.event_type == TransportEventType::AckReceived
+            && e.segment
+                .as_ref()
+                .map(|s| s.acknowledgment_number == 5501)
+                .unwrap_or(false)
+    });
+    assert!(has_data_ack, "Cumulative ACK for 5501 must be received");
+}
+
+#[test]
+fn test_tcp_rtt_estimator_jacobson_karn_and_clamping() {
+    use crate::transport::RttEstimator;
+
+    let mut estimator = RttEstimator::new(100_000, 20_000, 500_000);
+    assert_eq!(estimator.rto_us, 100_000);
+
+    // First valid sample R = 40_000 us
+    estimator.update_sample(40_000);
+    assert_eq!(estimator.sample_count, 1);
+    assert_eq!(estimator.srtt_us, 40_000);
+    assert_eq!(estimator.rttvar_us, 20_000);
+    // RTO = SRTT + 4 * RTTVAR = 40_000 + 4*20_000 = 120_000 us
+    assert_eq!(estimator.rto_us, 120_000);
+
+    // Second valid sample R = 50_000 us
+    // diff = |40_000 - 50_000| = 10_000
+    // RTTVAR = (3*20_000 + 10_000) / 4 = 70_000 / 4 = 17_500
+    // SRTT = (7*40_000 + 50_000) / 8 = 330_000 / 8 = 41_250
+    // RTO = 41_250 + 4 * 17_500 = 41_250 + 70_000 = 111_250
+    estimator.update_sample(50_000);
+    assert_eq!(estimator.sample_count, 2);
+    assert_eq!(estimator.rttvar_us, 17_500);
+    assert_eq!(estimator.srtt_us, 41_250);
+    assert_eq!(estimator.rto_us, 111_250);
+
+    // Test RTO clamping
+    estimator.update_sample(1_000_000);
+    assert!(
+        estimator.rto_us <= 500_000,
+        "RTO must be clamped to max_rto"
+    );
+
+    let mut min_estimator = RttEstimator::new(5_000, 20_000, 500_000);
+    min_estimator.update_sample(1_000);
+    assert!(
+        min_estimator.rto_us >= 20_000,
+        "RTO must be clamped to min_rto"
+    );
+}
+
+#[test]
+fn test_tcp_fast_retransmit_and_fast_recovery_on_3_dup_acks() {
+    use crate::transport::{simulate_tcp, TransportConfig, TransportEventType};
+
+    // Send 5 segments, drop segment #0
+    let config = TransportConfig {
+        payload_bytes: 5000,
+        segment_size_bytes: 1000,
+        dropped_segments: vec![0],
+        initial_cwnd_mss: 4.0,
+        initial_ssthresh_mss: 16.0,
+        ..Default::default()
+    };
+
+    let result = simulate_tcp(config, None).expect("Simulation must succeed");
+    assert!(result.completed);
+    assert!(result.metrics.fast_retransmit_count >= 1);
+    assert!(result.metrics.retransmissions >= 1);
+
+    // Verify Fast Retransmit event was recorded
+    let fast_rx = result.events.iter().find(|e| {
+        e.event_type == TransportEventType::Retransmission
+            && e.description.contains("FAST RETRANSMIT")
+    });
+    assert!(fast_rx.is_some(), "Fast Retransmit event must be present");
+}
+
+#[test]
+fn test_tcp_timeout_retransmission_and_exponential_backoff() {
+    use crate::transport::{simulate_tcp, TransportConfig, TransportEventType};
+
+    // Drop segment 0 with cwnd=1 so duplicate ACKs cannot be generated, forcing RTO timeout
+    let config = TransportConfig {
+        payload_bytes: 2000,
+        segment_size_bytes: 1000,
+        dropped_segments: vec![0],
+        initial_cwnd_mss: 1.0,
+        initial_ssthresh_mss: 8.0,
+        initial_rto_us: 50_000,
+        ..Default::default()
+    };
+
+    let result = simulate_tcp(config, None).expect("Simulation must succeed");
+    assert!(result.completed);
+    assert!(result.metrics.timeout_count >= 1);
+
+    let timeout_event = result
+        .events
+        .iter()
+        .find(|e| e.event_type == TransportEventType::Timeout)
+        .expect("Timeout event must be recorded");
+    assert_eq!(timeout_event.cwnd_mss, 1.0);
+}
+
+#[test]
+fn test_tcp_four_step_teardown() {
+    use crate::transport::{simulate_tcp, ConnectionState, TransportConfig};
+
+    let config = TransportConfig {
+        payload_bytes: 1000,
+        segment_size_bytes: 1000,
+        ..Default::default()
+    };
+
+    let result = simulate_tcp(config, None).expect("Simulation must succeed");
+    assert!(result.completed);
+
+    // Verify FIN -> ACK -> FIN -> ACK sequence
+    let fin_wait_1 = result
+        .events
+        .iter()
+        .find(|e| e.connection_state == ConnectionState::FinWait1);
+    assert!(fin_wait_1.is_some());
+
+    let close_wait = result
+        .events
+        .iter()
+        .find(|e| e.connection_state == ConnectionState::CloseWait);
+    assert!(close_wait.is_some());
+
+    let fin_wait_2 = result
+        .events
+        .iter()
+        .find(|e| e.connection_state == ConnectionState::FinWait2);
+    assert!(fin_wait_2.is_some());
+
+    let time_wait = result
+        .events
+        .iter()
+        .find(|e| e.connection_state == ConnectionState::TimeWait);
+    assert!(time_wait.is_some());
+
+    let closed = result
+        .events
+        .iter()
+        .rfind(|e| e.connection_state == ConnectionState::Closed);
+    assert!(closed.is_some());
+}
+
+#[test]
+fn test_tcp_congestion_controller_slow_start_and_congestion_avoidance() {
+    use crate::congestion::{CongestionController, CongestionPhase};
+
+    let mut cc = CongestionController::new(1.0, 4.0, 1000);
+    assert_eq!(cc.phase, CongestionPhase::SlowStart);
+    assert_eq!(cc.cwnd_mss, 1.0);
+
+    // ACK 1 MSS in Slow Start: cwnd increases to 2.0
+    cc.on_new_ack(1000, 1000);
+    assert_eq!(cc.cwnd_mss, 2.0);
+    assert_eq!(cc.phase, CongestionPhase::SlowStart);
+
+    // ACK 1 MSS: cwnd increases to 3.0
+    cc.on_new_ack(2000, 1000);
+    assert_eq!(cc.cwnd_mss, 3.0);
+
+    // ACK 1 MSS: cwnd reaches ssthresh (4.0) -> transitions to Congestion Avoidance
+    cc.on_new_ack(3000, 1000);
+    assert_eq!(cc.cwnd_mss, 4.0);
+    assert_eq!(cc.phase, CongestionPhase::CongestionAvoidance);
+
+    // Additive increase in Congestion Avoidance
+    cc.on_new_ack(4000, 1000);
+    assert!(cc.cwnd_mss > 4.0);
+    assert_eq!(cc.phase, CongestionPhase::CongestionAvoidance);
+}
+
+#[test]
+fn test_tcp_deterministic_replay() {
+    use crate::transport::{simulate_tcp, TransportConfig};
+
+    let config = TransportConfig {
+        payload_bytes: 4000,
+        segment_size_bytes: 1000,
+        dropped_segments: vec![1],
+        seed: 12345,
+        ..Default::default()
+    };
+
+    let res1 = simulate_tcp(config.clone(), None).unwrap();
+    let res2 = simulate_tcp(config, None).unwrap();
+
+    assert_eq!(res1.events.len(), res2.events.len());
+    assert_eq!(
+        res1.metrics.completion_time_us,
+        res2.metrics.completion_time_us
+    );
+    assert_eq!(res1.metrics.bytes_delivered, res2.metrics.bytes_delivered);
+    assert_eq!(res1.metrics.retransmissions, res2.metrics.retransmissions);
+    assert_eq!(
+        res1.metrics.fast_retransmit_count,
+        res2.metrics.fast_retransmit_count
+    );
+
+    for (e1, e2) in res1.events.iter().zip(res2.events.iter()) {
+        assert_eq!(e1.timestamp_us, e2.timestamp_us);
+        assert_eq!(e1.event_type, e2.event_type);
+        assert_eq!(e1.cwnd_mss, e2.cwnd_mss);
+    }
+}
+
+#[test]
+fn test_udp_connectionless_delivery_no_handshake_no_ack_no_retransmissions() {
+    use crate::transport::{simulate_udp, TransportConfig, TransportEventType};
+
+    let config = TransportConfig {
+        payload_bytes: 5000,
+        segment_size_bytes: 1000,
+        dropped_segments: vec![2],
+        ..Default::default()
+    };
+
+    let res = simulate_udp(config, None).unwrap();
+    assert!(res.completed);
+    assert_eq!(res.metrics.segments_sent, 5);
+    assert_eq!(res.metrics.segments_delivered, 4);
+    assert_eq!(res.metrics.segments_lost, 1);
+    assert_eq!(res.metrics.retransmissions, 0);
+    assert_eq!(res.metrics.duplicate_acks, 0);
+    assert_eq!(res.metrics.timeout_count, 0);
+
+    // UDP must NOT have SYN, ACK, or Retransmission events
+    for event in &res.events {
+        assert_ne!(event.event_type, TransportEventType::SynSent);
+        assert_ne!(event.event_type, TransportEventType::SynReceived);
+        assert_ne!(event.event_type, TransportEventType::AckReceived);
+        assert_ne!(event.event_type, TransportEventType::Retransmission);
+    }
+}
+
+#[test]
+fn test_multihop_transport_routing_derived_from_project() {
+    use crate::domain::{Link, LinkEndpoint, Node, NodeType, Position, Project};
+    use crate::transport::{simulate_tcp, simulate_udp, TransportConfig};
+
+    // Topology: Host A (PC) <-> Router 1 <-> Router 2 <-> Host B (PC)
+    let mut proj = Project::new("MultiHop Transport Test".to_string());
+    proj.nodes = vec![
+        Node::new(
+            "host-a".into(),
+            "Host A".into(),
+            NodeType::Pc,
+            Position { x: 0.0, y: 0.0 },
+        ),
+        Node::new(
+            "r1".into(),
+            "Router 1".into(),
+            NodeType::Router,
+            Position { x: 100.0, y: 0.0 },
+        ),
+        Node::new(
+            "r2".into(),
+            "Router 2".into(),
+            NodeType::Router,
+            Position { x: 200.0, y: 0.0 },
+        ),
+        Node::new(
+            "host-b".into(),
+            "Host B".into(),
+            NodeType::Pc,
+            Position { x: 300.0, y: 0.0 },
+        ),
+    ];
+
+    proj.links = vec![
+        Link::new(
+            "l1".into(),
+            LinkEndpoint {
+                node_id: "host-a".into(),
+                interface_id: "eth0".into(),
+            },
+            LinkEndpoint {
+                node_id: "r1".into(),
+                interface_id: "eth0".into(),
+            },
+        ),
+        Link::new(
+            "l2".into(),
+            LinkEndpoint {
+                node_id: "r1".into(),
+                interface_id: "eth1".into(),
+            },
+            LinkEndpoint {
+                node_id: "r2".into(),
+                interface_id: "eth0".into(),
+            },
+        ),
+        Link::new(
+            "l3".into(),
+            LinkEndpoint {
+                node_id: "r2".into(),
+                interface_id: "eth1".into(),
+            },
+            LinkEndpoint {
+                node_id: "host-b".into(),
+                interface_id: "eth0".into(),
+            },
+        ),
+    ];
+
+    let config = TransportConfig {
+        source_node_id: "host-a".into(),
+        destination_node_id: "host-b".into(),
+        payload_bytes: 2000,
+        segment_size_bytes: 1000,
+        ..Default::default()
+    };
+
+    let tcp_res =
+        simulate_tcp(config.clone(), Some(&proj)).expect("TCP over multi-hop must succeed");
+    assert_eq!(tcp_res.derived_route, vec!["host-a", "r1", "r2", "host-b"]);
+    assert!(tcp_res.completed);
+
+    let udp_res = simulate_udp(config, Some(&proj)).expect("UDP over multi-hop must succeed");
+    assert_eq!(udp_res.derived_route, vec!["host-a", "r1", "r2", "host-b"]);
+    assert!(udp_res.completed);
+}
+
+#[test]
+fn test_transport_invariants() {
+    use crate::transport::{simulate_tcp, TransportConfig};
+
+    let config = TransportConfig {
+        payload_bytes: 6000,
+        segment_size_bytes: 1000,
+        dropped_segments: vec![1, 3],
+        ..Default::default()
+    };
+
+    let res = simulate_tcp(config, None).expect("TCP must succeed");
+
+    // Invariant 1: Time never decreases
+    let mut prev_time = 0;
+    for event in &res.events {
+        assert!(event.timestamp_us >= prev_time, "Time must be monotonic");
+        prev_time = event.timestamp_us;
+    }
+
+    // Invariant 2: cwnd is always at least 1.0 MSS
+    for pt in &res.cwnd_timeline {
+        assert!(pt.cwnd_mss >= 1.0, "cwnd must never drop below 1.0 MSS");
+        assert!(
+            pt.ssthresh_mss >= 2.0,
+            "ssthresh must never drop below 2.0 MSS"
+        );
+    }
+
+    // Invariant 3: Delivered bytes equals requested payload on completion
+    assert_eq!(res.metrics.bytes_delivered, 6000);
+}

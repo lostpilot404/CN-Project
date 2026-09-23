@@ -354,3 +354,36 @@ pub fn simulate_csma(config: MacConfig) -> Result<MacSimResult> {
 pub fn simulate_csma_cd(config: MacConfig) -> Result<MacSimResult> {
     sim_csma_cd(config)
 }
+
+use crate::transport::{
+    simulate_tcp as sim_tcp, simulate_udp as sim_udp, TransportConfig, TransportSimResult,
+};
+
+#[tauri::command]
+pub fn simulate_tcp(
+    config: TransportConfig,
+    state: State<'_, AppState>,
+) -> Result<TransportSimResult> {
+    let project = state
+        .project
+        .lock()
+        .map_err(|e| NetSimError::Internal(format!("Project lock error: {}", e)))?;
+    sim_tcp(config, Some(&*project))
+}
+
+#[tauri::command]
+pub fn simulate_udp(
+    config: TransportConfig,
+    state: State<'_, AppState>,
+) -> Result<TransportSimResult> {
+    let project = state
+        .project
+        .lock()
+        .map_err(|e| NetSimError::Internal(format!("Project lock error: {}", e)))?;
+    sim_udp(config, Some(&*project))
+}
+
+#[tauri::command]
+pub fn simulate_tcp_congestion(config: TransportConfig) -> Result<TransportSimResult> {
+    sim_tcp(config, None)
+}

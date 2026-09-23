@@ -1,11 +1,13 @@
 pub mod addressing;
 pub mod commands;
+pub mod congestion;
 pub mod datalink;
 pub mod domain;
 pub mod error;
 pub mod routing;
 pub mod simulation;
 pub mod state;
+pub mod transport;
 
 #[cfg(test)]
 mod tests;
@@ -70,6 +72,9 @@ pub fn run() {
             commands::algorithms::simulate_slotted_aloha,
             commands::algorithms::simulate_csma,
             commands::algorithms::simulate_csma_cd,
+            commands::algorithms::simulate_tcp,
+            commands::algorithms::simulate_udp,
+            commands::algorithms::simulate_tcp_congestion,
         ])
         .run(tauri::generate_context!())
         .expect("error while running NetSim application");

@@ -4,6 +4,7 @@ import {
   Hash,
   PlayCircle,
   Binary,
+  ArrowLeftRight,
   BarChart3,
   FlaskConical,
   GraduationCap,
@@ -17,6 +18,7 @@ export type ActiveTab =
   | 'addressing'
   | 'simulation'
   | 'algorithms'
+  | 'transport'
   | 'qos'
   | 'experiments'
   | 'learning'
@@ -36,6 +38,7 @@ export const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
     { id: 'addressing', label: 'Addressing & NAT', icon: Hash },
     { id: 'simulation', label: 'Simulation & Events', icon: PlayCircle },
     { id: 'algorithms', label: 'Algorithm Studio', icon: Binary },
+    { id: 'transport', label: 'Transport Layer', icon: ArrowLeftRight },
     { id: 'qos', label: 'QoS Performance', icon: BarChart3 },
     { id: 'experiments', label: 'Batch Experiments', icon: FlaskConical },
     { id: 'learning', label: 'Learning Mode', icon: GraduationCap },
