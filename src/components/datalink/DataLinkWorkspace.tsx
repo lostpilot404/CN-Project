@@ -20,11 +20,16 @@ import {
   ChecksumCalculationResult,
   ChecksumVerifyResult,
 } from '../../types/datalink';
+import { FlowControlStudio } from './FlowControlStudio';
+import { MacStudio } from './MacStudio';
 
+type CategoryTab = 'error_control' | 'flow_control' | 'multiple_access';
 type SubTab = 'hamming' | 'crc' | 'checksum';
 
 export const DataLinkWorkspace: React.FC = () => {
+  const [categoryTab, setCategoryTab] = useState<CategoryTab>('error_control');
   const [activeTab, setActiveTab] = useState<SubTab>('hamming');
+
 
   // ==========================================
   // HAMMING STATE
@@ -203,61 +208,104 @@ export const DataLinkWorkspace: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 text-slate-100 overflow-hidden">
       {/* Workspace Header */}
-      <div className="h-14 border-b border-slate-800 bg-slate-900/60 backdrop-blur px-6 flex items-center justify-between">
+      <div className="h-16 border-b border-slate-800 bg-slate-900/60 backdrop-blur px-6 flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
             <Binary className="w-4 h-4" />
           </div>
           <div>
             <h1 className="text-sm font-semibold text-slate-200">
-              Data Link Layer Error Detection & Correction Studio
+              Data Link Layer Protocol & Algorithm Studio
             </h1>
             <p className="text-[11px] text-slate-400">
-              Authoritative deterministic Rust algorithms: Hamming Codes, Modulo-2 CRC, RFC 1071 Checksum
+              Authoritative deterministic Rust algorithms: Error Control, Flow Control & Multiple Access
             </p>
           </div>
         </div>
 
-        {/* Algorithm Subtabs */}
-        <div className="flex items-center space-x-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60 text-xs">
-          <button
-            onClick={() => setActiveTab('hamming')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-              activeTab === 'hamming'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Hamming Code
-          </button>
-          <button
-            onClick={() => setActiveTab('crc')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-              activeTab === 'crc'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            CRC Polynomial
-          </button>
-          <button
-            onClick={() => setActiveTab('checksum')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-              activeTab === 'checksum'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Internet Checksum
-          </button>
+        {/* Top-Level Category Switcher */}
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
+            <button
+              onClick={() => setCategoryTab('error_control')}
+              className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 ${
+                categoryTab === 'error_control'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <span>Error Control</span>
+            </button>
+            <button
+              onClick={() => setCategoryTab('flow_control')}
+              className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 ${
+                categoryTab === 'flow_control'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <span>Flow Control</span>
+            </button>
+            <button
+              onClick={() => setCategoryTab('multiple_access')}
+              className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 ${
+                categoryTab === 'multiple_access'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <span>Multiple Access</span>
+            </button>
+          </div>
+
+          {/* Algorithm Subtabs for Error Control */}
+          {categoryTab === 'error_control' && (
+            <div className="flex items-center space-x-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60 text-xs">
+              <button
+                onClick={() => setActiveTab('hamming')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  activeTab === 'hamming'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Hamming Code
+              </button>
+              <button
+                onClick={() => setActiveTab('crc')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  activeTab === 'crc'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                CRC Polynomial
+              </button>
+              <button
+                onClick={() => setActiveTab('checksum')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  activeTab === 'checksum'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Internet Checksum
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Main Workspace Body */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-7xl w-full mx-auto">
-        {/* ========================================================================= */}
-        {/* HAMMING CODE STUDIO */}
-        {/* ========================================================================= */}
+        {categoryTab === 'flow_control' && <FlowControlStudio />}
+        {categoryTab === 'multiple_access' && <MacStudio />}
+        {categoryTab === 'error_control' && (
+          <>
+            {/* ========================================================================= */}
+            {/* HAMMING CODE STUDIO */}
+            {/* ========================================================================= */}
+
         {activeTab === 'hamming' && (
           <div className="space-y-6">
             {/* Top Parameters Card */}
@@ -1048,7 +1096,10 @@ export const DataLinkWorkspace: React.FC = () => {
             )}
           </div>
         )}
+          </>
+        )}
       </div>
     </div>
   );
 };
+

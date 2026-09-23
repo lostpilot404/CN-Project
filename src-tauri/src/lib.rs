@@ -63,6 +63,13 @@ pub fn run() {
             commands::algorithms::verify_crc,
             commands::algorithms::calculate_internet_checksum,
             commands::algorithms::verify_internet_checksum,
+            commands::algorithms::simulate_sliding_window,
+            commands::algorithms::simulate_go_back_n,
+            commands::algorithms::simulate_selective_repeat,
+            commands::algorithms::simulate_pure_aloha,
+            commands::algorithms::simulate_slotted_aloha,
+            commands::algorithms::simulate_csma,
+            commands::algorithms::simulate_csma_cd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running NetSim application");

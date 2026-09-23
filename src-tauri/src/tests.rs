@@ -2901,3 +2901,537 @@ fn test_datalink_serialization_and_determinism() {
     let json_cs2 = serde_json::to_string(&cs2).unwrap();
     assert_eq!(json_cs1, json_cs2);
 }
+
+// =========================================================================
+// Phase 4C: Flow Control Tests (Sliding Window, GBN, SR)
+// =========================================================================
+
+use crate::datalink::{
+    circular_distance, get_window_sequences, is_in_circular_window, simulate_csma,
+    simulate_csma_cd, simulate_go_back_n, simulate_pure_aloha, simulate_selective_repeat,
+    simulate_sliding_window, simulate_slotted_aloha, validate_flow_control_config, CsmaPersistence,
+    FlowControlConfig, FlowControlProtocol, FlowEventType, MacConfig, MacEventType, MacProtocol,
+};
+
+#[test]
+fn test_flow_control_sequence_space_validation() {
+    // Valid GBN: seq_space >= window_size + 1 (e.g. window 4, seq_space 5)
+    let valid_gbn = FlowControlConfig {
+        protocol: FlowControlProtocol::GoBackN,
+        window_size: 4,
+        sequence_space: 5,
+        total_frames_to_send: 10,
+        frame_tx_time_us: 1000,
+        prop_delay_us: 2000,
+        ack_tx_time_us: 100,
+        timeout_us: 10_000,
+        seed: 42,
+        dropped_frame_indices: vec![],
+        corrupted_frame_indices: vec![],
+        dropped_ack_seqs: vec![],
+    };
+    assert!(validate_flow_control_config(&valid_gbn).is_ok());
+
+    // Invalid GBN: seq_space < window_size + 1 (e.g. window 4, seq_space 4)
+    let mut invalid_gbn = valid_gbn.clone();
+    invalid_gbn.sequence_space = 4;
+    let err = validate_flow_control_config(&invalid_gbn).unwrap_err();
+    assert!(matches!(err, NetSimError::InvalidConfiguration(_)));
+
+    // Valid SR: seq_space >= 2 * window_size (e.g. window 4, seq_space 8)
+    let valid_sr = FlowControlConfig {
+        protocol: FlowControlProtocol::SelectiveRepeat,
+        window_size: 4,
+        sequence_space: 8,
+        total_frames_to_send: 10,
+        frame_tx_time_us: 1000,
+        prop_delay_us: 2000,
+        ack_tx_time_us: 100,
+        timeout_us: 10_000,
+        seed: 42,
+        dropped_frame_indices: vec![],
+        corrupted_frame_indices: vec![],
+        dropped_ack_seqs: vec![],
+    };
+    assert!(validate_flow_control_config(&valid_sr).is_ok());
+
+    // Invalid SR: seq_space < 2 * window_size (e.g. window 4, seq_space 7)
+    let mut invalid_sr = valid_sr.clone();
+    invalid_sr.sequence_space = 7;
+    let err_sr = validate_flow_control_config(&invalid_sr).unwrap_err();
+    assert!(matches!(err_sr, NetSimError::InvalidConfiguration(_)));
+
+    // Zero window or frames
+    let mut zero_win = valid_gbn.clone();
+    zero_win.window_size = 0;
+    assert!(validate_flow_control_config(&zero_win).is_err());
+
+    let mut zero_frames = valid_gbn;
+    zero_frames.total_frames_to_send = 0;
+    assert!(validate_flow_control_config(&zero_frames).is_err());
+}
+
+#[test]
+fn test_circular_sequence_arithmetic() {
+    let seq_space = 8;
+
+    // Normal distance
+    assert_eq!(circular_distance(0, 3, seq_space), 3);
+    assert_eq!(circular_distance(2, 6, seq_space), 4);
+
+    // Wraparound distance
+    assert_eq!(circular_distance(6, 1, seq_space), 3); // 6 -> 7 -> 0 -> 1 = 3
+    assert_eq!(circular_distance(7, 0, seq_space), 1);
+    assert_eq!(circular_distance(4, 4, seq_space), 0);
+
+    // Window inclusion without wraparound: [2, 5) with size 3 -> 2, 3, 4
+    assert!(is_in_circular_window(2, 2, 3, seq_space));
+    assert!(is_in_circular_window(3, 2, 3, seq_space));
+    assert!(is_in_circular_window(4, 2, 3, seq_space));
+    assert!(!is_in_circular_window(5, 2, 3, seq_space));
+    assert!(!is_in_circular_window(1, 2, 3, seq_space));
+
+    // Window inclusion across wraparound: base=6, size=4 -> 6, 7, 0, 1
+    assert!(is_in_circular_window(6, 6, 4, seq_space));
+    assert!(is_in_circular_window(7, 6, 4, seq_space));
+    assert!(is_in_circular_window(0, 6, 4, seq_space));
+    assert!(is_in_circular_window(1, 6, 4, seq_space));
+    assert!(!is_in_circular_window(2, 6, 4, seq_space));
+    assert!(!is_in_circular_window(5, 6, 4, seq_space));
+
+    // Window sequences vector
+    let seqs = get_window_sequences(6, 4, seq_space);
+    assert_eq!(seqs, vec![6, 7, 0, 1]);
+}
+
+#[test]
+fn test_sliding_window_progression_and_wraparound() {
+    let config = FlowControlConfig {
+        protocol: FlowControlProtocol::SlidingWindow,
+        window_size: 4,
+        sequence_space: 8,
+        total_frames_to_send: 8,
+        frame_tx_time_us: 1000,
+        prop_delay_us: 2000,
+        ack_tx_time_us: 100,
+        timeout_us: 15_000,
+        seed: 12345,
+        dropped_frame_indices: vec![],
+        corrupted_frame_indices: vec![],
+        dropped_ack_seqs: vec![],
+    };
+
+    let result = simulate_sliding_window(config).expect("Simulation should succeed");
+    assert!(result.is_completed);
+    assert_eq!(result.metrics.completed_frames, 8);
+    assert_eq!(result.metrics.original_frames, 8);
+    assert_eq!(result.metrics.retransmissions, 0);
+    assert!(result.metrics.total_frames_sent >= 8);
+    assert!(result.metrics.utilization > 0.0);
+
+    // Verify window occupancy invariant: sender window size never exceeded configured window_size
+    for ev in &result.events {
+        assert!(ev.sender_window.active_window_seqs.len() <= 4);
+    }
+}
+
+#[test]
+fn test_go_back_n_drop_rejection_and_full_retransmission() {
+    // Drop frame 2 (the 3rd frame)
+    let config = FlowControlConfig {
+        protocol: FlowControlProtocol::GoBackN,
+        window_size: 4,
+        sequence_space: 8,
+        total_frames_to_send: 6,
+        frame_tx_time_us: 1000,
+        prop_delay_us: 2000,
+        ack_tx_time_us: 100,
+        timeout_us: 10_000,
+        seed: 54321,
+        dropped_frame_indices: vec![2],
+        corrupted_frame_indices: vec![],
+        dropped_ack_seqs: vec![],
+    };
+
+    let result = simulate_go_back_n(config).expect("GBN simulation should succeed");
+    assert!(result.is_completed);
+    assert_eq!(result.metrics.completed_frames, 6);
+    assert!(result.metrics.retransmissions >= 1);
+    assert!(result.metrics.dropped_or_corrupted_frames >= 1);
+
+    // Verify events: timeout triggered, out-of-order rejection occurred
+    let timeout_events: Vec<_> = result
+        .events
+        .iter()
+        .filter(|e| e.event_type == FlowEventType::TimeoutTriggered)
+        .collect();
+    assert!(
+        !timeout_events.is_empty(),
+        "Timeout should have triggered for dropped frame 2"
+    );
+
+    // In GBN, when timeout triggers, retransmissions occur from send_base
+    let retrans_events: Vec<_> = result
+        .events
+        .iter()
+        .filter(|e| e.event_type == FlowEventType::Retransmission)
+        .collect();
+    assert!(
+        !retrans_events.is_empty(),
+        "Retransmissions should have occurred in GBN"
+    );
+}
+
+#[test]
+fn test_selective_repeat_drop_buffering_and_selective_retransmission() {
+    // Drop frame 2 in Selective Repeat
+    let config = FlowControlConfig {
+        protocol: FlowControlProtocol::SelectiveRepeat,
+        window_size: 4,
+        sequence_space: 8,
+        total_frames_to_send: 6,
+        frame_tx_time_us: 1000,
+        prop_delay_us: 2000,
+        ack_tx_time_us: 100,
+        timeout_us: 10_000,
+        seed: 99999,
+        dropped_frame_indices: vec![2],
+        corrupted_frame_indices: vec![],
+        dropped_ack_seqs: vec![],
+    };
+
+    let result = simulate_selective_repeat(config).expect("SR simulation should succeed");
+    assert!(result.is_completed);
+    assert_eq!(result.metrics.completed_frames, 6);
+
+    // Verify that receiver buffered out-of-order frames
+    assert!(
+        result.metrics.receiver_buffer_occupancy_max >= 1,
+        "SR receiver must buffer out-of-order frames"
+    );
+
+    // Verify that timeout triggered specifically for frame index 2
+    let timeout_ev = result
+        .events
+        .iter()
+        .find(|e| e.event_type == FlowEventType::TimeoutTriggered);
+    assert!(timeout_ev.is_some());
+    assert_eq!(timeout_ev.unwrap().frame_index, Some(2));
+
+    // In Selective Repeat, ONLY the timed out frame (frame 2) is selectively retransmitted,
+    // NOT unrelated outstanding frames (frames 3, 4 are acknowledged individually and buffered)
+    let retransmitted_frame_indices: Vec<u32> = result
+        .events
+        .iter()
+        .filter(|e| e.event_type == FlowEventType::Retransmission)
+        .filter_map(|e| e.frame_index)
+        .collect();
+    assert!(
+        retransmitted_frame_indices.iter().all(|&idx| idx == 2),
+        "SR should selectively retransmit ONLY frame 2, got: {:?}",
+        retransmitted_frame_indices
+    );
+}
+
+#[test]
+fn test_flow_control_deterministic_replay() {
+    let config = FlowControlConfig {
+        protocol: FlowControlProtocol::GoBackN,
+        window_size: 4,
+        sequence_space: 8,
+        total_frames_to_send: 5,
+        frame_tx_time_us: 1000,
+        prop_delay_us: 1500,
+        ack_tx_time_us: 100,
+        timeout_us: 8000,
+        seed: 77777,
+        dropped_frame_indices: vec![1],
+        corrupted_frame_indices: vec![],
+        dropped_ack_seqs: vec![],
+    };
+
+    let run1 = simulate_go_back_n(config.clone()).unwrap();
+    let run2 = simulate_go_back_n(config).unwrap();
+
+    assert_eq!(run1.events.len(), run2.events.len());
+    assert_eq!(
+        run1.metrics.total_frames_sent,
+        run2.metrics.total_frames_sent
+    );
+    assert_eq!(
+        run1.metrics.completion_time_us,
+        run2.metrics.completion_time_us
+    );
+
+    for (e1, e2) in run1.events.iter().zip(run2.events.iter()) {
+        assert_eq!(e1.timestamp_us, e2.timestamp_us);
+        assert_eq!(e1.event_type, e2.event_type);
+        assert_eq!(e1.seq_num, e2.seq_num);
+    }
+}
+
+// =========================================================================
+// Phase 4C: Multiple Access (MAC) Tests
+// =========================================================================
+
+#[test]
+fn test_pure_aloha_single_station_success() {
+    let config = MacConfig {
+        protocol: MacProtocol::PureAloha,
+        persistence: CsmaPersistence::OnePersistent,
+        num_stations: 1,
+        total_frames_to_send: 5,
+        frame_duration_us: 10_000,
+        prop_delay_us: 50,
+        frame_size_bits: 8000,
+        seed: 123,
+        max_retries: 16,
+        offered_load_g: 0.5,
+    };
+
+    let result = simulate_pure_aloha(config).expect("Pure ALOHA single station should succeed");
+    assert!(result.completed_successfully);
+    assert_eq!(result.metrics.successful_transmissions, 5);
+    assert_eq!(result.metrics.collisions, 0);
+    assert_eq!(result.metrics.collision_rate, 0.0);
+    assert!(result.metrics.throughput_frames_per_sec > 0.0);
+    assert!(result.metrics.throughput_bits_per_sec > 0.0);
+}
+
+#[test]
+fn test_pure_aloha_overlap_collision_and_backoff() {
+    let config = MacConfig {
+        protocol: MacProtocol::PureAloha,
+        persistence: CsmaPersistence::OnePersistent,
+        num_stations: 8,
+        total_frames_to_send: 16,
+        frame_duration_us: 10_000,
+        prop_delay_us: 50,
+        frame_size_bits: 8000,
+        seed: 456,
+        max_retries: 16,
+        offered_load_g: 2.0,
+    };
+
+    let result = simulate_pure_aloha(config).expect("Pure ALOHA multi-station should run");
+    assert!(result.metrics.attempted_transmissions >= 16);
+    // With 8 stations and heavy load, collisions must occur
+    assert!(result.metrics.collisions > 0);
+    assert!(result.metrics.collision_rate > 0.0);
+    assert!(result.metrics.average_backoff_delay_us > 0.0);
+}
+
+#[test]
+fn test_slotted_aloha_discrete_slots_and_collisions() {
+    let config = MacConfig {
+        protocol: MacProtocol::SlottedAloha,
+        persistence: CsmaPersistence::OnePersistent,
+        num_stations: 6,
+        total_frames_to_send: 12,
+        frame_duration_us: 5_000,
+        prop_delay_us: 50,
+        frame_size_bits: 4000,
+        seed: 789,
+        max_retries: 16,
+        offered_load_g: 1.5,
+    };
+
+    let result = simulate_slotted_aloha(config).expect("Slotted ALOHA should succeed");
+    assert!(
+        !result.slot_records.is_empty(),
+        "Slotted ALOHA must generate slot records"
+    );
+
+    // Verify slot boundaries are exact multiples of frame duration
+    for slot in &result.slot_records {
+        assert_eq!(slot.end_time_us - slot.start_time_us, 5_000);
+        assert_eq!(slot.start_time_us % 5_000, 0);
+    }
+
+    // Verify collision slot records have >1 participating station
+    for slot in &result.slot_records {
+        if slot.status.starts_with("Collision") {
+            assert!(slot.participating_stations.len() >= 2);
+        } else if slot.status.starts_with("Success") {
+            assert_eq!(slot.participating_stations.len(), 1);
+        } else {
+            assert_eq!(slot.status, "Idle");
+            assert!(slot.participating_stations.is_empty());
+        }
+    }
+}
+
+#[test]
+fn test_csma_persistence_modes() {
+    // 1-persistent CSMA
+    let config_1p = MacConfig {
+        protocol: MacProtocol::Csma,
+        persistence: CsmaPersistence::OnePersistent,
+        num_stations: 4,
+        total_frames_to_send: 8,
+        frame_duration_us: 10_000,
+        prop_delay_us: 50,
+        frame_size_bits: 8000,
+        seed: 111,
+        max_retries: 16,
+        offered_load_g: 1.0,
+    };
+    let res_1p = simulate_csma(config_1p).expect("1-persistent CSMA should succeed");
+    assert!(res_1p.completed_successfully);
+
+    // Non-persistent CSMA
+    let config_np = MacConfig {
+        protocol: MacProtocol::Csma,
+        persistence: CsmaPersistence::NonPersistent,
+        num_stations: 4,
+        total_frames_to_send: 8,
+        frame_duration_us: 10_000,
+        prop_delay_us: 50,
+        frame_size_bits: 8000,
+        seed: 222,
+        max_retries: 16,
+        offered_load_g: 1.0,
+    };
+    let res_np = simulate_csma(config_np).expect("Non-persistent CSMA should succeed");
+    assert!(res_np.completed_successfully);
+
+    // p-persistent CSMA (p = 0.5)
+    let config_pp = MacConfig {
+        protocol: MacProtocol::Csma,
+        persistence: CsmaPersistence::PPersistent { probability: 0.5 },
+        num_stations: 4,
+        total_frames_to_send: 8,
+        frame_duration_us: 10_000,
+        prop_delay_us: 50,
+        frame_size_bits: 8000,
+        seed: 333,
+        max_retries: 16,
+        offered_load_g: 1.0,
+    };
+    let res_pp = simulate_csma(config_pp).expect("p-persistent CSMA should succeed");
+    assert!(res_pp.completed_successfully);
+}
+
+#[test]
+fn test_csma_cd_collision_detection_jam_and_beb() {
+    let config = MacConfig {
+        protocol: MacProtocol::CsmaCd,
+        persistence: CsmaPersistence::OnePersistent,
+        num_stations: 6,
+        total_frames_to_send: 12,
+        frame_duration_us: 10_000,
+        prop_delay_us: 100, // 2*tau = 200µs slot time
+        frame_size_bits: 8000,
+        seed: 444,
+        max_retries: 16,
+        offered_load_g: 2.0,
+    };
+
+    let result = simulate_csma_cd(config).expect("CSMA/CD simulation should succeed");
+    assert!(result.completed_successfully);
+
+    // Check for collision detection, jam signal, and abort events
+    let collision_events: Vec<_> = result
+        .events
+        .iter()
+        .filter(|e| e.event_type == MacEventType::CollisionDetected)
+        .collect();
+    let jam_events: Vec<_> = result
+        .events
+        .iter()
+        .filter(|e| e.event_type == MacEventType::JamSignalSent)
+        .collect();
+    let abort_events: Vec<_> = result
+        .events
+        .iter()
+        .filter(|e| e.event_type == MacEventType::TransmissionAborted)
+        .collect();
+    let backoff_events: Vec<_> = result
+        .events
+        .iter()
+        .filter(|e| e.event_type == MacEventType::BackoffScheduled)
+        .collect();
+
+    if !collision_events.is_empty() {
+        assert!(
+            !jam_events.is_empty(),
+            "CSMA/CD must send 32-bit jam signal on collision"
+        );
+        assert!(
+            !abort_events.is_empty(),
+            "CSMA/CD must abort transmission on collision"
+        );
+        assert!(
+            !backoff_events.is_empty(),
+            "CSMA/CD must schedule binary exponential backoff"
+        );
+
+        // Verify BEB exponent capped at 10 (k = min(c, 10))
+        for ev in &backoff_events {
+            assert!(
+                ev.description.contains("k="),
+                "Backoff event must report BEB exponent k: {}",
+                ev.description
+            );
+        }
+    }
+}
+
+#[test]
+fn test_mac_deterministic_replay() {
+    let config = MacConfig {
+        protocol: MacProtocol::CsmaCd,
+        persistence: CsmaPersistence::OnePersistent,
+        num_stations: 4,
+        total_frames_to_send: 8,
+        frame_duration_us: 10_000,
+        prop_delay_us: 50,
+        frame_size_bits: 8000,
+        seed: 8888,
+        max_retries: 16,
+        offered_load_g: 1.5,
+    };
+
+    let res1 = simulate_csma_cd(config.clone()).unwrap();
+    let res2 = simulate_csma_cd(config).unwrap();
+
+    assert_eq!(res1.events.len(), res2.events.len());
+    assert_eq!(
+        res1.metrics.attempted_transmissions,
+        res2.metrics.attempted_transmissions
+    );
+    assert_eq!(
+        res1.metrics.successful_transmissions,
+        res2.metrics.successful_transmissions
+    );
+    assert_eq!(res1.metrics.collisions, res2.metrics.collisions);
+    assert_eq!(
+        res1.metrics.total_simulation_time_us,
+        res2.metrics.total_simulation_time_us
+    );
+
+    for (e1, e2) in res1.events.iter().zip(res2.events.iter()) {
+        assert_eq!(e1.timestamp_us, e2.timestamp_us);
+        assert_eq!(e1.event_type, e2.event_type);
+        assert_eq!(e1.station_id, e2.station_id);
+    }
+}
+
+#[test]
+fn test_mac_invalid_configuration() {
+    let config = MacConfig {
+        num_stations: 0,
+        ..Default::default()
+    };
+    assert!(simulate_pure_aloha(config.clone()).is_err());
+    assert!(simulate_slotted_aloha(config.clone()).is_err());
+    assert!(simulate_csma(config.clone()).is_err());
+    assert!(simulate_csma_cd(config).is_err());
+
+    let config2 = MacConfig {
+        frame_duration_us: 0,
+        ..Default::default()
+    };
+    assert!(simulate_pure_aloha(config2.clone()).is_err());
+    assert!(simulate_slotted_aloha(config2).is_err());
+}

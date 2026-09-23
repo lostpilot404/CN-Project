@@ -36,6 +36,15 @@ import {
   ChecksumCalculationResult,
   ChecksumVerifyResult,
 } from '../types/datalink';
+import {
+  FlowControlConfig,
+  FlowControlSimResult,
+} from '../types/flowControl';
+import {
+  MacConfig,
+  MacSimResult,
+} from '../types/mac';
+
 
 // Check if running inside Tauri window
 export const isTauri = (): boolean => {
@@ -1003,8 +1012,284 @@ function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
       } as unknown as T);
     }
 
+    case 'simulate_sliding_window':
+    case 'simulate_go_back_n':
+    case 'simulate_selective_repeat': {
+      const isGBN = cmd === 'simulate_go_back_n';
+      const isSR = cmd === 'simulate_selective_repeat';
+      const proto = isSR ? 'selective_repeat' : isGBN ? 'go_back_n' : 'sliding_window';
+      const cfg = (args?.config as FlowControlConfig) || {
+        protocol: proto,
+        window_size: 4,
+        sequence_space: 8,
+        total_frames_to_send: 6,
+        frame_tx_time_us: 10000,
+        prop_delay_us: 40000,
+        ack_tx_time_us: 2000,
+        timeout_us: 120000,
+        seed: 42,
+        dropped_frame_indices: [],
+        corrupted_frame_indices: [],
+        dropped_ack_seqs: [],
+      };
+      const hasDrop = (cfg.dropped_frame_indices && cfg.dropped_frame_indices.length > 0) || false;
+      return Promise.resolve({
+        protocol: proto,
+        config: cfg,
+        events: [
+          {
+            step_index: 1,
+            timestamp_us: 0,
+            event_type: 'frame_sent',
+            frame_index: 0,
+            seq_num: 0,
+            ack_seq: null,
+            sender_window: { send_base: 0, next_seq_num: 1, window_size: cfg.window_size, sequence_space: cfg.sequence_space, active_window_seqs: [0, 1, 2, 3], outstanding_count: 1 },
+            receiver_window: { rcv_base: 0, window_size: isSR ? cfg.window_size : 1, sequence_space: cfg.sequence_space, active_window_seqs: [0], buffered_seqs: [], delivered_count: 0 },
+            description: 'Sender transmitted frame [0] (seq 0)',
+          },
+          ...(hasDrop ? [
+            {
+              step_index: 2,
+              timestamp_us: 45000,
+              event_type: 'frame_lost',
+              frame_index: cfg.dropped_frame_indices![0],
+              seq_num: cfg.dropped_frame_indices![0] % cfg.sequence_space,
+              ack_seq: null,
+              sender_window: { send_base: 0, next_seq_num: 3, window_size: cfg.window_size, sequence_space: cfg.sequence_space, active_window_seqs: [0, 1, 2, 3], outstanding_count: 3 },
+              receiver_window: { rcv_base: 0, window_size: isSR ? cfg.window_size : 1, sequence_space: cfg.sequence_space, active_window_seqs: [0], buffered_seqs: isSR ? [3] : [], delivered_count: 0 },
+              description: `Frame [${cfg.dropped_frame_indices![0]}] dropped in transit`,
+            },
+            {
+              step_index: 3,
+              timestamp_us: 120000,
+              event_type: 'timeout_triggered',
+              frame_index: cfg.dropped_frame_indices![0],
+              seq_num: cfg.dropped_frame_indices![0] % cfg.sequence_space,
+              ack_seq: null,
+              sender_window: { send_base: cfg.dropped_frame_indices![0] % cfg.sequence_space, next_seq_num: 3, window_size: cfg.window_size, sequence_space: cfg.sequence_space, active_window_seqs: [0, 1, 2, 3], outstanding_count: 3 },
+              receiver_window: { rcv_base: 0, window_size: isSR ? cfg.window_size : 1, sequence_space: cfg.sequence_space, active_window_seqs: [0], buffered_seqs: isSR ? [3] : [], delivered_count: 0 },
+              description: isSR ? `Selective Repeat timeout on frame [${cfg.dropped_frame_indices![0]}]; retransmitting ONLY this frame` : `GBN timeout; retransmitting all outstanding frames from base`,
+            },
+            {
+              step_index: 4,
+              timestamp_us: 121000,
+              event_type: 'retransmission',
+              frame_index: cfg.dropped_frame_indices![0],
+              seq_num: cfg.dropped_frame_indices![0] % cfg.sequence_space,
+              ack_seq: null,
+              sender_window: { send_base: cfg.dropped_frame_indices![0] % cfg.sequence_space, next_seq_num: 3, window_size: cfg.window_size, sequence_space: cfg.sequence_space, active_window_seqs: [0, 1, 2, 3], outstanding_count: 3 },
+              receiver_window: { rcv_base: 0, window_size: isSR ? cfg.window_size : 1, sequence_space: cfg.sequence_space, active_window_seqs: [0], buffered_seqs: isSR ? [3] : [], delivered_count: 0 },
+              description: `Retransmission of frame [${cfg.dropped_frame_indices![0]}]`,
+            },
+          ] : [
+            {
+              step_index: 2,
+              timestamp_us: 50000,
+              event_type: 'ack_received',
+              frame_index: 0,
+              seq_num: 0,
+              ack_seq: 1,
+              sender_window: { send_base: 1, next_seq_num: 1, window_size: cfg.window_size, sequence_space: cfg.sequence_space, active_window_seqs: [1, 2, 3, 4], outstanding_count: 0 },
+              receiver_window: { rcv_base: 1, window_size: isSR ? cfg.window_size : 1, sequence_space: cfg.sequence_space, active_window_seqs: [1], buffered_seqs: [], delivered_count: 1 },
+              description: 'ACK received; window advanced',
+            },
+          ]),
+        ],
+        frames: Array.from({ length: cfg.total_frames_to_send }, (_, i) => ({
+          frame_index: i,
+          seq_num: i % cfg.sequence_space,
+          status: 'delivered' as const,
+          is_retransmission: hasDrop && i === cfg.dropped_frame_indices![0],
+          tx_count: hasDrop && i === cfg.dropped_frame_indices![0] ? 2 : 1,
+          sent_at_us: i * 10000,
+          acked_at_us: (i + 1) * 50000,
+        })),
+        metrics: {
+          total_frames_sent: cfg.total_frames_to_send + (hasDrop ? 1 : 0),
+          original_frames: cfg.total_frames_to_send,
+          retransmissions: hasDrop ? 1 : 0,
+          ack_count: cfg.total_frames_to_send,
+          duplicate_frames: 0,
+          dropped_or_corrupted_frames: hasDrop ? 1 : 0,
+          completed_frames: cfg.total_frames_to_send,
+          completion_time_us: hasDrop ? 250000 : 180000,
+          utilization: hasDrop ? 0.48 : 0.65,
+          protocol_overhead: hasDrop ? 0.25 : 0.18,
+          sender_window_occupancy_avg: 2.4,
+          receiver_buffer_occupancy_max: isSR && hasDrop ? 1 : 0,
+        },
+        final_sender: { send_base: cfg.total_frames_to_send % cfg.sequence_space, next_seq_num: cfg.total_frames_to_send % cfg.sequence_space, window_size: cfg.window_size, sequence_space: cfg.sequence_space, active_window_seqs: [], outstanding_count: 0 },
+        final_receiver: { rcv_base: cfg.total_frames_to_send % cfg.sequence_space, window_size: isSR ? cfg.window_size : 1, sequence_space: cfg.sequence_space, active_window_seqs: [], buffered_seqs: [], delivered_count: cfg.total_frames_to_send },
+        is_completed: true,
+      } as unknown as T);
+    }
+
+    case 'simulate_pure_aloha': {
+      const cfg = (args?.config as MacConfig) || {
+        protocol: 'pure_aloha',
+        persistence: 'one_persistent',
+        num_stations: 4,
+        total_frames_to_send: 8,
+        frame_duration_us: 10000,
+        prop_delay_us: 50,
+        frame_size_bits: 8000,
+        seed: 42,
+        max_retries: 16,
+        offered_load_g: 1.0,
+      };
+      return Promise.resolve({
+        protocol: 'pure_aloha',
+        config: cfg,
+        events: [
+          { step_index: 1, timestamp_us: 0, event_type: 'transmission_started', station_id: 0, frame_id: 1, channel_state: 'busy', description: 'Station 0 started transmitting' },
+          { step_index: 2, timestamp_us: 5000, event_type: 'collision_detected', station_id: 1, frame_id: 1, channel_state: 'collision', description: 'Station 1 overlapping transmission detected (collision)' },
+          { step_index: 3, timestamp_us: 15000, event_type: 'backoff_scheduled', station_id: 0, frame_id: 1, channel_state: 'idle', description: 'Station 0 scheduled random backoff delay' },
+        ],
+        slot_records: [],
+        metrics: {
+          attempted_transmissions: 12,
+          successful_transmissions: cfg.total_frames_to_send,
+          collisions: 4,
+          retransmissions: 4,
+          channel_busy_time_us: 80000,
+          total_simulation_time_us: 150000,
+          throughput_frames_per_sec: 53.33,
+          throughput_bits_per_sec: 426666.67,
+          collision_rate: 0.33,
+          channel_utilization: 0.53,
+          average_backoff_delay_us: 12500,
+        },
+        completed_successfully: true,
+      } as unknown as T);
+    }
+
+    case 'simulate_slotted_aloha': {
+      const cfg = (args?.config as MacConfig) || {
+        protocol: 'slotted_aloha',
+        persistence: 'one_persistent',
+        num_stations: 4,
+        total_frames_to_send: 8,
+        frame_duration_us: 10000,
+        prop_delay_us: 50,
+        frame_size_bits: 8000,
+        seed: 42,
+        max_retries: 16,
+        offered_load_g: 1.0,
+      };
+      return Promise.resolve({
+        protocol: 'slotted_aloha',
+        config: cfg,
+        events: [
+          { step_index: 1, timestamp_us: 0, event_type: 'transmission_started', station_id: 0, frame_id: 1, channel_state: 'busy', description: 'Station 0 transmitted in slot 0' },
+          { step_index: 2, timestamp_us: 10000, event_type: 'transmission_success', station_id: 0, frame_id: 1, channel_state: 'idle', description: 'Station 0 successfully completed slot transmission' },
+        ],
+        slot_records: [
+          { slot_index: 0, start_time_us: 0, end_time_us: 10000, participating_stations: [0], status: 'Success (Station 0)' },
+          { slot_index: 1, start_time_us: 10000, end_time_us: 20000, participating_stations: [1, 2], status: 'Collision (Stations [1, 2])' },
+          { slot_index: 2, start_time_us: 20000, end_time_us: 30000, participating_stations: [], status: 'Idle' },
+        ],
+        metrics: {
+          attempted_transmissions: 10,
+          successful_transmissions: cfg.total_frames_to_send,
+          collisions: 2,
+          retransmissions: 2,
+          channel_busy_time_us: 80000,
+          total_simulation_time_us: 120000,
+          throughput_frames_per_sec: 66.67,
+          throughput_bits_per_sec: 533333.33,
+          collision_rate: 0.20,
+          channel_utilization: 0.67,
+          average_backoff_delay_us: 15000,
+        },
+        completed_successfully: true,
+      } as unknown as T);
+    }
+
+    case 'simulate_csma': {
+      const cfg = (args?.config as MacConfig) || {
+        protocol: 'csma',
+        persistence: 'one_persistent',
+        num_stations: 4,
+        total_frames_to_send: 8,
+        frame_duration_us: 10000,
+        prop_delay_us: 50,
+        frame_size_bits: 8000,
+        seed: 42,
+        max_retries: 16,
+        offered_load_g: 1.0,
+      };
+      return Promise.resolve({
+        protocol: 'csma',
+        config: cfg,
+        events: [
+          { step_index: 1, timestamp_us: 0, event_type: 'carrier_sensed', station_id: 0, frame_id: 1, channel_state: 'idle', description: 'Station 0 sensed channel: IDLE' },
+          { step_index: 2, timestamp_us: 0, event_type: 'transmission_started', station_id: 0, frame_id: 1, channel_state: 'busy', description: 'Station 0 initiated transmission immediately (1-persistent)' },
+          { step_index: 3, timestamp_us: 10000, event_type: 'transmission_success', station_id: 0, frame_id: 1, channel_state: 'idle', description: 'Station 0 transmission completed' },
+        ],
+        slot_records: [],
+        metrics: {
+          attempted_transmissions: 9,
+          successful_transmissions: cfg.total_frames_to_send,
+          collisions: 1,
+          retransmissions: 1,
+          channel_busy_time_us: 80000,
+          total_simulation_time_us: 105000,
+          throughput_frames_per_sec: 76.19,
+          throughput_bits_per_sec: 609523.81,
+          collision_rate: 0.11,
+          channel_utilization: 0.76,
+          average_backoff_delay_us: 8000,
+        },
+        completed_successfully: true,
+      } as unknown as T);
+    }
+
+    case 'simulate_csma_cd': {
+      const cfg = (args?.config as MacConfig) || {
+        protocol: 'csma_cd',
+        persistence: 'one_persistent',
+        num_stations: 4,
+        total_frames_to_send: 8,
+        frame_duration_us: 10000,
+        prop_delay_us: 50,
+        frame_size_bits: 8000,
+        seed: 42,
+        max_retries: 16,
+        offered_load_g: 1.5,
+      };
+      return Promise.resolve({
+        protocol: 'csma_cd',
+        config: cfg,
+        events: [
+          { step_index: 1, timestamp_us: 0, event_type: 'carrier_sensed', station_id: 0, frame_id: 1, channel_state: 'idle', description: 'Station 0 sensed channel: IDLE' },
+          { step_index: 2, timestamp_us: 0, event_type: 'transmission_started', station_id: 0, frame_id: 1, channel_state: 'busy', description: 'Station 0 began transmitting frame 1' },
+          { step_index: 3, timestamp_us: 40, event_type: 'collision_detected', station_id: 0, frame_id: 1, channel_state: 'collision', description: 'Collision detected within 2τ interval at 40 µs' },
+          { step_index: 4, timestamp_us: 45, event_type: 'jam_signal_sent', station_id: 0, frame_id: 1, channel_state: 'collision', description: 'Transmitting 32-bit jam signal to enforce collision on wire' },
+          { step_index: 5, timestamp_us: 95, event_type: 'transmission_aborted', station_id: 0, frame_id: 1, channel_state: 'idle', description: 'Transmission aborted after collision and jam signal' },
+          { step_index: 6, timestamp_us: 95, event_type: 'backoff_scheduled', station_id: 0, frame_id: 1, channel_state: 'idle', description: 'Station 0 collision #1 (k=1); picked slot 1 -> backoff 100 µs (BEB)' },
+        ],
+        slot_records: [],
+        metrics: {
+          attempted_transmissions: 10,
+          successful_transmissions: cfg.total_frames_to_send,
+          collisions: 2,
+          retransmissions: 2,
+          channel_busy_time_us: 81000,
+          total_simulation_time_us: 95000,
+          throughput_frames_per_sec: 84.21,
+          throughput_bits_per_sec: 673684.21,
+          collision_rate: 0.20,
+          channel_utilization: 0.85,
+          average_backoff_delay_us: 250,
+        },
+        completed_successfully: true,
+      } as unknown as T);
+    }
+
     default:
       return Promise.reject(new Error(`Command ${cmd} not implemented in mock mode`));
+
   }
 }
 
@@ -1195,4 +1480,20 @@ export const api = {
     invokeTauri<ChecksumCalculationResult>('calculate_internet_checksum', { inputHex }),
   verifyInternetChecksum: (payloadHex: string, checksumHex: string) =>
     invokeTauri<ChecksumVerifyResult>('verify_internet_checksum', { payloadHex, checksumHex }),
+  // Phase 4C: Flow Control and Multiple Access
+  simulateSlidingWindow: (config: FlowControlConfig) =>
+    invokeTauri<FlowControlSimResult>('simulate_sliding_window', { config }),
+  simulateGoBackN: (config: FlowControlConfig) =>
+    invokeTauri<FlowControlSimResult>('simulate_go_back_n', { config }),
+  simulateSelectiveRepeat: (config: FlowControlConfig) =>
+    invokeTauri<FlowControlSimResult>('simulate_selective_repeat', { config }),
+  simulatePureAloha: (config: MacConfig) =>
+    invokeTauri<MacSimResult>('simulate_pure_aloha', { config }),
+  simulateSlottedAloha: (config: MacConfig) =>
+    invokeTauri<MacSimResult>('simulate_slotted_aloha', { config }),
+  simulateCsma: (config: MacConfig) =>
+    invokeTauri<MacSimResult>('simulate_csma', { config }),
+  simulateCsmaCd: (config: MacConfig) =>
+    invokeTauri<MacSimResult>('simulate_csma_cd', { config }),
 };
+

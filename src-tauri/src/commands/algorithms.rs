@@ -308,3 +308,49 @@ pub fn verify_internet_checksum(
         .map_err(|e| NetSimError::InvalidConfiguration(format!("Invalid checksum hex: {}", e)))?;
     ver_checksum(&payload_words, checksum)
 }
+
+// =========================================================================
+// Phase 4C: Data Link Flow Control & Multiple Access Commands
+// =========================================================================
+
+use crate::datalink::{
+    simulate_csma as sim_csma, simulate_csma_cd as sim_csma_cd, simulate_go_back_n as sim_gbn,
+    simulate_pure_aloha as sim_pure_aloha, simulate_selective_repeat as sim_sr,
+    simulate_sliding_window as sim_sw, simulate_slotted_aloha as sim_slotted_aloha,
+    FlowControlConfig, FlowControlSimResult, MacConfig, MacSimResult,
+};
+
+#[tauri::command]
+pub fn simulate_sliding_window(config: FlowControlConfig) -> Result<FlowControlSimResult> {
+    sim_sw(config)
+}
+
+#[tauri::command]
+pub fn simulate_go_back_n(config: FlowControlConfig) -> Result<FlowControlSimResult> {
+    sim_gbn(config)
+}
+
+#[tauri::command]
+pub fn simulate_selective_repeat(config: FlowControlConfig) -> Result<FlowControlSimResult> {
+    sim_sr(config)
+}
+
+#[tauri::command]
+pub fn simulate_pure_aloha(config: MacConfig) -> Result<MacSimResult> {
+    sim_pure_aloha(config)
+}
+
+#[tauri::command]
+pub fn simulate_slotted_aloha(config: MacConfig) -> Result<MacSimResult> {
+    sim_slotted_aloha(config)
+}
+
+#[tauri::command]
+pub fn simulate_csma(config: MacConfig) -> Result<MacSimResult> {
+    sim_csma(config)
+}
+
+#[tauri::command]
+pub fn simulate_csma_cd(config: MacConfig) -> Result<MacSimResult> {
+    sim_csma_cd(config)
+}
