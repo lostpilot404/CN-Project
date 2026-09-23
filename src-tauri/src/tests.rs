@@ -5036,3 +5036,144 @@ fn test_phase6_sim_event_application_layer_mapping() {
     assert_eq!(ev.node_id, Some("web-client".to_string()));
     assert_eq!(ev.packet_id, Some("pkt-http-001".to_string()));
 }
+
+#[test]
+fn test_phase6_http_deterministic_replay() {
+    use crate::application::http::{simulate_http, HttpConfig, HttpMethod, HttpRequest};
+    use std::collections::BTreeMap;
+
+    let mut headers = BTreeMap::new();
+    headers.insert("Host".to_string(), "example.com".to_string());
+
+    let config = HttpConfig {
+        client_node_id: "host-a".to_string(),
+        server_node_id: "web-server".to_string(),
+        request: HttpRequest {
+            method: HttpMethod::Get,
+            path: "/index.html".to_string(),
+            headers,
+            body: None,
+        },
+        port: 80,
+        seed: 42,
+    };
+
+    let run1 = simulate_http(config.clone(), None).expect("HTTP run 1 must succeed");
+    let run2 = simulate_http(config, None).expect("HTTP run 2 must succeed");
+
+    assert_eq!(run1.response.status_code, run2.response.status_code);
+    assert_eq!(run1.response.body, run2.response.body);
+    assert_eq!(run1.events.len(), run2.events.len());
+    assert_eq!(run1.packets.len(), run2.packets.len());
+
+    for (e1, e2) in run1.events.iter().zip(run2.events.iter()) {
+        assert_eq!(e1.timestamp_us, e2.timestamp_us);
+        assert_eq!(e1.event_type, e2.event_type);
+        assert_eq!(e1.node_id, e2.node_id);
+    }
+}
+
+#[test]
+fn test_phase6_ftp_file_retr_and_stor_transfer() {
+    use crate::application::ftp::{simulate_ftp, FtpCommand, FtpConfig};
+
+    // Test RETR (download)
+    let retr_cfg = FtpConfig {
+        client_node_id: "host-a".to_string(),
+        server_node_id: "ftp-server".to_string(),
+        username: "alice".to_string(),
+        password: Some("secret".to_string()),
+        transfer_command: FtpCommand::Retr,
+        filename: Some("dataset.csv".to_string()),
+        file_size_bytes: 8192,
+        control_port: 21,
+        data_port: 50001,
+        seed: 42,
+    };
+    let retr_res = simulate_ftp(retr_cfg, None).expect("FTP RETR must succeed");
+    assert_eq!(
+        retr_res.state,
+        crate::application::AppProtocolState::Completed
+    );
+    assert!(retr_res.metrics.payload_bytes_received >= 8192);
+    assert!(retr_res
+        .events
+        .iter()
+        .any(|e| e.event_type == "FTP_DATA_TRANSFER" && e.description.contains("RETR")));
+
+    // Test STOR (upload)
+    let stor_cfg = FtpConfig {
+        client_node_id: "host-a".to_string(),
+        server_node_id: "ftp-server".to_string(),
+        username: "alice".to_string(),
+        password: Some("secret".to_string()),
+        transfer_command: FtpCommand::Stor,
+        filename: Some("telemetry.log".to_string()),
+        file_size_bytes: 4096,
+        control_port: 21,
+        data_port: 50002,
+        seed: 42,
+    };
+    let stor_res = simulate_ftp(stor_cfg, None).expect("FTP STOR must succeed");
+    assert_eq!(
+        stor_res.state,
+        crate::application::AppProtocolState::Completed
+    );
+    assert!(stor_res
+        .events
+        .iter()
+        .any(|e| e.event_type == "FTP_DATA_TRANSFER" && e.description.contains("STOR")));
+}
+
+#[test]
+fn test_phase6_application_packet_encapsulation_stack() {
+    use crate::application::dns::{simulate_dns, DnsConfig, DnsQueryMode, DnsRecordType};
+
+    let config = DnsConfig {
+        client_node_id: "host-a".to_string(),
+        server_node_id: "dns-resolver".to_string(),
+        auth_server_node_id: None,
+        query_name: "www.example.com".to_string(),
+        query_type: DnsRecordType::A,
+        query_mode: DnsQueryMode::Recursive,
+        query_id: 1001,
+        custom_records: Vec::new(),
+        seed: 42,
+    };
+
+    let res = simulate_dns(config, None).expect("DNS simulation must succeed");
+    assert!(res.packets.len() >= 2);
+
+    let query_pkt = &res.packets[0];
+
+    // Layer 5: Application
+    assert_eq!(query_pkt.headers.application.protocol, "DNS");
+    assert_eq!(query_pkt.headers.application.transaction_id, Some(1001));
+    assert_eq!(
+        query_pkt.headers.application.message_type.as_deref(),
+        Some("Query")
+    );
+
+    // Layer 4: Transport
+    assert_eq!(query_pkt.headers.transport.protocol, "UDP");
+    assert_eq!(query_pkt.headers.transport.dst_port, 53);
+
+    // Layer 3: Network
+    assert_eq!(query_pkt.headers.network.version, 4);
+    assert_eq!(query_pkt.headers.network.protocol_num, 17);
+
+    // Layer 2: Data Link
+    assert!(!query_pkt.headers.datalink.src_mac.is_empty());
+    assert!(!query_pkt.headers.datalink.dst_mac.is_empty());
+    assert_eq!(query_pkt.headers.datalink.ether_type, 0x0800);
+
+    // Layer 1: Physical
+    let phys = query_pkt
+        .headers
+        .physical
+        .as_ref()
+        .expect("Physical layer info must be present");
+    assert!(phys.bit_count > 0);
+    // Application-layer packet builder does not set signal_encoding (educational simplification)
+    assert_eq!(phys.signal_encoding, None);
+}
