@@ -48,6 +48,18 @@ import {
   TransportConfig,
   TransportSimResult,
 } from '../types/transport';
+import {
+  DnsConfig,
+  DnsSimResult,
+  HttpConfig,
+  HttpSimResult,
+  FtpConfig,
+  FtpSimResult,
+  SmtpConfig,
+  SmtpSimResult,
+  SnmpConfig,
+  SnmpSimResult,
+} from '../types/application';
 
 
 // Check if running inside Tauri window
@@ -1728,6 +1740,1038 @@ function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
       } as unknown as T);
     }
 
+    case 'simulate_dns': {
+      const cfg = (args?.config as DnsConfig) || {
+        client_node_id: 'host-a',
+        server_node_id: 'dns-resolver',
+        auth_server_node_id: 'dns-auth',
+        query_name: 'www.example.com',
+        query_type: 'A',
+        query_mode: 'recursive',
+        query_id: 1001,
+        seed: 42,
+      };
+      const isNx = cfg.query_name === 'nxdomain.example.com';
+      const responseCode = isNx ? 'NXDOMAIN' : 'NOERROR';
+      const answers = isNx
+        ? []
+        : [
+            {
+              name: cfg.query_name,
+              record_type: cfg.query_type,
+              value: cfg.query_type === 'AAAA' ? '2606:2800:220:1:248:1893:25c8:1946' : '93.184.216.34',
+              ttl: 300,
+              priority: null,
+            },
+          ];
+      const queryPktId = `dns-query-${cfg.query_id}`;
+      const respPktId = `dns-resp-${cfg.query_id}`;
+      const events = [
+        {
+          step_index: 0,
+          timestamp_us: 0,
+          node_id: cfg.client_node_id,
+          protocol: 'DNS',
+          event_type: 'DNS_QUERY_SENT',
+          description: `Client sent DNS query #${cfg.query_id} for ${cfg.query_name} [${cfg.query_type}]`,
+          packet_id: queryPktId,
+          session_id: `dns-sess-${cfg.query_id}`,
+          details: `Target: ${cfg.server_node_id}:53`,
+        },
+        {
+          step_index: 1,
+          timestamp_us: 15000,
+          node_id: cfg.server_node_id,
+          protocol: 'DNS',
+          event_type: 'DNS_LOOKUP',
+          description: `Resolver received query #${cfg.query_id}, consulting local cache/zone`,
+          packet_id: null,
+          session_id: `dns-sess-${cfg.query_id}`,
+          details: `Mode: ${cfg.query_mode}`,
+        },
+        {
+          step_index: 2,
+          timestamp_us: 30000,
+          node_id: cfg.server_node_id,
+          protocol: 'DNS',
+          event_type: isNx ? 'DNS_NXDOMAIN' : 'DNS_RESPONSE_SENT',
+          description: isNx
+            ? `Resolver produced NXDOMAIN response for ${cfg.query_name}`
+            : `Resolver sent response with ${answers.length} answer(s)`,
+          packet_id: respPktId,
+          session_id: `dns-sess-${cfg.query_id}`,
+          details: `Status: ${responseCode}`,
+        },
+      ];
+      const packets = [
+        {
+          id: queryPktId,
+          src_node_id: cfg.client_node_id,
+          dst_node_id: cfg.server_node_id,
+          size_bytes: 64,
+          created_at_us: 0,
+          current_node_id: cfg.server_node_id,
+          next_hop_node_id: null,
+          state: 'delivered' as const,
+          headers: {
+            application: {
+              protocol: 'DNS',
+              payload_preview: `DNS Query: ${cfg.query_name} [${cfg.query_type}]`,
+              message_type: 'DNS_QUERY',
+              session_id: `dns-sess-${cfg.query_id}`,
+              transaction_id: cfg.query_id,
+              resource_or_command: cfg.query_name,
+              status_code: null,
+            },
+            transport: {
+              protocol: 'UDP',
+              src_port: 5353,
+              dst_port: 53,
+              flags: [],
+              payload_length: 32,
+              is_retransmission: false,
+              connection_state: 'closed',
+            },
+            network: {
+              version: 4,
+              src_ip: '192.168.1.10',
+              dst_ip: '192.168.1.53',
+              ttl: 64,
+              protocol_num: 17,
+              checksum: 0x4a12,
+            },
+            datalink: {
+              src_mac: '02:00:00:00:00:01',
+              dst_mac: '02:00:00:00:00:02',
+              ether_type: 0x0800,
+              crc_fcs: 0x12345678,
+              frame_type: 'Ethernet II',
+              fcs_valid: true,
+            },
+            physical: {
+              bit_count: 512,
+              signal_encoding: 'Manchester',
+            },
+          },
+          journey_hops: [cfg.client_node_id, cfg.server_node_id],
+          planned_route: [cfg.client_node_id, cfg.server_node_id],
+          hop_history: [
+            {
+              hop_index: 0,
+              node_id: cfg.client_node_id,
+              link_id: null,
+              timestamp_us: 0,
+              state: 'created' as const,
+              description: `DNS Query packet created at ${cfg.client_node_id}`,
+            },
+            {
+              hop_index: 1,
+              node_id: cfg.server_node_id,
+              link_id: 'link-1',
+              timestamp_us: 15000,
+              state: 'delivered' as const,
+              description: `DNS Query packet delivered to ${cfg.server_node_id}`,
+            },
+          ],
+        },
+        {
+          id: respPktId,
+          src_node_id: cfg.server_node_id,
+          dst_node_id: cfg.client_node_id,
+          size_bytes: 96,
+          created_at_us: 30000,
+          current_node_id: cfg.client_node_id,
+          next_hop_node_id: null,
+          state: 'delivered' as const,
+          headers: {
+            application: {
+              protocol: 'DNS',
+              payload_preview: `DNS Response: ${responseCode} (${answers.length} answers)`,
+              message_type: 'DNS_RESPONSE',
+              session_id: `dns-sess-${cfg.query_id}`,
+              transaction_id: cfg.query_id,
+              resource_or_command: cfg.query_name,
+              status_code: responseCode,
+            },
+            transport: {
+              protocol: 'UDP',
+              src_port: 53,
+              dst_port: 5353,
+              flags: [],
+              payload_length: 64,
+              is_retransmission: false,
+              connection_state: 'closed',
+            },
+            network: {
+              version: 4,
+              src_ip: '192.168.1.53',
+              dst_ip: '192.168.1.10',
+              ttl: 64,
+              protocol_num: 17,
+              checksum: 0x4a13,
+            },
+            datalink: {
+              src_mac: '02:00:00:00:00:02',
+              dst_mac: '02:00:00:00:00:01',
+              ether_type: 0x0800,
+              crc_fcs: 0x87654321,
+              frame_type: 'Ethernet II',
+              fcs_valid: true,
+            },
+            physical: {
+              bit_count: 768,
+              signal_encoding: 'Manchester',
+            },
+          },
+          journey_hops: [cfg.server_node_id, cfg.client_node_id],
+          planned_route: [cfg.server_node_id, cfg.client_node_id],
+          hop_history: [
+            {
+              hop_index: 0,
+              node_id: cfg.server_node_id,
+              link_id: null,
+              timestamp_us: 30000,
+              state: 'created' as const,
+              description: `DNS Response packet created at ${cfg.server_node_id}`,
+            },
+            {
+              hop_index: 1,
+              node_id: cfg.client_node_id,
+              link_id: 'link-1',
+              timestamp_us: 45000,
+              state: 'delivered' as const,
+              description: `DNS Response packet delivered to ${cfg.client_node_id}`,
+            },
+          ],
+        },
+      ];
+      return Promise.resolve({
+        config: cfg,
+        state: isNx ? 'failed' : 'completed',
+        response_code: responseCode,
+        answers,
+        events,
+        sim_events: events.map((e, idx) => ({
+          id: idx + 1,
+          timestamp: e.timestamp_us,
+          event_type: { application_event: { protocol: 'DNS', event_name: e.event_type } },
+          description: e.description,
+          packet_id: e.packet_id,
+          node_id: e.node_id,
+          layer: 'Application',
+          protocol: 'DNS',
+        })),
+        packets,
+        metrics: {
+          transaction_duration_us: 45000,
+          requests_sent: 1,
+          responses_received: 1,
+          payload_bytes_sent: 64,
+          payload_bytes_received: 96,
+          success: !isNx,
+          error_message: isNx ? 'NXDOMAIN: Domain name not found' : null,
+        },
+      } as unknown as T);
+    }
+
+    case 'simulate_http': {
+      const cfg = (args?.config as HttpConfig) || {
+        client_node_id: 'host-a',
+        server_node_id: 'web-server',
+        request: {
+          method: 'GET',
+          path: '/index.html',
+          headers: { Host: 'example.com' },
+          body: null,
+        },
+        port: 80,
+        seed: 42,
+      };
+      const is404 = cfg.request.path === '/not-found';
+      const statusCode = is404 ? 404 : 200;
+      const statusText = is404 ? 'Not Found' : 'OK';
+      const body = is404
+        ? '<html><body><h1>404 Not Found</h1></body></html>'
+        : '<html><body><h1>Welcome to NetSim</h1></body></html>';
+      const reqPktId = 'http-req-1';
+      const respPktId = 'http-resp-1';
+      const events = [
+        {
+          step_index: 0,
+          timestamp_us: 50000,
+          node_id: cfg.client_node_id,
+          protocol: 'HTTP',
+          event_type: 'HTTP_REQUEST_SENT',
+          description: `HTTP ${cfg.request.method} ${cfg.request.path} sent to ${cfg.server_node_id}:80`,
+          packet_id: reqPktId,
+          session_id: 'http-sess-80',
+          details: `Headers: ${Object.keys(cfg.request.headers).length}`,
+        },
+        {
+          step_index: 1,
+          timestamp_us: 70000,
+          node_id: cfg.server_node_id,
+          protocol: 'HTTP',
+          event_type: 'HTTP_SERVER_PROCESSING',
+          description: `Server processing ${cfg.request.method} ${cfg.request.path}`,
+          packet_id: null,
+          session_id: 'http-sess-80',
+          details: `Endpoint matched status ${statusCode}`,
+        },
+        {
+          step_index: 2,
+          timestamp_us: 80000,
+          node_id: cfg.server_node_id,
+          protocol: 'HTTP',
+          event_type: is404 ? 'HTTP_NOT_FOUND' : 'HTTP_RESPONSE_SENT',
+          description: `HTTP/1.1 ${statusCode} ${statusText} response sent`,
+          packet_id: respPktId,
+          session_id: 'http-sess-80',
+          details: `Content-Length: ${body.length}`,
+        },
+        {
+          step_index: 3,
+          timestamp_us: 100000,
+          node_id: cfg.client_node_id,
+          protocol: 'HTTP',
+          event_type: 'HTTP_COMPLETED',
+          description: `HTTP transaction finished with status ${statusCode}`,
+          packet_id: null,
+          session_id: 'http-sess-80',
+          details: `Bytes: ${body.length}`,
+        },
+      ];
+      return Promise.resolve({
+        config: cfg,
+        state: is404 ? 'failed' : 'completed',
+        response: {
+          status_code: statusCode,
+          status_text: statusText,
+          headers: {
+            'Content-Type': 'text/html',
+            'Content-Length': `${body.length}`,
+            Server: 'NetSim-HTTPd/2.4',
+          },
+          body,
+        },
+        events,
+        sim_events: events.map((e, idx) => ({
+          id: idx + 1,
+          timestamp: e.timestamp_us,
+          event_type: { application_event: { protocol: 'HTTP', event_name: e.event_type } },
+          description: e.description,
+          packet_id: e.packet_id,
+          node_id: e.node_id,
+          layer: 'Application',
+          protocol: 'HTTP',
+        })),
+        tcp_events: [],
+        packets: [
+          {
+            id: reqPktId,
+            src_node_id: cfg.client_node_id,
+            dst_node_id: cfg.server_node_id,
+            size_bytes: 180,
+            created_at_us: 50000,
+            current_node_id: cfg.server_node_id,
+            next_hop_node_id: null,
+            state: 'delivered' as const,
+            headers: {
+              application: {
+                protocol: 'HTTP',
+                payload_preview: `${cfg.request.method} ${cfg.request.path} HTTP/1.1`,
+                message_type: 'HTTP_REQUEST',
+                session_id: 'http-sess-80',
+                transaction_id: 1,
+                resource_or_command: `${cfg.request.method} ${cfg.request.path}`,
+                status_code: null,
+              },
+              transport: {
+                protocol: 'TCP',
+                src_port: 49152,
+                dst_port: 80,
+                seq_num: 1001,
+                ack_num: 5001,
+                window_size: 65535,
+                flags: ['ACK', 'PSH'],
+                payload_length: 120,
+                is_retransmission: false,
+                connection_state: 'established',
+              },
+              network: {
+                version: 4,
+                src_ip: '192.168.1.10',
+                dst_ip: '192.168.1.80',
+                ttl: 64,
+                protocol_num: 6,
+                checksum: 0x3344,
+              },
+              datalink: {
+                src_mac: '02:00:00:00:00:01',
+                dst_mac: '02:00:00:00:00:02',
+                ether_type: 0x0800,
+                crc_fcs: 0x12345678,
+                frame_type: 'Ethernet II',
+                fcs_valid: true,
+              },
+              physical: { bit_count: 1440, signal_encoding: 'Manchester' },
+            },
+            journey_hops: [cfg.client_node_id, cfg.server_node_id],
+            planned_route: [cfg.client_node_id, cfg.server_node_id],
+            hop_history: [],
+          },
+          {
+            id: respPktId,
+            src_node_id: cfg.server_node_id,
+            dst_node_id: cfg.client_node_id,
+            size_bytes: 320,
+            created_at_us: 80000,
+            current_node_id: cfg.client_node_id,
+            next_hop_node_id: null,
+            state: 'delivered' as const,
+            headers: {
+              application: {
+                protocol: 'HTTP',
+                payload_preview: `HTTP/1.1 ${statusCode} ${statusText}`,
+                message_type: 'HTTP_RESPONSE',
+                session_id: 'http-sess-80',
+                transaction_id: 1,
+                resource_or_command: `${cfg.request.method} ${cfg.request.path}`,
+                status_code: `${statusCode}`,
+              },
+              transport: {
+                protocol: 'TCP',
+                src_port: 80,
+                dst_port: 49152,
+                seq_num: 5001,
+                ack_num: 1121,
+                window_size: 65535,
+                flags: ['ACK', 'PSH'],
+                payload_length: 260,
+                is_retransmission: false,
+                connection_state: 'established',
+              },
+              network: {
+                version: 4,
+                src_ip: '192.168.1.80',
+                dst_ip: '192.168.1.10',
+                ttl: 64,
+                protocol_num: 6,
+                checksum: 0x3345,
+              },
+              datalink: {
+                src_mac: '02:00:00:00:00:02',
+                dst_mac: '02:00:00:00:00:01',
+                ether_type: 0x0800,
+                crc_fcs: 0x87654321,
+                frame_type: 'Ethernet II',
+                fcs_valid: true,
+              },
+              physical: { bit_count: 2560, signal_encoding: 'Manchester' },
+            },
+            journey_hops: [cfg.server_node_id, cfg.client_node_id],
+            planned_route: [cfg.server_node_id, cfg.client_node_id],
+            hop_history: [],
+          },
+        ],
+        metrics: {
+          transaction_duration_us: 100000,
+          requests_sent: 1,
+          responses_received: 1,
+          payload_bytes_sent: 180,
+          payload_bytes_received: 320,
+          success: !is404,
+          error_message: is404 ? '404 Not Found: Path does not exist' : null,
+        },
+      } as unknown as T);
+    }
+
+    case 'simulate_ftp': {
+      const cfg = (args?.config as FtpConfig) || {
+        client_node_id: 'host-a',
+        server_node_id: 'ftp-server',
+        username: 'anonymous',
+        password: 'user@example.com',
+        transfer_command: 'RETR',
+        filename: 'file.txt',
+        file_size_bytes: 2048,
+        control_port: 21,
+        data_port: 50000,
+        seed: 42,
+      };
+      const ctrlPkt = 'ftp-ctrl-1';
+      const dataPkt = 'ftp-data-1';
+      const events = [
+        {
+          step_index: 0,
+          timestamp_us: 0,
+          node_id: cfg.server_node_id,
+          protocol: 'FTP',
+          event_type: 'FTP_GREETING',
+          description: '220 NetSim Educational FTP Ready',
+          packet_id: null,
+          session_id: 'ftp-ctrl-sess-21',
+          details: 'Port 21 Control Channel',
+        },
+        {
+          step_index: 1,
+          timestamp_us: 10000,
+          node_id: cfg.client_node_id,
+          protocol: 'FTP',
+          event_type: 'FTP_CONTROL_COMMAND',
+          description: `USER ${cfg.username}`,
+          packet_id: ctrlPkt,
+          session_id: 'ftp-ctrl-sess-21',
+          details: 'Code 331 Password required',
+        },
+        {
+          step_index: 2,
+          timestamp_us: 20000,
+          node_id: cfg.client_node_id,
+          protocol: 'FTP',
+          event_type: 'FTP_LOGIN_SUCCESS',
+          description: 'PASS ****** -> 230 User logged in, proceed',
+          packet_id: null,
+          session_id: 'ftp-ctrl-sess-21',
+          details: 'Authentication successful',
+        },
+        {
+          step_index: 3,
+          timestamp_us: 30000,
+          node_id: cfg.client_node_id,
+          protocol: 'FTP',
+          event_type: 'FTP_DATA_OPEN',
+          description: `${cfg.transfer_command} ${cfg.filename || ''} -> 150 File status okay; opening data channel`,
+          packet_id: null,
+          session_id: 'ftp-data-sess-50000',
+          details: `Port ${cfg.data_port}`,
+        },
+        {
+          step_index: 4,
+          timestamp_us: 45000,
+          node_id: cfg.server_node_id,
+          protocol: 'FTP',
+          event_type: 'FTP_DATA_TRANSFERRING',
+          description: `Transferring payload over Data Channel (${cfg.file_size_bytes} bytes)`,
+          packet_id: dataPkt,
+          session_id: 'ftp-data-sess-50000',
+          details: 'Payload delivery',
+        },
+        {
+          step_index: 5,
+          timestamp_us: 60000,
+          node_id: cfg.server_node_id,
+          protocol: 'FTP',
+          event_type: 'FTP_DATA_COMPLETE',
+          description: '226 Closing data connection, transfer complete',
+          packet_id: null,
+          session_id: 'ftp-ctrl-sess-21',
+          details: 'Data channel closed',
+        },
+      ];
+      return Promise.resolve({
+        config: cfg,
+        state: 'completed',
+        control_session_id: 'ftp-ctrl-sess-21',
+        data_session_id: 'ftp-data-sess-50000',
+        events,
+        sim_events: events.map((e, idx) => ({
+          id: idx + 1,
+          timestamp: e.timestamp_us,
+          event_type: { application_event: { protocol: 'FTP', event_name: e.event_type } },
+          description: e.description,
+          packet_id: e.packet_id,
+          node_id: e.node_id,
+          layer: 'Application',
+          protocol: 'FTP',
+        })),
+        packets: [
+          {
+            id: ctrlPkt,
+            src_node_id: cfg.client_node_id,
+            dst_node_id: cfg.server_node_id,
+            size_bytes: 80,
+            created_at_us: 10000,
+            current_node_id: cfg.server_node_id,
+            next_hop_node_id: null,
+            state: 'delivered' as const,
+            headers: {
+              application: {
+                protocol: 'FTP',
+                payload_preview: `USER ${cfg.username}`,
+                message_type: 'FTP_CONTROL_CMD',
+                session_id: 'ftp-ctrl-sess-21',
+                transaction_id: 1,
+                resource_or_command: 'USER',
+                status_code: '331',
+              },
+              transport: {
+                protocol: 'TCP',
+                src_port: 49152,
+                dst_port: 21,
+                seq_num: 100,
+                ack_num: 1,
+                flags: ['ACK', 'PSH'],
+                payload_length: 20,
+                is_retransmission: false,
+                connection_state: 'established',
+              },
+              network: {
+                version: 4,
+                src_ip: '192.168.1.10',
+                dst_ip: '192.168.1.21',
+                ttl: 64,
+                protocol_num: 6,
+                checksum: 0x1111,
+              },
+              datalink: {
+                src_mac: '02:00:00:00:00:01',
+                dst_mac: '02:00:00:00:00:02',
+                ether_type: 0x0800,
+                crc_fcs: 0x2222,
+                frame_type: 'Ethernet II',
+                fcs_valid: true,
+              },
+              physical: { bit_count: 640, signal_encoding: 'Manchester' },
+            },
+            journey_hops: [cfg.client_node_id, cfg.server_node_id],
+            planned_route: [cfg.client_node_id, cfg.server_node_id],
+            hop_history: [],
+          },
+          {
+            id: dataPkt,
+            src_node_id: cfg.server_node_id,
+            dst_node_id: cfg.client_node_id,
+            size_bytes: cfg.file_size_bytes,
+            created_at_us: 45000,
+            current_node_id: cfg.client_node_id,
+            next_hop_node_id: null,
+            state: 'delivered' as const,
+            headers: {
+              application: {
+                protocol: 'FTP',
+                payload_preview: `FTP Data: ${cfg.filename || 'data'} (${cfg.file_size_bytes}B)`,
+                message_type: 'FTP_DATA_PAYLOAD',
+                session_id: 'ftp-data-sess-50000',
+                transaction_id: 2,
+                resource_or_command: cfg.transfer_command,
+                status_code: '226',
+              },
+              transport: {
+                protocol: 'TCP',
+                src_port: 50000,
+                dst_port: 49153,
+                seq_num: 500,
+                ack_num: 1,
+                flags: ['ACK'],
+                payload_length: cfg.file_size_bytes,
+                is_retransmission: false,
+                connection_state: 'established',
+              },
+              network: {
+                version: 4,
+                src_ip: '192.168.1.21',
+                dst_ip: '192.168.1.10',
+                ttl: 64,
+                protocol_num: 6,
+                checksum: 0x3333,
+              },
+              datalink: {
+                src_mac: '02:00:00:00:00:02',
+                dst_mac: '02:00:00:00:00:01',
+                ether_type: 0x0800,
+                crc_fcs: 0x4444,
+                frame_type: 'Ethernet II',
+                fcs_valid: true,
+              },
+              physical: { bit_count: cfg.file_size_bytes * 8, signal_encoding: 'Manchester' },
+            },
+            journey_hops: [cfg.server_node_id, cfg.client_node_id],
+            planned_route: [cfg.server_node_id, cfg.client_node_id],
+            hop_history: [],
+          },
+        ],
+        metrics: {
+          transaction_duration_us: 60000,
+          requests_sent: 4,
+          responses_received: 4,
+          payload_bytes_sent: 120,
+          payload_bytes_received: cfg.file_size_bytes,
+          success: true,
+          error_message: null,
+        },
+      } as unknown as T);
+    }
+
+    case 'simulate_smtp': {
+      const cfg = (args?.config as SmtpConfig) || {
+        client_node_id: 'host-a',
+        server_node_id: 'mail-server',
+        mail_from: 'alice@example.com',
+        rcpt_to: 'bob@example.com',
+        subject: 'Test Subject',
+        body: 'Mail body content.',
+        reject_recipient: false,
+        port: 25,
+        seed: 42,
+      };
+      const isRejected = cfg.reject_recipient;
+      const smtpPkt = 'smtp-cmd-1';
+      const events = [
+        {
+          step_index: 0,
+          timestamp_us: 0,
+          node_id: cfg.server_node_id,
+          protocol: 'SMTP',
+          event_type: 'SMTP_GREETING',
+          description: '220 NetSim Mail Transfer Agent ESMTP Ready',
+          packet_id: null,
+          session_id: 'smtp-sess-25',
+          details: 'Port 25',
+        },
+        {
+          step_index: 1,
+          timestamp_us: 10000,
+          node_id: cfg.client_node_id,
+          protocol: 'SMTP',
+          event_type: 'SMTP_COMMAND',
+          description: 'EHLO host-a.example.com -> 250 Hello',
+          packet_id: null,
+          session_id: 'smtp-sess-25',
+          details: 'Handshake complete',
+        },
+        {
+          step_index: 2,
+          timestamp_us: 20000,
+          node_id: cfg.client_node_id,
+          protocol: 'SMTP',
+          event_type: 'SMTP_COMMAND',
+          description: `MAIL FROM:<${cfg.mail_from}> -> 250 Sender OK`,
+          packet_id: null,
+          session_id: 'smtp-sess-25',
+          details: 'Sender envelope',
+        },
+        {
+          step_index: 3,
+          timestamp_us: 30000,
+          node_id: cfg.client_node_id,
+          protocol: 'SMTP',
+          event_type: isRejected ? 'SMTP_RCPT_REJECTED' : 'SMTP_COMMAND',
+          description: isRejected
+            ? `RCPT TO:<${cfg.rcpt_to}> -> 550 User unknown`
+            : `RCPT TO:<${cfg.rcpt_to}> -> 250 Recipient OK`,
+          packet_id: smtpPkt,
+          session_id: 'smtp-sess-25',
+          details: isRejected ? 'Rejected by policy' : 'Recipient accepted',
+        },
+      ];
+      if (!isRejected) {
+        events.push(
+          {
+            step_index: 4,
+            timestamp_us: 40000,
+            node_id: cfg.client_node_id,
+            protocol: 'SMTP',
+            event_type: 'SMTP_COMMAND',
+            description: 'DATA -> 354 Start mail input; end with <CRLF>.<CRLF>',
+            packet_id: null,
+            session_id: 'smtp-sess-25',
+            details: 'Ready for body',
+          },
+          {
+            step_index: 5,
+            timestamp_us: 50000,
+            node_id: cfg.client_node_id,
+            protocol: 'SMTP',
+            event_type: 'SMTP_MESSAGE_ACCEPTED',
+            description: 'Message payload sent -> 250 2.0.0 Ok: queued as 48A9B1',
+            packet_id: null,
+            session_id: 'smtp-sess-25',
+            details: `Length: ${cfg.body.length}B`,
+          },
+          {
+            step_index: 6,
+            timestamp_us: 60000,
+            node_id: cfg.client_node_id,
+            protocol: 'SMTP',
+            event_type: 'SMTP_TERMINATED',
+            description: 'QUIT -> 221 2.0.0 Bye',
+            packet_id: null,
+            session_id: 'smtp-sess-25',
+            details: 'Session closed',
+          }
+        );
+      }
+      return Promise.resolve({
+        config: cfg,
+        state: isRejected ? 'failed' : 'completed',
+        is_accepted: !isRejected,
+        events,
+        sim_events: events.map((e, idx) => ({
+          id: idx + 1,
+          timestamp: e.timestamp_us,
+          event_type: { application_event: { protocol: 'SMTP', event_name: e.event_type } },
+          description: e.description,
+          packet_id: e.packet_id,
+          node_id: e.node_id,
+          layer: 'Application',
+          protocol: 'SMTP',
+        })),
+        packets: [
+          {
+            id: smtpPkt,
+            src_node_id: cfg.client_node_id,
+            dst_node_id: cfg.server_node_id,
+            size_bytes: 120,
+            created_at_us: 30000,
+            current_node_id: cfg.server_node_id,
+            next_hop_node_id: null,
+            state: 'delivered' as const,
+            headers: {
+              application: {
+                protocol: 'SMTP',
+                payload_preview: `RCPT TO:<${cfg.rcpt_to}>`,
+                message_type: 'SMTP_RCPT',
+                session_id: 'smtp-sess-25',
+                transaction_id: 1,
+                resource_or_command: 'RCPT TO',
+                status_code: isRejected ? '550' : '250',
+              },
+              transport: {
+                protocol: 'TCP',
+                src_port: 49152,
+                dst_port: 25,
+                seq_num: 200,
+                ack_num: 150,
+                flags: ['ACK', 'PSH'],
+                payload_length: 45,
+                is_retransmission: false,
+                connection_state: 'established',
+              },
+              network: {
+                version: 4,
+                src_ip: '192.168.1.10',
+                dst_ip: '192.168.1.25',
+                ttl: 64,
+                protocol_num: 6,
+                checksum: 0x5555,
+              },
+              datalink: {
+                src_mac: '02:00:00:00:00:01',
+                dst_mac: '02:00:00:00:00:02',
+                ether_type: 0x0800,
+                crc_fcs: 0x6666,
+                frame_type: 'Ethernet II',
+                fcs_valid: true,
+              },
+              physical: { bit_count: 960, signal_encoding: 'Manchester' },
+            },
+            journey_hops: [cfg.client_node_id, cfg.server_node_id],
+            planned_route: [cfg.client_node_id, cfg.server_node_id],
+            hop_history: [],
+          },
+        ],
+        metrics: {
+          transaction_duration_us: isRejected ? 30000 : 60000,
+          requests_sent: isRejected ? 3 : 5,
+          responses_received: isRejected ? 3 : 5,
+          payload_bytes_sent: 350,
+          payload_bytes_received: 280,
+          success: !isRejected,
+          error_message: isRejected ? '550 User unknown: Recipient mailbox rejected' : null,
+        },
+      } as unknown as T);
+    }
+
+    case 'simulate_snmp': {
+      const cfg = (args?.config as SnmpConfig) || {
+        manager_node_id: 'nms-manager',
+        agent_node_id: 'router-core',
+        community: 'public',
+        requested_oid: '1.3.6.1.2.1.1.1.0',
+        port: 161,
+        seed: 42,
+      };
+      const isKnown = cfg.requested_oid === '1.3.6.1.2.1.1.1.0';
+      const mibObj = isKnown
+        ? {
+            oid: '1.3.6.1.2.1.1.1.0',
+            name: 'sysDescr.0',
+            syntax: 'DisplayString',
+            value: 'NetSim CoreOS Router v2.4 (x86_64, Educational Edition)',
+            description: 'A textual description of the network entity.',
+          }
+        : null;
+      const snmpReq = 'snmp-req-1';
+      const snmpResp = 'snmp-resp-1';
+      const events = [
+        {
+          step_index: 0,
+          timestamp_us: 0,
+          node_id: cfg.manager_node_id,
+          protocol: 'SNMP',
+          event_type: 'SNMP_GET_REQUEST',
+          description: `Manager sent GetRequest for OID ${cfg.requested_oid}`,
+          packet_id: snmpReq,
+          session_id: 'snmp-sess-161',
+          details: `Community: ${cfg.community}`,
+        },
+        {
+          step_index: 1,
+          timestamp_us: 15000,
+          node_id: cfg.agent_node_id,
+          protocol: 'SNMP',
+          event_type: isKnown ? 'SNMP_MIB_LOOKUP' : 'SNMP_UNKNOWN_OID',
+          description: isKnown
+            ? `Agent resolved OID ${cfg.requested_oid} -> ${mibObj?.name}`
+            : `Agent OID ${cfg.requested_oid} not found in MIB tree`,
+          packet_id: null,
+          session_id: 'snmp-sess-161',
+          details: isKnown ? `Value: ${mibObj?.value}` : 'Error: noSuchName',
+        },
+        {
+          step_index: 2,
+          timestamp_us: 30000,
+          node_id: cfg.agent_node_id,
+          protocol: 'SNMP',
+          event_type: 'SNMP_GET_RESPONSE',
+          description: isKnown
+            ? `Agent sent GetResponse: ${mibObj?.name} = ${mibObj?.value}`
+            : 'Agent sent GetResponse with error status: noSuchName',
+          packet_id: snmpResp,
+          session_id: 'snmp-sess-161',
+          details: isKnown ? 'Status: 0 (noError)' : 'Status: 2 (noSuchName)',
+        },
+      ];
+      return Promise.resolve({
+        config: cfg,
+        state: isKnown ? 'completed' : 'failed',
+        found_object: mibObj,
+        events,
+        sim_events: events.map((e, idx) => ({
+          id: idx + 1,
+          timestamp: e.timestamp_us,
+          event_type: { application_event: { protocol: 'SNMP', event_name: e.event_type } },
+          description: e.description,
+          packet_id: e.packet_id,
+          node_id: e.node_id,
+          layer: 'Application',
+          protocol: 'SNMP',
+        })),
+        packets: [
+          {
+            id: snmpReq,
+            src_node_id: cfg.manager_node_id,
+            dst_node_id: cfg.agent_node_id,
+            size_bytes: 75,
+            created_at_us: 0,
+            current_node_id: cfg.agent_node_id,
+            next_hop_node_id: null,
+            state: 'delivered' as const,
+            headers: {
+              application: {
+                protocol: 'SNMP',
+                payload_preview: `GetRequest(${cfg.requested_oid})`,
+                message_type: 'SNMP_GET_REQUEST',
+                session_id: 'snmp-sess-161',
+                transaction_id: 101,
+                resource_or_command: cfg.requested_oid,
+                status_code: null,
+              },
+              transport: {
+                protocol: 'UDP',
+                src_port: 51234,
+                dst_port: 161,
+                flags: [],
+                payload_length: 45,
+                is_retransmission: false,
+                connection_state: 'closed',
+              },
+              network: {
+                version: 4,
+                src_ip: '192.168.1.10',
+                dst_ip: '192.168.1.1',
+                ttl: 64,
+                protocol_num: 17,
+                checksum: 0x7777,
+              },
+              datalink: {
+                src_mac: '02:00:00:00:00:01',
+                dst_mac: '02:00:00:00:00:02',
+                ether_type: 0x0800,
+                crc_fcs: 0x8888,
+                frame_type: 'Ethernet II',
+                fcs_valid: true,
+              },
+              physical: { bit_count: 600, signal_encoding: 'Manchester' },
+            },
+            journey_hops: [cfg.manager_node_id, cfg.agent_node_id],
+            planned_route: [cfg.manager_node_id, cfg.agent_node_id],
+            hop_history: [],
+          },
+          {
+            id: snmpResp,
+            src_node_id: cfg.agent_node_id,
+            dst_node_id: cfg.manager_node_id,
+            size_bytes: 90,
+            created_at_us: 30000,
+            current_node_id: cfg.manager_node_id,
+            next_hop_node_id: null,
+            state: 'delivered' as const,
+            headers: {
+              application: {
+                protocol: 'SNMP',
+                payload_preview: isKnown ? `GetResponse(${mibObj?.value})` : 'GetResponse(noSuchName)',
+                message_type: 'SNMP_GET_RESPONSE',
+                session_id: 'snmp-sess-161',
+                transaction_id: 101,
+                resource_or_command: cfg.requested_oid,
+                status_code: isKnown ? 'noError' : 'noSuchName',
+              },
+              transport: {
+                protocol: 'UDP',
+                src_port: 161,
+                dst_port: 51234,
+                flags: [],
+                payload_length: 60,
+                is_retransmission: false,
+                connection_state: 'closed',
+              },
+              network: {
+                version: 4,
+                src_ip: '192.168.1.1',
+                dst_ip: '192.168.1.10',
+                ttl: 64,
+                protocol_num: 17,
+                checksum: 0x7778,
+              },
+              datalink: {
+                src_mac: '02:00:00:00:00:02',
+                dst_mac: '02:00:00:00:00:01',
+                ether_type: 0x0800,
+                crc_fcs: 0x8889,
+                frame_type: 'Ethernet II',
+                fcs_valid: true,
+              },
+              physical: { bit_count: 720, signal_encoding: 'Manchester' },
+            },
+            journey_hops: [cfg.agent_node_id, cfg.manager_node_id],
+            planned_route: [cfg.agent_node_id, cfg.manager_node_id],
+            hop_history: [],
+          },
+        ],
+        metrics: {
+          transaction_duration_us: 30000,
+          requests_sent: 1,
+          responses_received: 1,
+          payload_bytes_sent: 75,
+          payload_bytes_received: 90,
+          success: isKnown,
+          error_message: isKnown ? null : 'noSuchName: OID not found in agent MIB tree',
+        },
+      } as unknown as T);
+    }
+
     default:
       return Promise.reject(new Error(`Command ${cmd} not implemented in mock mode`));
 
@@ -1943,5 +2987,17 @@ export const api = {
     invokeTauri<TransportSimResult>('simulate_udp', { config }),
   simulateTcpCongestion: (config: TransportConfig) =>
     invokeTauri<TransportSimResult>('simulate_tcp_congestion', { config }),
+  // Phase 6: Application Layer Protocols
+  simulateDns: (config: DnsConfig) =>
+    invokeTauri<DnsSimResult>('simulate_dns', { config }),
+  simulateHttp: (config: HttpConfig) =>
+    invokeTauri<HttpSimResult>('simulate_http', { config }),
+  simulateFtp: (config: FtpConfig) =>
+    invokeTauri<FtpSimResult>('simulate_ftp', { config }),
+  simulateSmtp: (config: SmtpConfig) =>
+    invokeTauri<SmtpSimResult>('simulate_smtp', { config }),
+  simulateSnmp: (config: SnmpConfig) =>
+    invokeTauri<SnmpSimResult>('simulate_snmp', { config }),
 };
+
 

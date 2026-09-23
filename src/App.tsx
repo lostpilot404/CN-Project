@@ -6,6 +6,7 @@ import { RoutingWorkspace } from './components/routing/RoutingWorkspace';
 import { AddressingWorkspace } from './components/addressing/AddressingWorkspace';
 import { DataLinkWorkspace } from './components/datalink/DataLinkWorkspace';
 import { TransportWorkspace } from './components/transport/TransportWorkspace';
+import { ApplicationWorkspace } from './components/application/ApplicationWorkspace';
 import { SimulationStudio } from './components/simulation/SimulationStudio';
 import { ControlBar } from './components/simulation/ControlBar';
 import { TimelineDrawer } from './components/timeline/TimelineDrawer';
@@ -318,6 +319,8 @@ export function App() {
             <DataLinkWorkspace />
           ) : activeTab === 'transport' ? (
             <TransportWorkspace project={project} />
+          ) : activeTab === 'application' ? (
+            <ApplicationWorkspace project={project} />
           ) : activeTab === 'simulation' ? (
             <SimulationStudio project={project} />
           ) : (

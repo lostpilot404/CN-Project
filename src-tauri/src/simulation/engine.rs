@@ -162,6 +162,10 @@ impl SimulationEngine {
                     protocol: app_protocol.clone(),
                     payload_preview: format!("Data payload ({} bytes)", size_bytes),
                     message_type: Some(format!("{} Data", app_protocol)),
+                    session_id: None,
+                    transaction_id: None,
+                    resource_or_command: None,
+                    status_code: None,
                 },
                 transport: TransportHeader {
                     protocol: transport_protocol.clone(),
@@ -607,6 +611,7 @@ impl SimulationEngine {
             SimEventType::Retransmission { .. } => {}
             SimEventType::RouteUpdated { .. } => {}
             SimEventType::FaultInjected { .. } => {}
+            SimEventType::ApplicationEvent { .. } => {}
         }
     }
 

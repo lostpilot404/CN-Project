@@ -3926,6 +3926,10 @@ fn test_phase5_five_layer_packet_serialization_and_deserialization() {
                 protocol: "HTTP".into(),
                 payload_preview: "GET /index.html HTTP/1.1".into(),
                 message_type: Some("HTTP Request".into()),
+                session_id: None,
+                transaction_id: None,
+                resource_or_command: None,
+                status_code: None,
             },
             transport: TransportHeader {
                 protocol: "TCP".into(),
@@ -4211,7 +4215,12 @@ fn test_phase5_event_metadata_enrichment_and_layer_identification() {
     let created_ev = snap
         .recent_events
         .iter()
-        .find(|e| matches!(e.event_type, crate::simulation::SimEventType::PacketCreated { .. }))
+        .find(|e| {
+            matches!(
+                e.event_type,
+                crate::simulation::SimEventType::PacketCreated { .. }
+            )
+        })
         .expect("PacketCreated event must exist");
 
     assert_eq!(created_ev.packet_id, Some(pkt_id.clone()));
@@ -4222,7 +4231,12 @@ fn test_phase5_event_metadata_enrichment_and_layer_identification() {
     let tx_ev = snap
         .recent_events
         .iter()
-        .find(|e| matches!(e.event_type, crate::simulation::SimEventType::TransmissionStarted { .. }))
+        .find(|e| {
+            matches!(
+                e.event_type,
+                crate::simulation::SimEventType::TransmissionStarted { .. }
+            )
+        })
         .expect("TransmissionStarted event must exist");
 
     assert_eq!(tx_ev.packet_id, Some(pkt_id.clone()));
@@ -4278,6 +4292,10 @@ fn test_phase5_planned_route_vs_actual_hop_history_distinction() {
                 protocol: "HTTP".into(),
                 payload_preview: "test".into(),
                 message_type: None,
+                session_id: None,
+                transaction_id: None,
+                resource_or_command: None,
+                status_code: None,
             },
             transport: TransportHeader {
                 protocol: "TCP".into(),
@@ -4350,4 +4368,671 @@ fn test_phase5_planned_route_vs_actual_hop_history_distinction() {
     assert_eq!(packet.hop_history.len(), 3);
     assert_eq!(packet.hop_history[2].state, PacketState::DroppedLinkDown);
     assert!(!packet.hop_history.iter().any(|h| h.node_id == "host-b"));
+}
+
+// =========================================================================
+// PHASE 6: APPLICATION-LAYER PROTOCOLS & WORKFLOWS TESTS
+// =========================================================================
+
+#[test]
+fn test_phase6_dns_recursive_query_a_record_success() {
+    use crate::application::dns::{
+        simulate_dns, DnsConfig, DnsQueryMode, DnsRecordType, DnsResponseCode,
+    };
+
+    let config = DnsConfig {
+        client_node_id: "client-host".to_string(),
+        server_node_id: "dns-resolver".to_string(),
+        auth_server_node_id: None,
+        query_name: "www.example.com".to_string(),
+        query_type: DnsRecordType::A,
+        query_mode: DnsQueryMode::Recursive,
+        query_id: 2001,
+        custom_records: Vec::new(),
+        seed: 42,
+    };
+
+    let result = simulate_dns(config, None).expect("DNS simulation must succeed");
+    assert_eq!(result.response_code, DnsResponseCode::NoError);
+    assert_eq!(
+        result.state,
+        crate::application::AppProtocolState::Completed
+    );
+    assert!(!result.answers.is_empty());
+    assert_eq!(result.answers[0].name, "www.example.com");
+    assert_eq!(result.answers[0].value, "93.184.216.34");
+    assert_eq!(result.answers[0].record_type, DnsRecordType::A);
+
+    // Verify events sequence
+    let query_event = result
+        .events
+        .iter()
+        .find(|e| e.event_type == "DNS_QUERY_SENT");
+    assert!(query_event.is_some());
+    assert_eq!(query_event.unwrap().node_id, "client-host");
+    assert!(query_event.unwrap().packet_id.is_some());
+
+    let lookup_event = result.events.iter().find(|e| e.event_type == "DNS_LOOKUP");
+    assert!(lookup_event.is_some());
+    assert_eq!(
+        lookup_event.unwrap().packet_id,
+        None,
+        "Local lookup must not have a packet"
+    );
+
+    let resp_event = result
+        .events
+        .iter()
+        .find(|e| e.event_type == "DNS_RESPONSE_SENT");
+    assert!(resp_event.is_some());
+    assert!(resp_event.unwrap().packet_id.is_some());
+
+    // Verify packet 5-layer encapsulation
+    assert_eq!(
+        result.packets.len(),
+        2,
+        "1 query packet + 1 response packet"
+    );
+    let q_pkt = &result.packets[0];
+    assert_eq!(q_pkt.headers.application.protocol, "DNS");
+    assert_eq!(q_pkt.headers.application.transaction_id, Some(2001));
+    assert_eq!(q_pkt.headers.transport.protocol, "UDP");
+    assert_eq!(q_pkt.headers.transport.dst_port, 53);
+    assert_eq!(
+        q_pkt.headers.transport.flags.len(),
+        0,
+        "UDP must not fabricate TCP flags"
+    );
+    assert!(q_pkt.headers.physical.is_some());
+}
+
+#[test]
+fn test_phase6_dns_records_aaaa_cname_mx() {
+    use crate::application::dns::{
+        simulate_dns, DnsConfig, DnsQueryMode, DnsRecordType, DnsResponseCode,
+    };
+
+    // AAAA Query
+    let cfg_aaaa = DnsConfig {
+        client_node_id: "pc-1".to_string(),
+        server_node_id: "dns-1".to_string(),
+        auth_server_node_id: None,
+        query_name: "ipv6.example.com".to_string(),
+        query_type: DnsRecordType::Aaaa,
+        query_mode: DnsQueryMode::Recursive,
+        query_id: 3001,
+        custom_records: Vec::new(),
+        seed: 42,
+    };
+    let res_aaaa = simulate_dns(cfg_aaaa, None).expect("AAAA query must succeed");
+    assert_eq!(res_aaaa.response_code, DnsResponseCode::NoError);
+    assert_eq!(
+        res_aaaa.answers[0].value,
+        "2606:2800:220:1:248:1893:25c8:1946"
+    );
+
+    // MX Query
+    let cfg_mx = DnsConfig {
+        client_node_id: "pc-1".to_string(),
+        server_node_id: "dns-1".to_string(),
+        auth_server_node_id: None,
+        query_name: "mail.example.org".to_string(),
+        query_type: DnsRecordType::Mx,
+        query_mode: DnsQueryMode::Recursive,
+        query_id: 3002,
+        custom_records: Vec::new(),
+        seed: 42,
+    };
+    let res_mx = simulate_dns(cfg_mx, None).expect("MX query must succeed");
+    assert_eq!(res_mx.response_code, DnsResponseCode::NoError);
+    assert_eq!(res_mx.answers[0].value, "mailhost.example.org");
+    assert_eq!(res_mx.answers[0].priority, Some(10));
+
+    // CNAME Query
+    let cfg_cname = DnsConfig {
+        client_node_id: "pc-1".to_string(),
+        server_node_id: "dns-1".to_string(),
+        auth_server_node_id: None,
+        query_name: "ftp.example.com".to_string(),
+        query_type: DnsRecordType::Cname,
+        query_mode: DnsQueryMode::Recursive,
+        query_id: 3003,
+        custom_records: Vec::new(),
+        seed: 42,
+    };
+    let res_cname = simulate_dns(cfg_cname, None).expect("CNAME query must succeed");
+    assert_eq!(res_cname.response_code, DnsResponseCode::NoError);
+    assert_eq!(res_cname.answers[0].value, "www.example.com");
+}
+
+#[test]
+fn test_phase6_dns_iterative_query_steps() {
+    use crate::application::dns::{simulate_dns, DnsConfig, DnsQueryMode, DnsRecordType};
+
+    let config = DnsConfig {
+        client_node_id: "pc-1".to_string(),
+        server_node_id: "local-resolver".to_string(),
+        auth_server_node_id: Some("auth-dns-root".to_string()),
+        query_name: "unlisted.domain.net".to_string(),
+        query_type: DnsRecordType::A,
+        query_mode: DnsQueryMode::Iterative,
+        query_id: 4001,
+        custom_records: Vec::new(),
+        seed: 42,
+    };
+
+    let res = simulate_dns(config, None).expect("Simulation must complete");
+    let referral_ev = res.events.iter().find(|e| e.event_type == "DNS_REFERRAL");
+    assert!(
+        referral_ev.is_some(),
+        "Iterative query must produce a DNS_REFERRAL step"
+    );
+    assert!(referral_ev.unwrap().description.contains("auth-dns-root"));
+}
+
+#[test]
+fn test_phase6_dns_nxdomain_unknown_query() {
+    use crate::application::dns::{
+        simulate_dns, DnsConfig, DnsQueryMode, DnsRecordType, DnsResponseCode,
+    };
+
+    let config = DnsConfig {
+        client_node_id: "pc-1".to_string(),
+        server_node_id: "dns-resolver".to_string(),
+        auth_server_node_id: None,
+        query_name: "nonexistent.example.invalid".to_string(),
+        query_type: DnsRecordType::A,
+        query_mode: DnsQueryMode::Recursive,
+        query_id: 5001,
+        custom_records: Vec::new(),
+        seed: 42,
+    };
+
+    let res = simulate_dns(config, None).expect("Simulation must complete");
+    assert_eq!(res.response_code, DnsResponseCode::NxDomain);
+    assert_eq!(res.state, crate::application::AppProtocolState::Failed);
+    assert!(res.answers.is_empty());
+    assert!(!res.metrics.success);
+    assert!(res.metrics.error_message.unwrap().contains("NXDOMAIN"));
+
+    let nx_ev = res.events.iter().find(|e| e.event_type == "DNS_NXDOMAIN");
+    assert!(nx_ev.is_some(), "Must emit DNS_NXDOMAIN event");
+}
+
+#[test]
+fn test_phase6_dns_deterministic_replay() {
+    use crate::application::dns::{simulate_dns, DnsConfig, DnsQueryMode, DnsRecordType};
+
+    let config1 = DnsConfig {
+        client_node_id: "pc-1".to_string(),
+        server_node_id: "dns-1".to_string(),
+        auth_server_node_id: None,
+        query_name: "www.example.com".to_string(),
+        query_type: DnsRecordType::A,
+        query_mode: DnsQueryMode::Recursive,
+        query_id: 6001,
+        custom_records: Vec::new(),
+        seed: 999,
+    };
+    let config2 = config1.clone();
+
+    let res1 = simulate_dns(config1, None).unwrap();
+    let res2 = simulate_dns(config2, None).unwrap();
+
+    assert_eq!(res1.events.len(), res2.events.len());
+    for (e1, e2) in res1.events.iter().zip(res2.events.iter()) {
+        assert_eq!(e1.timestamp_us, e2.timestamp_us);
+        assert_eq!(e1.event_type, e2.event_type);
+        assert_eq!(e1.packet_id, e2.packet_id);
+    }
+}
+
+#[test]
+fn test_phase6_http_get_200_ok_tcp_stream_and_headers() {
+    use crate::application::http::{simulate_http, HttpConfig, HttpMethod, HttpRequest};
+    use std::collections::BTreeMap;
+
+    let mut headers = BTreeMap::new();
+    headers.insert("Host".to_string(), "example.com".to_string());
+    headers.insert("User-Agent".to_string(), "NetSim-Test/1.0".to_string());
+
+    let config = HttpConfig {
+        client_node_id: "host-client".to_string(),
+        server_node_id: "server-web".to_string(),
+        request: HttpRequest {
+            method: HttpMethod::Get,
+            path: "/index.html".to_string(),
+            headers,
+            body: None,
+        },
+        port: 80,
+        seed: 42,
+    };
+
+    let res = simulate_http(config, None).expect("HTTP simulation must succeed");
+    assert_eq!(res.response.status_code, 200);
+    assert_eq!(res.response.status_text, "OK");
+    assert!(res.response.body.contains("Welcome to NetSim"));
+    assert_eq!(res.state, crate::application::AppProtocolState::Completed);
+
+    // Verify TCP handshake and closure events are present
+    assert!(res
+        .events
+        .iter()
+        .any(|e| e.event_type == "HTTP_TCP_HANDSHAKE_INITIATED"));
+    assert!(res
+        .events
+        .iter()
+        .any(|e| e.event_type == "HTTP_TCP_CONNECTED"));
+    assert!(res
+        .events
+        .iter()
+        .any(|e| e.event_type == "HTTP_REQUEST_SENT"));
+    assert!(res
+        .events
+        .iter()
+        .any(|e| e.event_type == "HTTP_RESPONSE_SENT"));
+    assert!(res.events.iter().any(|e| e.event_type == "HTTP_TCP_CLOSED"));
+
+    // Verify request packet
+    let req_pkt = res
+        .packets
+        .iter()
+        .find(|p| p.headers.application.message_type == Some("Request".to_string()))
+        .unwrap();
+    assert_eq!(req_pkt.headers.application.protocol, "HTTP");
+    assert_eq!(
+        req_pkt.headers.application.resource_or_command,
+        Some("Get /index.html".to_string())
+    );
+    assert_eq!(req_pkt.headers.transport.protocol, "TCP");
+    assert_eq!(req_pkt.headers.transport.dst_port, 80);
+
+    // Verify response packet
+    let resp_pkt = res
+        .packets
+        .iter()
+        .find(|p| p.headers.application.message_type == Some("Response".to_string()))
+        .unwrap();
+    assert_eq!(
+        resp_pkt.headers.application.status_code,
+        Some("200 OK".to_string())
+    );
+    assert_eq!(resp_pkt.headers.transport.src_port, 80);
+}
+
+#[test]
+fn test_phase6_http_get_404_not_found() {
+    use crate::application::http::{simulate_http, HttpConfig, HttpMethod, HttpRequest};
+    use std::collections::BTreeMap;
+
+    let config = HttpConfig {
+        client_node_id: "host-client".to_string(),
+        server_node_id: "server-web".to_string(),
+        request: HttpRequest {
+            method: HttpMethod::Get,
+            path: "/missing/resource.html".to_string(),
+            headers: BTreeMap::new(),
+            body: None,
+        },
+        port: 80,
+        seed: 42,
+    };
+
+    let res = simulate_http(config, None).expect("HTTP simulation must run");
+    assert_eq!(res.response.status_code, 404);
+    assert_eq!(res.response.status_text, "Not Found");
+    assert_eq!(res.state, crate::application::AppProtocolState::Failed);
+    assert!(!res.metrics.success);
+    assert!(res.events.iter().any(|e| e.event_type == "HTTP_NOT_FOUND"));
+}
+
+#[test]
+fn test_phase6_http_post_request_body_and_response() {
+    use crate::application::http::{simulate_http, HttpConfig, HttpMethod, HttpRequest};
+    use std::collections::BTreeMap;
+
+    let mut headers = BTreeMap::new();
+    headers.insert("Content-Type".to_string(), "application/json".to_string());
+
+    let payload = "{\"sensor\": \"temp-1\", \"reading\": 24.5}".to_string();
+
+    let config = HttpConfig {
+        client_node_id: "iot-device".to_string(),
+        server_node_id: "api-backend".to_string(),
+        request: HttpRequest {
+            method: HttpMethod::Post,
+            path: "/api/data".to_string(),
+            headers,
+            body: Some(payload),
+        },
+        port: 8080,
+        seed: 42,
+    };
+
+    let res = simulate_http(config, None).expect("HTTP POST must succeed");
+    assert_eq!(res.response.status_code, 200);
+    assert!(res.response.body.contains("bytes_processed"));
+    assert!(res.metrics.payload_bytes_sent > 250);
+}
+
+#[test]
+fn test_phase6_ftp_control_session_login_and_channels() {
+    use crate::application::ftp::{simulate_ftp, FtpCommand, FtpConfig};
+
+    let config = FtpConfig {
+        client_node_id: "workstation-1".to_string(),
+        server_node_id: "ftp-archive".to_string(),
+        username: "ftpuser".to_string(),
+        password: Some("secret123".to_string()),
+        transfer_command: FtpCommand::List,
+        filename: None,
+        file_size_bytes: 512,
+        control_port: 21,
+        data_port: 50000,
+        seed: 42,
+    };
+
+    let res = simulate_ftp(config, None).expect("FTP simulation must succeed");
+    assert_eq!(res.control_session_id, "ftp-ctrl-sess-21");
+    assert_eq!(res.data_session_id, "ftp-data-sess-50000");
+    assert_eq!(res.state, crate::application::AppProtocolState::Completed);
+
+    // Verify server greeting 220 and login 230
+    assert!(res
+        .events
+        .iter()
+        .any(|e| e.event_type == "FTP_SERVER_GREETING"));
+    assert!(res.events.iter().any(|e| e.event_type == "FTP_LOGIN"));
+    assert!(res
+        .events
+        .iter()
+        .any(|e| e.event_type == "FTP_DATA_CHANNEL_OPENED"));
+    assert!(res
+        .events
+        .iter()
+        .any(|e| e.event_type == "FTP_DATA_TRANSFER"));
+    assert!(res
+        .events
+        .iter()
+        .any(|e| e.event_type == "FTP_TRANSFER_COMPLETE"));
+
+    // Verify control port vs data port in packets
+    let ctrl_pkt = res
+        .packets
+        .iter()
+        .find(|p| p.headers.application.message_type == Some("Control Command".to_string()))
+        .unwrap();
+    assert_eq!(ctrl_pkt.headers.transport.dst_port, 21);
+
+    let data_pkt = res
+        .packets
+        .iter()
+        .find(|p| p.headers.application.message_type == Some("Data Transfer".to_string()))
+        .unwrap();
+    assert_eq!(data_pkt.headers.transport.src_port, 50000);
+    assert_ne!(
+        data_pkt.headers.transport.src_port,
+        ctrl_pkt.headers.transport.dst_port
+    );
+}
+
+#[test]
+fn test_phase6_ftp_separate_control_and_data_channels_retr() {
+    use crate::application::ftp::{simulate_ftp, FtpCommand, FtpConfig};
+
+    let config = FtpConfig {
+        client_node_id: "pc-client".to_string(),
+        server_node_id: "ftp-server".to_string(),
+        username: "anonymous".to_string(),
+        password: None,
+        transfer_command: FtpCommand::Retr,
+        filename: Some("large_dataset.bin".to_string()),
+        file_size_bytes: 8192,
+        control_port: 21,
+        data_port: 50005,
+        seed: 42,
+    };
+
+    let res = simulate_ftp(config, None).expect("FTP RETR must succeed");
+    let data_transfer_event = res
+        .events
+        .iter()
+        .find(|e| e.event_type == "FTP_DATA_TRANSFER")
+        .unwrap();
+    assert!(data_transfer_event.description.contains("8192 bytes"));
+
+    let data_packet = res
+        .packets
+        .iter()
+        .find(|p| p.headers.application.session_id == Some("ftp-data-sess-50005".to_string()))
+        .unwrap();
+    assert_eq!(data_packet.size_bytes, 8192);
+}
+
+#[test]
+fn test_phase6_smtp_mail_delivery_complete_workflow() {
+    use crate::application::smtp::{simulate_smtp, SmtpConfig};
+
+    let config = SmtpConfig {
+        client_node_id: "mail-client".to_string(),
+        server_node_id: "mta-server".to_string(),
+        mail_from: "sender@uni.edu".to_string(),
+        rcpt_to: "prof@uni.edu".to_string(),
+        subject: "Assignment 4 Submission".to_string(),
+        body: "Attached is the solution.".to_string(),
+        reject_recipient: false,
+        port: 25,
+        seed: 42,
+    };
+
+    let res = simulate_smtp(config, None).expect("SMTP workflow must succeed");
+    assert!(res.is_accepted);
+    assert_eq!(res.state, crate::application::AppProtocolState::Completed);
+
+    // Verify SMTP standard transaction sequence
+    let event_types: Vec<&str> = res.events.iter().map(|e| e.event_type.as_str()).collect();
+    assert!(event_types.contains(&"SMTP_CONNECTED"));
+    assert!(event_types.contains(&"SMTP_GREETING"));
+    assert!(event_types.contains(&"SMTP_COMMAND")); // EHLO, MAIL FROM, RCPT TO, DATA, QUIT
+    assert!(event_types.contains(&"SMTP_DATA_TRANSFER"));
+    assert!(event_types.contains(&"SMTP_MESSAGE_ACCEPTED"));
+    assert!(event_types.contains(&"SMTP_RESPONSE"));
+
+    // Verify packets generated
+    assert!(res
+        .packets
+        .iter()
+        .any(|p| p.headers.application.resource_or_command
+            == Some("MAIL FROM:<sender@uni.edu>".to_string())));
+    assert!(res
+        .packets
+        .iter()
+        .any(|p| p.headers.application.resource_or_command
+            == Some("RCPT TO:<prof@uni.edu>".to_string())));
+    assert!(res
+        .packets
+        .iter()
+        .any(|p| p.headers.application.message_type == Some("Mail Data".to_string())));
+}
+
+#[test]
+fn test_phase6_smtp_recipient_rejection_550_error_path() {
+    use crate::application::smtp::{simulate_smtp, SmtpConfig};
+
+    let config = SmtpConfig {
+        client_node_id: "mail-client".to_string(),
+        server_node_id: "mta-server".to_string(),
+        mail_from: "spammer@evil.org".to_string(),
+        rcpt_to: "invalid_mailbox_999@uni.edu".to_string(),
+        subject: "Spam".to_string(),
+        body: "Spam content".to_string(),
+        reject_recipient: true,
+        port: 25,
+        seed: 42,
+    };
+
+    let res = simulate_smtp(config, None).expect("Simulation must run");
+    assert!(!res.is_accepted);
+    assert_eq!(res.state, crate::application::AppProtocolState::Failed);
+    assert!(res
+        .events
+        .iter()
+        .any(|e| e.event_type == "SMTP_RCPT_REJECTED"));
+    assert!(res
+        .metrics
+        .error_message
+        .unwrap()
+        .contains("550 User unknown"));
+}
+
+#[test]
+fn test_phase6_snmp_get_request_known_oids() {
+    use crate::application::snmp::{simulate_snmp, SnmpConfig};
+
+    let config = SnmpConfig {
+        manager_node_id: "admin-nms".to_string(),
+        agent_node_id: "switch-core".to_string(),
+        community: "public".to_string(),
+        requested_oid: "1.3.6.1.2.1.1.1.0".to_string(), // sysDescr.0
+        port: 161,
+        seed: 42,
+    };
+
+    let res = simulate_snmp(config, None).expect("SNMP simulation must succeed");
+    assert_eq!(res.state, crate::application::AppProtocolState::Completed);
+    assert!(res.found_object.is_some());
+
+    let obj = res.found_object.unwrap();
+    assert_eq!(obj.oid, "1.3.6.1.2.1.1.1.0");
+    assert_eq!(obj.name, "sysDescr.0");
+    assert!(obj.value.contains("NetSim CoreOS Router"));
+
+    // Verify events
+    assert!(res
+        .events
+        .iter()
+        .any(|e| e.event_type == "SNMP_GET_REQUEST"));
+    assert!(res
+        .events
+        .iter()
+        .any(|e| e.event_type == "SNMP_AGENT_LOOKUP"));
+    assert!(res
+        .events
+        .iter()
+        .any(|e| e.event_type == "SNMP_GET_RESPONSE"));
+
+    // Verify packets
+    assert_eq!(res.packets.len(), 2, "GetRequest and GetResponse");
+    assert_eq!(res.packets[0].headers.transport.protocol, "UDP");
+    assert_eq!(res.packets[0].headers.transport.dst_port, 161);
+    assert_eq!(res.packets[0].headers.application.protocol, "SNMP");
+    assert_eq!(
+        res.packets[1].headers.application.status_code,
+        Some("noError".to_string())
+    );
+}
+
+#[test]
+fn test_phase6_snmp_unknown_oid_no_such_name() {
+    use crate::application::snmp::{simulate_snmp, SnmpConfig};
+
+    let config = SnmpConfig {
+        manager_node_id: "admin-nms".to_string(),
+        agent_node_id: "switch-core".to_string(),
+        community: "public".to_string(),
+        requested_oid: "1.3.6.1.4.1.99999.1.0".to_string(), // unknown
+        port: 161,
+        seed: 42,
+    };
+
+    let res = simulate_snmp(config, None).expect("SNMP simulation must run");
+    assert_eq!(res.state, crate::application::AppProtocolState::Failed);
+    assert!(res.found_object.is_none());
+    assert!(!res.metrics.success);
+    assert!(res
+        .events
+        .iter()
+        .any(|e| e.event_type == "SNMP_UNKNOWN_OID"));
+
+    let resp_pkt = res
+        .packets
+        .iter()
+        .find(|p| p.headers.application.message_type == Some("GetResponse".to_string()))
+        .unwrap();
+    assert_eq!(
+        resp_pkt.headers.application.status_code,
+        Some("noSuchName".to_string())
+    );
+}
+
+#[test]
+fn test_phase6_application_multi_hop_traversal_and_actual_hop_history() {
+    use crate::application::dns::{simulate_dns, DnsConfig, DnsQueryMode, DnsRecordType};
+
+    let config = DnsConfig {
+        client_node_id: "host-a".to_string(),
+        server_node_id: "host-b".to_string(),
+        auth_server_node_id: None,
+        query_name: "www.example.com".to_string(),
+        query_type: DnsRecordType::A,
+        query_mode: DnsQueryMode::Recursive,
+        query_id: 8888,
+        custom_records: Vec::new(),
+        seed: 42,
+    };
+
+    let res = simulate_dns(config, None).expect("Simulation must succeed");
+    let query_pkt = &res.packets[0];
+
+    // Standard baseline path: host-a -> router-1 -> host-b
+    assert_eq!(
+        query_pkt.planned_route,
+        vec!["host-a", "router-1", "host-b"]
+    );
+    assert_eq!(query_pkt.journey_hops, vec!["host-a", "router-1", "host-b"]);
+
+    // Actual hop_history must contain distinct traversal records
+    assert!(query_pkt.hop_history.len() >= 4);
+    assert_eq!(query_pkt.hop_history[0].node_id, "host-a");
+    assert_eq!(
+        query_pkt.hop_history[0].state,
+        crate::domain::PacketState::Created
+    );
+
+    let intermediate = query_pkt
+        .hop_history
+        .iter()
+        .find(|h| h.node_id == "router-1");
+    assert!(intermediate.is_some());
+
+    let final_hop = query_pkt.hop_history.last().unwrap();
+    assert_eq!(final_hop.node_id, "host-b");
+    assert_eq!(final_hop.state, crate::domain::PacketState::Delivered);
+    assert!(final_hop.timestamp_us > query_pkt.hop_history[0].timestamp_us);
+}
+
+#[test]
+fn test_phase6_sim_event_application_layer_mapping() {
+    use crate::simulation::clock::SimTime;
+    use crate::simulation::event::{SimEvent, SimEventType};
+
+    let ev = SimEvent::new(
+        99,
+        SimTime::from_micros(12345),
+        SimEventType::ApplicationEvent {
+            protocol: "HTTP".to_string(),
+            event_name: "HTTP_REQUEST_SENT".to_string(),
+            node_id: "web-client".to_string(),
+            packet_id: Some("pkt-http-001".to_string()),
+            session_id: Some("sess-http-1".to_string()),
+            details: "GET /index.html".to_string(),
+        },
+        "Client sent GET /index.html".to_string(),
+    );
+
+    assert_eq!(ev.layer, Some("Application".to_string()));
+    assert_eq!(ev.protocol, Some("HTTP".to_string()));
+    assert_eq!(ev.node_id, Some("web-client".to_string()));
+    assert_eq!(ev.packet_id, Some("pkt-http-001".to_string()));
 }

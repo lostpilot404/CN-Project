@@ -21,6 +21,14 @@ pub struct AppHeader {
     pub payload_preview: String,
     #[serde(default)]
     pub message_type: Option<String>,
+    #[serde(default)]
+    pub session_id: Option<String>,
+    #[serde(default)]
+    pub transaction_id: Option<u32>,
+    #[serde(default)]
+    pub resource_or_command: Option<String>,
+    #[serde(default)]
+    pub status_code: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

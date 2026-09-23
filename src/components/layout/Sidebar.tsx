@@ -9,6 +9,7 @@ import {
   FlaskConical,
   GraduationCap,
   BookOpenCheck,
+  Globe,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -19,6 +20,7 @@ export type ActiveTab =
   | 'simulation'
   | 'algorithms'
   | 'transport'
+  | 'application'
   | 'qos'
   | 'experiments'
   | 'learning'
@@ -39,6 +41,7 @@ export const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
     { id: 'simulation', label: 'Simulation & Events', icon: PlayCircle },
     { id: 'algorithms', label: 'Algorithm Studio', icon: Binary },
     { id: 'transport', label: 'Transport Layer', icon: ArrowLeftRight },
+    { id: 'application', label: 'Application Layer', icon: Globe },
     { id: 'qos', label: 'QoS Performance', icon: BarChart3 },
     { id: 'experiments', label: 'Batch Experiments', icon: FlaskConical },
     { id: 'learning', label: 'Learning Mode', icon: GraduationCap },

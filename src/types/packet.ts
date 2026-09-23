@@ -16,6 +16,10 @@ export interface AppHeader {
   protocol: string; // "HTTP", "DNS", "FTP", "SMTP", "SNMP", "RAW"
   payload_preview: string;
   message_type?: string | null;
+  session_id?: string | null;
+  transaction_id?: number | null;
+  resource_or_command?: string | null;
+  status_code?: string | null;
 }
 
 export interface TransportHeader {

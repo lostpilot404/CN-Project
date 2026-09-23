@@ -28,35 +28,54 @@ export const PacketInspector: React.FC<PacketInspectorProps> = ({
   }
 
   // Derive 5 LayerViews from authoritative packet headers
+  const appFields: { label: string; value: string | number; hex?: string; isModeled?: boolean }[] = [
+    {
+      label: 'Protocol',
+      value: packet.headers.application.protocol,
+      hex: '0x' + Array.from(packet.headers.application.protocol.slice(0, 4)).map((c) => c.charCodeAt(0).toString(16)).join(''),
+      isModeled: true,
+    },
+    { label: 'Message Type', value: packet.headers.application.message_type || 'Not modeled', isModeled: Boolean(packet.headers.application.message_type) },
+    { label: 'Payload Size', value: `${packet.size_bytes} bytes`, isModeled: true },
+  ];
+
+  if (packet.headers.application.session_id) {
+    appFields.push({ label: 'Session ID', value: packet.headers.application.session_id, isModeled: true });
+  }
+  if (packet.headers.application.transaction_id !== undefined && packet.headers.application.transaction_id !== null) {
+    appFields.push({
+      label: 'Transaction ID',
+      value: packet.headers.application.transaction_id,
+      hex: `0x${packet.headers.application.transaction_id.toString(16)}`,
+      isModeled: true,
+    });
+  }
+  if (packet.headers.application.resource_or_command) {
+    appFields.push({ label: 'Command / Resource', value: packet.headers.application.resource_or_command, isModeled: true });
+  }
+  if (packet.headers.application.status_code) {
+    appFields.push({ label: 'Status Code', value: packet.headers.application.status_code, isModeled: true });
+  }
+
   const appLayer: LayerView = {
     layerIndex: 5,
     layerName: 'Application',
     title: `${packet.headers.application.protocol} Message`,
     protocol: packet.headers.application.protocol,
-    headerFields: [
-      {
-        label: 'Protocol',
-        value: packet.headers.application.protocol,
-        hex: '0x' + Array.from(packet.headers.application.protocol.slice(0, 4)).map((c) => c.charCodeAt(0).toString(16)).join(''),
-        isModeled: true,
-      },
-      { label: 'Message Type', value: packet.headers.application.message_type || 'Not modeled', isModeled: Boolean(packet.headers.application.message_type) },
-      { label: 'Payload Size', value: `${packet.size_bytes} bytes`, isModeled: true },
-    ],
+    headerFields: appFields,
     payloadSummary: packet.headers.application.payload_preview,
-    statusBadge: packet.headers.application.message_type || 'Application Data',
+    statusBadge: packet.headers.application.status_code || packet.headers.application.message_type || 'Application Data',
     isModeled: true,
   };
 
   const isTcp = packet.headers.transport.protocol.toUpperCase() === 'TCP';
-  const transportLayer: LayerView = {
-    layerIndex: 4,
-    layerName: 'Transport',
-    title: `${packet.headers.transport.protocol} Segment / Datagram`,
-    protocol: packet.headers.transport.protocol,
-    headerFields: [
-      { label: 'Source Port', value: packet.headers.transport.src_port, hex: `0x${packet.headers.transport.src_port.toString(16).padStart(4, '0')}`, isModeled: true },
-      { label: 'Destination Port', value: packet.headers.transport.dst_port, hex: `0x${packet.headers.transport.dst_port.toString(16).padStart(4, '0')}`, isModeled: true },
+  const transportFields: { label: string; value: string | number; hex?: string; isModeled?: boolean }[] = [
+    { label: 'Source Port', value: packet.headers.transport.src_port, hex: `0x${packet.headers.transport.src_port.toString(16).padStart(4, '0')}`, isModeled: true },
+    { label: 'Destination Port', value: packet.headers.transport.dst_port, hex: `0x${packet.headers.transport.dst_port.toString(16).padStart(4, '0')}`, isModeled: true },
+  ];
+
+  if (isTcp) {
+    transportFields.push(
       {
         label: 'Sequence Number',
         value: packet.headers.transport.seq_num !== null && packet.headers.transport.seq_num !== undefined ? packet.headers.transport.seq_num : 'Not modeled',
@@ -78,21 +97,57 @@ export const PacketInspector: React.FC<PacketInspectorProps> = ({
       {
         label: 'Control Flags',
         value: packet.headers.transport.flags.length > 0 ? packet.headers.transport.flags.join(', ') : 'None',
-        isModeled: isTcp,
+        isModeled: true,
       },
       {
         label: 'Retransmission',
         value: packet.headers.transport.is_retransmission ? 'Yes (Retransmit)' : 'No (Original)',
-        isModeled: isTcp,
+        isModeled: true,
       },
       {
         label: 'Connection State',
-        value: packet.headers.transport.connection_state || (isTcp ? 'Established' : 'Connectionless'),
+        value: packet.headers.transport.connection_state || 'Established',
         isModeled: true,
+      }
+    );
+  } else {
+    transportFields.push(
+      {
+        label: 'Sequence Number',
+        value: 'Not applicable (UDP)',
+        isModeled: false,
       },
-    ],
+      {
+        label: 'Acknowledgment Number',
+        value: 'Not applicable (UDP)',
+        isModeled: false,
+      },
+      {
+        label: 'Window Size',
+        value: 'Not applicable (UDP)',
+        isModeled: false,
+      },
+      {
+        label: 'Control Flags',
+        value: 'None (UDP is connectionless)',
+        isModeled: false,
+      },
+      {
+        label: 'Connection State',
+        value: 'Connectionless (UDP)',
+        isModeled: true,
+      }
+    );
+  }
+
+  const transportLayer: LayerView = {
+    layerIndex: 4,
+    layerName: 'Transport',
+    title: `${packet.headers.transport.protocol} Segment / Datagram`,
+    protocol: packet.headers.transport.protocol,
+    headerFields: transportFields,
     payloadSummary: `${packet.headers.transport.protocol} ${isTcp ? 'Segment' : 'Datagram'} payload: ${packet.headers.transport.payload_length || packet.size_bytes} bytes`,
-    statusBadge: packet.headers.transport.flags.length > 0 ? packet.headers.transport.flags.join(' ') : packet.headers.transport.protocol,
+    statusBadge: isTcp ? (packet.headers.transport.flags.length > 0 ? packet.headers.transport.flags.join(' ') : 'TCP') : 'UDP',
     isModeled: true,
   };
 

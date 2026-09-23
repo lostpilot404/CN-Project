@@ -387,3 +387,54 @@ pub fn simulate_udp(
 pub fn simulate_tcp_congestion(config: TransportConfig) -> Result<TransportSimResult> {
     sim_tcp(config, None)
 }
+
+use crate::application::dns::{simulate_dns as sim_dns, DnsConfig, DnsSimResult};
+use crate::application::ftp::{simulate_ftp as sim_ftp, FtpConfig, FtpSimResult};
+use crate::application::http::{simulate_http as sim_http, HttpConfig, HttpSimResult};
+use crate::application::smtp::{simulate_smtp as sim_smtp, SmtpConfig, SmtpSimResult};
+use crate::application::snmp::{simulate_snmp as sim_snmp, SnmpConfig, SnmpSimResult};
+
+#[tauri::command]
+pub fn simulate_dns(config: DnsConfig, state: State<'_, AppState>) -> Result<DnsSimResult> {
+    let project = state
+        .project
+        .lock()
+        .map_err(|e| NetSimError::Internal(format!("Project lock error: {}", e)))?;
+    sim_dns(config, Some(&*project))
+}
+
+#[tauri::command]
+pub fn simulate_http(config: HttpConfig, state: State<'_, AppState>) -> Result<HttpSimResult> {
+    let project = state
+        .project
+        .lock()
+        .map_err(|e| NetSimError::Internal(format!("Project lock error: {}", e)))?;
+    sim_http(config, Some(&*project))
+}
+
+#[tauri::command]
+pub fn simulate_ftp(config: FtpConfig, state: State<'_, AppState>) -> Result<FtpSimResult> {
+    let project = state
+        .project
+        .lock()
+        .map_err(|e| NetSimError::Internal(format!("Project lock error: {}", e)))?;
+    sim_ftp(config, Some(&*project))
+}
+
+#[tauri::command]
+pub fn simulate_smtp(config: SmtpConfig, state: State<'_, AppState>) -> Result<SmtpSimResult> {
+    let project = state
+        .project
+        .lock()
+        .map_err(|e| NetSimError::Internal(format!("Project lock error: {}", e)))?;
+    sim_smtp(config, Some(&*project))
+}
+
+#[tauri::command]
+pub fn simulate_snmp(config: SnmpConfig, state: State<'_, AppState>) -> Result<SnmpSimResult> {
+    let project = state
+        .project
+        .lock()
+        .map_err(|e| NetSimError::Internal(format!("Project lock error: {}", e)))?;
+    sim_snmp(config, Some(&*project))
+}

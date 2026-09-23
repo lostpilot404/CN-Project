@@ -1,4 +1,5 @@
 pub mod addressing;
+pub mod application;
 pub mod commands;
 pub mod congestion;
 pub mod datalink;
@@ -75,6 +76,11 @@ pub fn run() {
             commands::algorithms::simulate_tcp,
             commands::algorithms::simulate_udp,
             commands::algorithms::simulate_tcp_congestion,
+            commands::algorithms::simulate_dns,
+            commands::algorithms::simulate_http,
+            commands::algorithms::simulate_ftp,
+            commands::algorithms::simulate_smtp,
+            commands::algorithms::simulate_snmp,
         ])
         .run(tauri::generate_context!())
         .expect("error while running NetSim application");

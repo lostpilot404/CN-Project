@@ -57,6 +57,14 @@ pub enum SimEventType {
         target_id: String,
         fault_type: String,
     },
+    ApplicationEvent {
+        protocol: String,
+        event_name: String,
+        node_id: String,
+        packet_id: Option<String>,
+        session_id: Option<String>,
+        details: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -170,6 +178,18 @@ impl SimEvent {
                 None,
                 Some("Physical".to_string()),
                 None,
+            ),
+            SimEventType::ApplicationEvent {
+                protocol,
+                node_id,
+                packet_id,
+                ..
+            } => (
+                packet_id.clone(),
+                Some(node_id.clone()),
+                None,
+                Some("Application".to_string()),
+                Some(protocol.clone()),
             ),
         };
 
