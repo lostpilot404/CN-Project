@@ -78,7 +78,7 @@ class MacConfig:
         else:
             persistence_dict = self.persistence
         return {
-            "protocol": self.protocol.value,
+            "protocol": self.protocol.value if hasattr(self.protocol, "value") else str(self.protocol),
             "persistence": persistence_dict,
             "num_stations": self.num_stations,
             "total_frames_to_send": self.total_frames_to_send,

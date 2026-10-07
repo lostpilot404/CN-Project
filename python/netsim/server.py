@@ -605,7 +605,13 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
     # 8. QoS, Faults & Experiments
     elif cmd in ("get_current_qos_metrics", "getCurrentQosMetrics"):
         elapsed = SESSION.engine.current_time.as_micros()
-        return compute_network_qos(SESSION.engine.metrics, elapsed).to_dict()
+        return compute_network_qos(
+            SESSION.engine.metrics,
+            list(SESSION.engine.packets.values()),
+            SESSION.engine.processed_events,
+            [],
+            elapsed,
+        ).to_dict()
 
     elif cmd in ("schedule_fault_command", "scheduleFaultCommand"):
         entry_data = args.get("entry") or args.get("fault_entry", {})
