@@ -3,7 +3,7 @@ use crate::faults::FaultSchedule;
 use serde::{Deserialize, Serialize};
 
 /// Identifies which parameter is being swept in a parameter sweep experiment.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SweepParameter {
     /// Link bandwidth in bits per second. If link_id is None, applied to all links.
@@ -20,6 +20,12 @@ pub enum SweepParameter {
     TrafficIntervalUs,
     /// Total number of packets injected in the test flow.
     PacketCount,
+    /// Flow control or TCP window size (in packets or bytes).
+    WindowSize,
+    /// Retransmission timeout in microseconds.
+    TimeoutUs,
+    /// MAC persistence probability in [0.0, 1.0] (for p-persistent CSMA).
+    MacPersistence,
 }
 
 impl SweepParameter {
@@ -44,14 +50,31 @@ impl SweepParameter {
             SweepParameter::PacketSizeBytes => "packet_size_bytes".to_string(),
             SweepParameter::TrafficIntervalUs => "traffic_interval_us".to_string(),
             SweepParameter::PacketCount => "packet_count".to_string(),
+            SweepParameter::WindowSize => "window_size".to_string(),
+            SweepParameter::TimeoutUs => "timeout_us".to_string(),
+            SweepParameter::MacPersistence => "mac_persistence".to_string(),
         }
     }
+}
+
+/// Explicit experiment target classification.
+/// Allows experiments to target specific layers or protocols rather than forcing all through Transport.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ExperimentTarget {
+    Tcp,
+    Udp,
+    Application,
+    FlowControl,
+    Mac,
 }
 
 /// Configuration for a parameter sweep experiment.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SweepConfig {
     pub experiment_name: String,
+    #[serde(default)]
+    pub target: Option<ExperimentTarget>,
     pub parameter: SweepParameter,
     pub parameter_values: Vec<f64>,
     pub seeds: Vec<u64>,
@@ -79,6 +102,8 @@ pub struct ComparativeScenarioConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComparativeExperimentConfig {
     pub experiment_name: String,
+    #[serde(default)]
+    pub target: Option<ExperimentTarget>,
     pub scenario_a: ComparativeScenarioConfig,
     pub scenario_b: ComparativeScenarioConfig,
     pub seeds: Vec<u64>,

@@ -83,6 +83,8 @@ export interface RouteChangeRecord {
   timestamp_us: number;
 }
 
+export type ExperimentTarget = 'tcp' | 'udp' | 'application' | 'flow_control' | 'mac';
+
 export type SweepParameter =
   | { type: 'link_bandwidth'; link_id?: string | null }
   | { type: 'propagation_delay'; link_id?: string | null }
@@ -90,10 +92,14 @@ export type SweepParameter =
   | { type: 'bit_error_rate'; link_id?: string | null }
   | { type: 'packet_size_bytes' }
   | { type: 'traffic_interval_us' }
-  | { type: 'packet_count' };
+  | { type: 'packet_count' }
+  | { type: 'window_size' }
+  | { type: 'timeout_us' }
+  | { type: 'mac_persistence' };
 
 export interface SweepConfig {
   experiment_name: string;
+  target?: ExperimentTarget;
   parameter: SweepParameter;
   parameter_values: number[];
   seeds: number[];
@@ -147,6 +153,7 @@ export interface ComparativeScenarioConfig {
 
 export interface ComparativeExperimentConfig {
   experiment_name: string;
+  target?: ExperimentTarget;
   scenario_a: ComparativeScenarioConfig;
   scenario_b: ComparativeScenarioConfig;
   seeds: number[];

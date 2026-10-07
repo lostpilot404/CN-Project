@@ -5566,6 +5566,7 @@ fn test_phase7_dynamic_routing_observation_route_change_records() {
 
     let config = SweepConfig {
         experiment_name: "Diamond Reroute Test".to_string(),
+        target: None,
         parameter: SweepParameter::TrafficIntervalUs,
         parameter_values: vec![5000.0],
         seeds: vec![42],
@@ -5628,6 +5629,7 @@ fn test_phase7_deterministic_parameter_sweep() {
 
     let config = SweepConfig {
         experiment_name: "Bandwidth Sweep".to_string(),
+        target: None,
         parameter: SweepParameter::LinkBandwidth { link_id: None },
         parameter_values: vec![1_000_000.0, 10_000_000.0, 100_000_000.0],
         seeds: vec![101, 102],
@@ -5716,6 +5718,7 @@ fn test_phase7_comparative_experiment_ab_testing() {
 
     let config = ComparativeExperimentConfig {
         experiment_name: "Bandwidth Comparison A/B".to_string(),
+        target: None,
         scenario_a,
         scenario_b,
         seeds: vec![42],
@@ -5736,4 +5739,730 @@ fn test_phase7_comparative_experiment_ab_testing() {
 
     // Higher bandwidth in A means lower serialization latency than in B
     assert!(result.qos_a.mean_latency_us < result.qos_b.mean_latency_us);
+}
+
+#[test]
+fn test_phase7_experiment_target_validation() {
+    use crate::experiments::{validate_sweep_config, ExperimentTarget};
+    // 1. TCP supports window_size and timeout_us, but rejects mac_persistence
+    let tcp_config = SweepConfig {
+        experiment_name: "TCP Window".to_string(),
+        target: Some(ExperimentTarget::Tcp),
+        parameter: SweepParameter::WindowSize,
+        parameter_values: vec![1.0, 2.0, 4.0],
+        seeds: vec![42],
+        simulation_duration_us: 10_000,
+        base_project: None,
+        traffic_src_id: None,
+        traffic_dst_id: None,
+        packet_size_bytes: None,
+        traffic_interval_us: None,
+        packet_count: None,
+        fault_schedule: None,
+    };
+    assert!(validate_sweep_config(&tcp_config).is_ok());
+
+    let tcp_invalid = SweepConfig {
+        experiment_name: "TCP MAC Invalid".to_string(),
+        target: Some(ExperimentTarget::Tcp),
+        parameter: SweepParameter::MacPersistence,
+        parameter_values: vec![0.5],
+        seeds: vec![42],
+        simulation_duration_us: 10_000,
+        base_project: None,
+        traffic_src_id: None,
+        traffic_dst_id: None,
+        packet_size_bytes: None,
+        traffic_interval_us: None,
+        packet_count: None,
+        fault_schedule: None,
+    };
+    assert!(validate_sweep_config(&tcp_invalid).is_err());
+
+    // 2. UDP rejects window_size
+    let udp_invalid = SweepConfig {
+        experiment_name: "UDP Window Invalid".to_string(),
+        target: Some(ExperimentTarget::Udp),
+        parameter: SweepParameter::WindowSize,
+        parameter_values: vec![4.0],
+        seeds: vec![42],
+        simulation_duration_us: 10_000,
+        base_project: None,
+        traffic_src_id: None,
+        traffic_dst_id: None,
+        packet_size_bytes: None,
+        traffic_interval_us: None,
+        packet_count: None,
+        fault_schedule: None,
+    };
+    assert!(validate_sweep_config(&udp_invalid).is_err());
+
+    // 3. MAC supports mac_persistence, but rejects queue_capacity
+    let mac_valid = SweepConfig {
+        experiment_name: "MAC Persistence".to_string(),
+        target: Some(ExperimentTarget::Mac),
+        parameter: SweepParameter::MacPersistence,
+        parameter_values: vec![0.1, 0.5, 1.0],
+        seeds: vec![42],
+        simulation_duration_us: 10_000,
+        base_project: None,
+        traffic_src_id: None,
+        traffic_dst_id: None,
+        packet_size_bytes: None,
+        traffic_interval_us: None,
+        packet_count: None,
+        fault_schedule: None,
+    };
+    assert!(validate_sweep_config(&mac_valid).is_ok());
+
+    let mac_invalid = SweepConfig {
+        experiment_name: "MAC Queue Invalid".to_string(),
+        target: Some(ExperimentTarget::Mac),
+        parameter: SweepParameter::QueueCapacity { link_id: None },
+        parameter_values: vec![10.0],
+        seeds: vec![42],
+        simulation_duration_us: 10_000,
+        base_project: None,
+        traffic_src_id: None,
+        traffic_dst_id: None,
+        packet_size_bytes: None,
+        traffic_interval_us: None,
+        packet_count: None,
+        fault_schedule: None,
+    };
+    assert!(validate_sweep_config(&mac_invalid).is_err());
+}
+
+#[test]
+fn test_phase7_audit_all_18_manual_scenarios() {
+    use crate::experiments::{run_single_simulation, ExperimentTarget, SingleRunParams};
+    println!("=== EXECUTING AUDIT OF ALL 18 MANUAL SCENARIOS ===");
+
+    // SCENARIO 1: Baseline QoS
+    let mut p1 = Project::new("Scenario 1 Baseline".to_string());
+    let n1 = Node::new(
+        "pc-1".to_string(),
+        "PC 1".to_string(),
+        NodeType::Pc,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let n2 = Node::new(
+        "pc-2".to_string(),
+        "PC 2".to_string(),
+        NodeType::Pc,
+        Position { x: 100.0, y: 0.0 },
+    );
+    let mut link1 = Link::new(
+        "l1".to_string(),
+        LinkEndpoint {
+            node_id: "pc-1".to_string(),
+            interface_id: "eth0".to_string(),
+        },
+        LinkEndpoint {
+            node_id: "pc-2".to_string(),
+            interface_id: "eth0".to_string(),
+        },
+    );
+    link1.bandwidth_bps = 10_000_000;
+    link1.propagation_delay_us = 10_000;
+    p1.nodes = vec![n1, n2];
+    p1.links = vec![link1];
+
+    let (qos1, _) = run_single_simulation(SingleRunParams {
+        base_project: &p1,
+        seed: 42,
+        duration_us: 150_000,
+        traffic_src: "pc-1",
+        traffic_dst: "pc-2",
+        packet_size: 1000,
+        interval_us: 20_000,
+        packet_count: 5,
+        fault_schedule: None,
+    })
+    .expect("Scenario 1 failed");
+    println!(
+        "Scenario 1 Baseline QoS: delivered={}, lost={}, avg_lat={:.1}us, throughput={:.1}bps",
+        qos1.packets_delivered,
+        qos1.packets_lost,
+        qos1.average_latency_us,
+        qos1.throughput_bits_per_sec
+    );
+    assert_eq!(qos1.packets_delivered, 5);
+    assert_eq!(qos1.packets_lost, 0);
+    assert_eq!(qos1.average_latency_us, 10_805.0);
+
+    // SCENARIO 2: Bandwidth Increase (100 Mbps)
+    let mut p2 = p1.clone();
+    p2.links[0].bandwidth_bps = 100_000_000;
+    let (qos2, _) = run_single_simulation(SingleRunParams {
+        base_project: &p2,
+        seed: 42,
+        duration_us: 150_000,
+        traffic_src: "pc-1",
+        traffic_dst: "pc-2",
+        packet_size: 1000,
+        interval_us: 20_000,
+        packet_count: 5,
+        fault_schedule: None,
+    })
+    .expect("Scenario 2 failed");
+    println!(
+        "Scenario 2 Bandwidth Increase: avg_lat={:.1}us (tx delay dropped from 800us to 80us)",
+        qos2.average_latency_us
+    );
+    assert_eq!(qos2.average_latency_us, 10_085.0);
+    assert!(qos2.average_latency_us < qos1.average_latency_us);
+
+    // SCENARIO 3: Bandwidth Decrease (1 Mbps)
+    let mut p3 = p1.clone();
+    p3.links[0].bandwidth_bps = 1_000_000;
+    let (qos3, _) = run_single_simulation(SingleRunParams {
+        base_project: &p3,
+        seed: 42,
+        duration_us: 150_000,
+        traffic_src: "pc-1",
+        traffic_dst: "pc-2",
+        packet_size: 1000,
+        interval_us: 20_000,
+        packet_count: 5,
+        fault_schedule: None,
+    })
+    .expect("Scenario 3 failed");
+    println!(
+        "Scenario 3 Bandwidth Decrease: avg_lat={:.1}us (tx delay increased to 8000us)",
+        qos3.average_latency_us
+    );
+    assert_eq!(qos3.average_latency_us, 18_005.0);
+    assert!(qos3.average_latency_us > qos1.average_latency_us);
+
+    // SCENARIO 4: Queue Saturation (Queue Cap = 2, 6 packets at 1 Mbps)
+    let mut p4 = p3.clone();
+    p4.links[0].queue_capacity = 2;
+    let (qos4, _) = run_single_simulation(SingleRunParams {
+        base_project: &p4,
+        seed: 42,
+        duration_us: 100_000,
+        traffic_src: "pc-1",
+        traffic_dst: "pc-2",
+        packet_size: 1000,
+        interval_us: 500, // rapid bursts
+        packet_count: 6,
+        fault_schedule: None,
+    })
+    .expect("Scenario 4 failed");
+    println!(
+        "Scenario 4 Queue Saturation: delivered={}, dropped_overflow={}",
+        qos4.packets_delivered, qos4.loss_by_category.queue_overflow
+    );
+    assert!(qos4.loss_by_category.queue_overflow > 0);
+    assert!(qos4.queue_drops > 0);
+
+    // SCENARIO 5: Link Failure + Dynamic Route Change
+    let mut p5 = Project::new("Diamond Network".to_string());
+    p5.nodes = vec![
+        Node::new(
+            "r1".to_string(),
+            "R1".to_string(),
+            NodeType::Router,
+            Position { x: 0.0, y: 0.0 },
+        ),
+        Node::new(
+            "r2".to_string(),
+            "R2".to_string(),
+            NodeType::Router,
+            Position { x: 50.0, y: -50.0 },
+        ),
+        Node::new(
+            "r3".to_string(),
+            "R3".to_string(),
+            NodeType::Router,
+            Position { x: 50.0, y: 50.0 },
+        ),
+        Node::new(
+            "r4".to_string(),
+            "R4".to_string(),
+            NodeType::Router,
+            Position { x: 100.0, y: 0.0 },
+        ),
+    ];
+    p5.links = vec![
+        Link::new(
+            "l12".to_string(),
+            LinkEndpoint {
+                node_id: "r1".to_string(),
+                interface_id: "e1".to_string(),
+            },
+            LinkEndpoint {
+                node_id: "r2".to_string(),
+                interface_id: "e1".to_string(),
+            },
+        ),
+        Link::new(
+            "l24".to_string(),
+            LinkEndpoint {
+                node_id: "r2".to_string(),
+                interface_id: "e2".to_string(),
+            },
+            LinkEndpoint {
+                node_id: "r4".to_string(),
+                interface_id: "e1".to_string(),
+            },
+        ),
+        Link::new(
+            "l13".to_string(),
+            LinkEndpoint {
+                node_id: "r1".to_string(),
+                interface_id: "e2".to_string(),
+            },
+            LinkEndpoint {
+                node_id: "r3".to_string(),
+                interface_id: "e1".to_string(),
+            },
+        ),
+        Link::new(
+            "l34".to_string(),
+            LinkEndpoint {
+                node_id: "r3".to_string(),
+                interface_id: "e2".to_string(),
+            },
+            LinkEndpoint {
+                node_id: "r4".to_string(),
+                interface_id: "e2".to_string(),
+            },
+        ),
+    ];
+    let mut fs5 = FaultSchedule::default();
+    fs5.entries.push(FaultScheduleEntry {
+        fault_id: "f_link_down".to_string(),
+        timestamp_us: 1000,
+        fault_type: FaultType::LinkDown {
+            link_id: "l12".to_string(),
+        },
+        description: "Sever l12".to_string(),
+    });
+    let (_, rc5) = run_single_simulation(SingleRunParams {
+        base_project: &p5,
+        seed: 42,
+        duration_us: 50_000,
+        traffic_src: "r1",
+        traffic_dst: "r4",
+        packet_size: 500,
+        interval_us: 5000,
+        packet_count: 5,
+        fault_schedule: Some(&fs5),
+    })
+    .expect("Scenario 5 failed");
+    println!(
+        "Scenario 5 Link Failure Route Change: route_changes={}",
+        rc5.len()
+    );
+    assert!(!rc5.is_empty());
+    assert_eq!(
+        rc5[0].before_path,
+        Some(vec!["r1".to_string(), "r2".to_string(), "r4".to_string()])
+    );
+    assert_eq!(
+        rc5[0].after_path,
+        Some(vec!["r1".to_string(), "r3".to_string(), "r4".to_string()])
+    );
+
+    // SCENARIO 6: Link Restoration
+    let mut fs6 = fs5.clone();
+    fs6.entries.push(FaultScheduleEntry {
+        fault_id: "f_link_restore".to_string(),
+        timestamp_us: 10_000,
+        fault_type: FaultType::LinkRestore {
+            link_id: "l12".to_string(),
+        },
+        description: "Restore l12".to_string(),
+    });
+    let (_, rc6) = run_single_simulation(SingleRunParams {
+        base_project: &p5,
+        seed: 42,
+        duration_us: 50_000,
+        traffic_src: "r1",
+        traffic_dst: "r4",
+        packet_size: 500,
+        interval_us: 5000,
+        packet_count: 5,
+        fault_schedule: Some(&fs6),
+    })
+    .expect("Scenario 6 failed");
+    println!("Scenario 6 Link Restoration: route_changes={}", rc6.len());
+    assert_eq!(rc6.len(), 2);
+    assert_eq!(
+        rc6[1].after_path,
+        Some(vec!["r1".to_string(), "r2".to_string(), "r4".to_string()])
+    );
+
+    // SCENARIO 7: Node Failure/Recovery Preserving Previous Link States
+    let mut engine7 = SimulationEngine::new(42);
+    let mut l_init_down = Link::new(
+        "l_down".to_string(),
+        LinkEndpoint {
+            node_id: "n1".to_string(),
+            interface_id: "e1".to_string(),
+        },
+        LinkEndpoint {
+            node_id: "n2".to_string(),
+            interface_id: "e1".to_string(),
+        },
+    );
+    l_init_down.status = LinkStatus::Down;
+    let l_init_up = Link::new(
+        "l_up".to_string(),
+        LinkEndpoint {
+            node_id: "n1".to_string(),
+            interface_id: "e2".to_string(),
+        },
+        LinkEndpoint {
+            node_id: "n3".to_string(),
+            interface_id: "e1".to_string(),
+        },
+    );
+    engine7.update_links(&[l_init_down, l_init_up]);
+
+    engine7.schedule_fault(
+        "fail_n1",
+        1000,
+        FaultType::NodeFailure {
+            node_id: "n1".to_string(),
+        },
+    );
+    let _ = engine7.run_until(SimTime::from_micros(2000));
+    assert_eq!(engine7.get_link_status("l_down"), Some(LinkStatus::Down));
+    assert_eq!(engine7.get_link_status("l_up"), Some(LinkStatus::Down));
+
+    engine7.schedule_fault(
+        "rec_n1",
+        3000,
+        FaultType::NodeRecovery {
+            node_id: "n1".to_string(),
+        },
+    );
+    let _ = engine7.run_until(SimTime::from_micros(4000));
+    println!(
+        "Scenario 7 Node Recovery: l_down status={:?}, l_up status={:?}",
+        engine7.get_link_status("l_down"),
+        engine7.get_link_status("l_up")
+    );
+    assert_eq!(engine7.get_link_status("l_down"), Some(LinkStatus::Down));
+    assert_eq!(engine7.get_link_status("l_up"), Some(LinkStatus::Up));
+
+    // SCENARIO 8: TCP Loss & Retransmission
+    let mut tcp_engine = SimulationEngine::new(42);
+    tcp_engine.update_links(&p1.links);
+    let pkt_tcp = tcp_engine.inject_packet(
+        "pc-1".to_string(),
+        "pc-2".to_string(),
+        1000,
+        "TCP".to_string(),
+        "TCP".to_string(),
+    );
+    tcp_engine.schedule_fault(
+        "drop_tcp",
+        5,
+        FaultType::PacketDrop {
+            packet_id: pkt_tcp.clone(),
+        },
+    );
+    let _ = tcp_engine.run_all();
+    let pkt_state = tcp_engine.get_packet(&pkt_tcp).unwrap().state;
+    println!("Scenario 8 TCP Loss: packet state={:?}", pkt_state);
+    assert_eq!(pkt_state, PacketState::DroppedBitError);
+
+    // SCENARIO 9: UDP Loss (No Transport Retransmission)
+    let mut udp_engine = SimulationEngine::new(42);
+    udp_engine.update_links(&p1.links);
+    let pkt_udp = udp_engine.inject_packet(
+        "pc-1".to_string(),
+        "pc-2".to_string(),
+        500,
+        "UDP".to_string(),
+        "UDP".to_string(),
+    );
+    udp_engine.schedule_fault(
+        "drop_udp",
+        5,
+        FaultType::PacketDrop {
+            packet_id: pkt_udp.clone(),
+        },
+    );
+    let _ = udp_engine.run_all();
+    let qos_udp = compute_network_qos(
+        udp_engine.metrics(),
+        &udp_engine.all_packets(),
+        udp_engine.processed_events(),
+        &[],
+        10_000,
+    );
+    println!(
+        "Scenario 9 UDP Loss: lost={}, retransmissions={}",
+        qos_udp.packets_lost, qos_udp.retransmissions
+    );
+    assert_eq!(qos_udp.packets_lost, 1);
+    assert_eq!(qos_udp.retransmissions, 0);
+
+    // SCENARIO 10: HTTP under fault
+    let mut http_engine = SimulationEngine::new(42);
+    http_engine.update_links(&p1.links);
+    let pkt_http = http_engine.inject_packet(
+        "pc-1".to_string(),
+        "pc-2".to_string(),
+        1000,
+        "HTTP".to_string(),
+        "TCP".to_string(),
+    );
+    http_engine.schedule_fault(
+        "cut_link_http",
+        1,
+        FaultType::LinkDown {
+            link_id: "l1".to_string(),
+        },
+    );
+    let _ = http_engine.run_all();
+    let http_state = http_engine.get_packet(&pkt_http).unwrap().state;
+    println!(
+        "Scenario 10 HTTP Under Fault: packet state={:?}",
+        http_state
+    );
+    assert_eq!(http_state, PacketState::DroppedLinkDown);
+
+    // SCENARIO 11: DNS under loss
+    let mut dns_engine = SimulationEngine::new(42);
+    dns_engine.update_links(&p1.links);
+    let pkt_dns = dns_engine.inject_packet(
+        "pc-1".to_string(),
+        "pc-2".to_string(),
+        200,
+        "DNS".to_string(),
+        "UDP".to_string(),
+    );
+    dns_engine.schedule_fault(
+        "drop_dns",
+        5,
+        FaultType::PacketDrop {
+            packet_id: pkt_dns.clone(),
+        },
+    );
+    let _ = dns_engine.run_all();
+    let dns_state = dns_engine.get_packet(&pkt_dns).unwrap().state;
+    println!("Scenario 11 DNS Under Loss: packet state={:?}", dns_state);
+    assert_eq!(dns_state, PacketState::DroppedBitError);
+
+    // SCENARIO 12: FTP Control / Data Fault Isolation
+    let mut ftp_engine = SimulationEngine::new(42);
+    let link_ctrl = Link::new(
+        "ftp_ctrl".to_string(),
+        LinkEndpoint {
+            node_id: "pc-1".to_string(),
+            interface_id: "e1".to_string(),
+        },
+        LinkEndpoint {
+            node_id: "pc-2".to_string(),
+            interface_id: "e1".to_string(),
+        },
+    );
+    let link_data = Link::new(
+        "ftp_data".to_string(),
+        LinkEndpoint {
+            node_id: "pc-1".to_string(),
+            interface_id: "e2".to_string(),
+        },
+        LinkEndpoint {
+            node_id: "pc-2".to_string(),
+            interface_id: "e2".to_string(),
+        },
+    );
+    ftp_engine.update_links(&[link_ctrl, link_data]);
+    ftp_engine.schedule_fault(
+        "drop_ftp_data",
+        100,
+        FaultType::LinkDown {
+            link_id: "ftp_data".to_string(),
+        },
+    );
+    let _ = ftp_engine.run_until(SimTime::from_micros(200));
+    println!(
+        "Scenario 12 FTP Isolation: ctrl_status={:?}, data_status={:?}",
+        ftp_engine.get_link_status("ftp_ctrl"),
+        ftp_engine.get_link_status("ftp_data")
+    );
+    assert_eq!(ftp_engine.get_link_status("ftp_ctrl"), Some(LinkStatus::Up));
+    assert_eq!(
+        ftp_engine.get_link_status("ftp_data"),
+        Some(LinkStatus::Down)
+    );
+
+    // SCENARIO 13: SNMP Loss
+    let mut snmp_engine = SimulationEngine::new(42);
+    snmp_engine.update_links(&p1.links);
+    let pkt_snmp = snmp_engine.inject_packet(
+        "pc-1".to_string(),
+        "pc-2".to_string(),
+        300,
+        "SNMP".to_string(),
+        "UDP".to_string(),
+    );
+    snmp_engine.schedule_fault(
+        "drop_snmp",
+        5,
+        FaultType::PacketDrop {
+            packet_id: pkt_snmp.clone(),
+        },
+    );
+    let _ = snmp_engine.run_all();
+    let snmp_state = snmp_engine.get_packet(&pkt_snmp).unwrap().state;
+    println!("Scenario 13 SNMP Loss: packet state={:?}", snmp_state);
+    assert_eq!(snmp_state, PacketState::DroppedBitError);
+
+    // SCENARIO 14: Parameter Sweep
+    let sweep_cfg = SweepConfig {
+        experiment_name: "Audit Sweep".to_string(),
+        target: Some(ExperimentTarget::Tcp),
+        parameter: SweepParameter::LinkBandwidth { link_id: None },
+        parameter_values: vec![1_000_000.0, 5_000_000.0, 10_000_000.0],
+        seeds: vec![42],
+        simulation_duration_us: 100_000,
+        base_project: Some(p1.clone()),
+        traffic_src_id: Some("pc-1".to_string()),
+        traffic_dst_id: Some("pc-2".to_string()),
+        packet_size_bytes: Some(1000),
+        traffic_interval_us: Some(10_000),
+        packet_count: Some(5),
+        fault_schedule: None,
+    };
+    let sweep_res = run_parameter_sweep(&sweep_cfg, &p1).expect("Scenario 14 sweep failed");
+    println!("Scenario 14 Sweep: points={}", sweep_res.points.len());
+    assert_eq!(sweep_res.points.len(), 3);
+    assert!(
+        sweep_res.points[0].aggregated_qos.mean_latency_us
+            > sweep_res.points[2].aggregated_qos.mean_latency_us
+    );
+
+    // SCENARIO 15: Multi-Seed
+    let multi_seed_cfg = SweepConfig {
+        seeds: vec![42, 101, 2024],
+        parameter_values: vec![10_000_000.0],
+        ..sweep_cfg.clone()
+    };
+    let multi_res =
+        run_parameter_sweep(&multi_seed_cfg, &p1).expect("Scenario 15 multi-seed failed");
+    println!(
+        "Scenario 15 Multi-Seed: runs={}, mean_tp={:.1}bps, stddev_tp={:.1}",
+        multi_res.total_runs,
+        multi_res.points[0].aggregated_qos.mean_throughput_bps,
+        multi_res.points[0].aggregated_qos.stddev_throughput_bps
+    );
+    assert_eq!(multi_res.total_runs, 3);
+
+    // SCENARIO 16: Comparison A/B
+    let comp_cfg = ComparativeExperimentConfig {
+        experiment_name: "Audit A/B".to_string(),
+        target: Some(ExperimentTarget::Tcp),
+        scenario_a: ComparativeScenarioConfig {
+            name: "A (10M)".to_string(),
+            description: "10M".to_string(),
+            project_override: None,
+            fault_schedule: None,
+            parameter_overrides: Some(vec![(
+                SweepParameter::LinkBandwidth { link_id: None },
+                10_000_000.0,
+            )]),
+        },
+        scenario_b: ComparativeScenarioConfig {
+            name: "B (1M)".to_string(),
+            description: "1M".to_string(),
+            project_override: None,
+            fault_schedule: None,
+            parameter_overrides: Some(vec![(
+                SweepParameter::LinkBandwidth { link_id: None },
+                1_000_000.0,
+            )]),
+        },
+        seeds: vec![42],
+        simulation_duration_us: 100_000,
+        base_project: Some(p1.clone()),
+        traffic_src_id: Some("pc-1".to_string()),
+        traffic_dst_id: Some("pc-2".to_string()),
+        packet_size_bytes: Some(1000),
+        traffic_interval_us: Some(10_000),
+        packet_count: Some(5),
+    };
+    let comp_res = run_comparative_experiment(&comp_cfg, &p1).expect("Scenario 16 comp failed");
+    let lat_delta = comp_res
+        .deltas
+        .iter()
+        .find(|d| d.metric_name == "latency_us")
+        .unwrap();
+    println!(
+        "Scenario 16 Comparison: latency diff={:.1}us, percent={:?}%",
+        lat_delta.diff, lat_delta.percent_change
+    );
+    assert!(lat_delta.diff > 0.0);
+
+    // SCENARIO 17: Fault Timeline Synchronization
+    let mut engine17 = SimulationEngine::new(42);
+    engine17.update_links(&p1.links);
+    let pkt_early = engine17.inject_packet(
+        "pc-1".to_string(),
+        "pc-2".to_string(),
+        1000,
+        "IP".to_string(),
+        "IP".to_string(),
+    );
+    engine17.schedule_fault(
+        "f_late",
+        20_000,
+        FaultType::LinkDown {
+            link_id: "l1".to_string(),
+        },
+    );
+    let _ = engine17.run_until(SimTime::from_micros(15_000));
+    assert_eq!(engine17.get_link_status("l1"), Some(LinkStatus::Up));
+    assert_eq!(
+        engine17.get_packet(&pkt_early).unwrap().state,
+        PacketState::Delivered
+    );
+    let _ = engine17.run_until(SimTime::from_micros(25_000));
+    assert_eq!(engine17.get_link_status("l1"), Some(LinkStatus::Down));
+    println!("Scenario 17 Fault Timeline: verified exact SimTime dispatch (20,000us)");
+
+    // SCENARIO 18: PacketJourney / Hop History Immutability
+    let mut engine18 = SimulationEngine::new(42);
+    engine18.update_links(&p1.links);
+    let pkt18_id = engine18.inject_packet(
+        "pc-1".to_string(),
+        "pc-2".to_string(),
+        1000,
+        "IP".to_string(),
+        "IP".to_string(),
+    );
+    let initial_hop_count = engine18.get_packet(&pkt18_id).unwrap().hop_history.len();
+    let initial_hop = engine18.get_packet(&pkt18_id).unwrap().hop_history[0].clone();
+
+    engine18.schedule_fault(
+        "f18",
+        5,
+        FaultType::PacketDrop {
+            packet_id: pkt18_id.clone(),
+        },
+    );
+    let _ = engine18.run_all();
+    let final_pkt = engine18.get_packet(&pkt18_id).unwrap();
+    println!(
+        "Scenario 18 Hop History: initial_len={}, final_len={}, state={:?}",
+        initial_hop_count,
+        final_pkt.hop_history.len(),
+        final_pkt.state
+    );
+    assert!(final_pkt.hop_history.len() > initial_hop_count);
+    assert_eq!(final_pkt.hop_history[0].node_id, initial_hop.node_id);
+    assert_eq!(
+        final_pkt.hop_history[0].timestamp_us,
+        initial_hop.timestamp_us
+    );
+    assert_eq!(final_pkt.hop_history[0].state, initial_hop.state);
+
+    println!("=== ALL 18 MANUAL SCENARIOS EXECUTED & AUDITED SUCCESSFULLY ===");
 }

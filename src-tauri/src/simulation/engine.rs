@@ -128,6 +128,10 @@ impl SimulationEngine {
         self.status
     }
 
+    pub fn get_link_status(&self, link_id: &str) -> Option<LinkStatus> {
+        self.links_cache.get(link_id).map(|l| l.status)
+    }
+
     pub fn metrics(&self) -> &SimulationMetrics {
         &self.metrics
     }
@@ -503,19 +507,24 @@ impl SimulationEngine {
                     queue.is_transmitting = false;
                 }
                 if let Some(pkt) = self.packets.get_mut(packet_id) {
-                    pkt.state = PacketState::InFlight;
-                    let hop_idx = pkt.hop_history.len();
-                    pkt.hop_history.push(PacketHopRecord {
-                        hop_index: hop_idx,
-                        node_id: pkt.current_node_id.clone(),
-                        link_id: Some(link_id.clone()),
-                        timestamp_us: self.current_time.as_micros(),
-                        state: PacketState::InFlight,
-                        description: format!(
-                            "Packet {} completed transmission onto link {}, in-flight",
-                            packet_id, link_id
-                        ),
-                    });
+                    if pkt.state != PacketState::DroppedBitError
+                        && pkt.state != PacketState::DroppedLinkDown
+                        && pkt.state != PacketState::DroppedQueueFull
+                    {
+                        pkt.state = PacketState::InFlight;
+                        let hop_idx = pkt.hop_history.len();
+                        pkt.hop_history.push(PacketHopRecord {
+                            hop_index: hop_idx,
+                            node_id: pkt.current_node_id.clone(),
+                            link_id: Some(link_id.clone()),
+                            timestamp_us: self.current_time.as_micros(),
+                            state: PacketState::InFlight,
+                            description: format!(
+                                "Packet {} completed transmission onto link {}, in-flight",
+                                packet_id, link_id
+                            ),
+                        });
+                    }
                 }
                 // If more packets are waiting in the FIFO queue, start next transmission
                 self.trigger_link_transmission(link_id);
@@ -526,6 +535,14 @@ impl SimulationEngine {
                 node_id,
                 link_id: _,
             } => {
+                if let Some(pkt) = self.packets.get(packet_id) {
+                    if pkt.state == PacketState::DroppedBitError
+                        || pkt.state == PacketState::DroppedLinkDown
+                        || pkt.state == PacketState::DroppedQueueFull
+                    {
+                        return;
+                    }
+                }
                 let size_bytes = self
                     .packets
                     .get(packet_id)

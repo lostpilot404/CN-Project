@@ -26,6 +26,7 @@ import {
   ComparativeExperimentConfig,
   ComparativeExperimentResult,
   SweepParameter,
+  ExperimentTarget,
 } from '../../types/experiments';
 
 interface ExperimentsWorkspaceProps {
@@ -39,6 +40,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
 
   // -- Sweep State --
   const [sweepName, setSweepName] = useState<string>('Bandwidth Sweep Analysis');
+  const [sweepTarget, setSweepTarget] = useState<ExperimentTarget>('tcp');
   const [sweepParamType, setSweepParamType] = useState<string>('link_bandwidth');
   const [sweepValuesStr, setSweepValuesStr] = useState<string>('1000000, 5000000, 10000000, 50000000, 100000000');
   const [sweepSeedsStr, setSweepSeedsStr] = useState<string>('42, 101, 202');
@@ -48,6 +50,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
 
   // -- Comparative State --
   const [compName, setCompName] = useState<string>('Capacity & Congestion A/B Test');
+  const [compTarget, setCompTarget] = useState<ExperimentTarget>('tcp');
   const [scenarioAName, setScenarioAName] = useState<string>('High Bandwidth Baseline');
   const [scenarioBName, setScenarioBName] = useState<string>('Constrained Bandwidth Link');
   const [scenarioABw, setScenarioABw] = useState<number>(100000000); // 100M
@@ -120,12 +123,22 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
         case 'packet_count':
           param = { type: 'packet_count' };
           break;
+        case 'window_size':
+          param = { type: 'window_size' };
+          break;
+        case 'timeout_us':
+          param = { type: 'timeout_us' };
+          break;
+        case 'mac_persistence':
+          param = { type: 'mac_persistence' };
+          break;
         default:
           param = { type: 'link_bandwidth', link_id: null };
       }
 
       const cfg: SweepConfig = {
         experiment_name: sweepName,
+        target: sweepTarget,
         parameter: param,
         parameter_values: rawValues,
         seeds: rawSeeds,
@@ -157,6 +170,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
 
       const cfg: ComparativeExperimentConfig = {
         experiment_name: compName,
+        target: compTarget,
         scenario_a: {
           name: scenarioAName,
           description: `Bandwidth configured to ${(scenarioABw / 1_000_000).toFixed(1)} Mbps`,
@@ -313,6 +327,21 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                 </div>
 
                 <div>
+                  <label className="block text-slate-300 font-medium mb-1">Experiment Target</label>
+                  <select
+                    value={sweepTarget}
+                    onChange={(e) => setSweepTarget(e.target.value as ExperimentTarget)}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="tcp">TCP (Transport & Flow Control)</option>
+                    <option value="udp">UDP (Connectionless Datagram)</option>
+                    <option value="application">Application (HTTP / DNS / FTP / SNMP)</option>
+                    <option value="flow_control">Flow Control (Sliding Window)</option>
+                    <option value="mac">MAC (Medium Access Contention)</option>
+                  </select>
+                </div>
+
+                <div>
                   <label className="block text-slate-300 font-medium mb-1">Variable Parameter</label>
                   <select
                     value={sweepParamType}
@@ -326,6 +355,9 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     <option value="packet_size_bytes">Packet Size (bytes)</option>
                     <option value="traffic_interval_us">Injection Interval (µs)</option>
                     <option value="packet_count">Total Packet Count</option>
+                    <option value="window_size">Window Size (pkts/bytes)</option>
+                    <option value="timeout_us">Timeout Duration (µs)</option>
+                    <option value="mac_persistence">MAC Persistence Probability</option>
                   </select>
                 </div>
 
@@ -544,16 +576,34 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                 </span>
               </div>
 
-              <div>
-                <label className="block text-slate-300 font-medium text-xs mb-1">
-                  Comparative Experiment Label
-                </label>
-                <input
-                  type="text"
-                  value={compName}
-                  onChange={(e) => setCompName(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-emerald-500"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-slate-300 font-medium text-xs mb-1">
+                    Comparative Experiment Label
+                  </label>
+                  <input
+                    type="text"
+                    value={compName}
+                    onChange={(e) => setCompName(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-medium text-xs mb-1">
+                    Experiment Target
+                  </label>
+                  <select
+                    value={compTarget}
+                    onChange={(e) => setCompTarget(e.target.value as ExperimentTarget)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="tcp">TCP (Transport & Flow Control)</option>
+                    <option value="udp">UDP (Connectionless Datagram)</option>
+                    <option value="application">Application (HTTP / DNS / FTP / SNMP)</option>
+                    <option value="flow_control">Flow Control (Sliding Window)</option>
+                    <option value="mac">MAC (Medium Access Contention)</option>
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">

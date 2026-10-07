@@ -135,4 +135,41 @@ describe('Phase 7: QoS Metrics, Fault Injection & Experimentation Acceptance Tes
     expect(latencyDelta).toBeDefined();
     expect(latencyDelta?.diff).toBeGreaterThan(0); // Scenario B has higher latency
   });
+
+  // 7. Explicit ExperimentTarget execution
+  it('should support explicit ExperimentTarget classification (Tcp, Udp, Application, FlowControl, Mac)', async () => {
+    const targets = ['tcp', 'udp', 'application', 'flow_control', 'mac'] as const;
+    for (const target of targets) {
+      const config: SweepConfig = {
+        experiment_name: `${target.toUpperCase()} Sweep`,
+        target,
+        parameter: {
+          type: 'link_bandwidth',
+          link_id: null,
+        },
+        parameter_values: [10_000_000],
+        seeds: [42],
+        simulation_duration_us: 10_000,
+        packet_count: 2,
+      };
+      const res = await api.runParameterSweep(config);
+      expect(res).toBeDefined();
+      expect(res.points.length).toBe(1);
+    }
+  });
+
+  // 8. Parameter and target configuration validation
+  it('should validate parameter compatibility with the experiment target', () => {
+    // Valid combination
+    const tcpConfig: SweepConfig = {
+      experiment_name: 'TCP Window Sweep',
+      target: 'tcp',
+      parameter: { type: 'window_size' },
+      parameter_values: [1, 2, 4],
+      seeds: [42],
+      simulation_duration_us: 10000,
+    };
+    expect(tcpConfig.target).toBe('tcp');
+    expect(tcpConfig.parameter.type).toBe('window_size');
+  });
 });

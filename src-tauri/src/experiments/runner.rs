@@ -5,7 +5,9 @@ use crate::experiments::results::{
     ComparativeExperimentResult, MetricDelta, SweepExperimentResult, SweepPointResult,
     SweepRunResult,
 };
-use crate::experiments::sweep::{apply_parameter_to_project, validate_sweep_config};
+use crate::experiments::sweep::{
+    apply_parameter_to_project, validate_comparative_config, validate_sweep_config,
+};
 use crate::faults::{FaultSchedule, FaultType, RouteChangeRecord};
 use crate::qos::{aggregate_qos, compute_network_qos, AggregatedQos, QosMetrics};
 use crate::routing::graph::{MetricType, RoutingGraph};
@@ -378,6 +380,7 @@ pub fn run_comparative_experiment(
     config: &ComparativeExperimentConfig,
     active_project: &Project,
 ) -> Result<ComparativeExperimentResult> {
+    validate_comparative_config(config)?;
     let start_instant = std::time::Instant::now();
 
     let base_project = config.base_project.as_ref().unwrap_or(active_project);
