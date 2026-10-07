@@ -155,7 +155,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
             <h2 className="text-sm font-semibold tracking-wide text-slate-100 flex items-center gap-2">
               Layer 4 Transport Layer Studio
               <span className="text-[10px] font-mono uppercase bg-indigo-900/60 text-indigo-300 border border-indigo-700/50 px-2 py-0.5 rounded-full">
-                Authoritative Rust Core
+                Authoritative Python Core
               </span>
             </h2>
             <p className="text-[11px] text-slate-400">

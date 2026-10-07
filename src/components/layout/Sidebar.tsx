@@ -80,7 +80,7 @@ export const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
           <span>Simulation Engine:</span>
           <span className="font-mono text-emerald-400 font-semibold">ONLINE</span>
         </div>
-        <div className="mt-1 text-[10px] text-slate-400">Tauri 2.x • Rust Core</div>
+        <div className="mt-1 text-[10px] text-slate-400">Tauri 2.x • Python Core</div>
       </div>
     </aside>
   );

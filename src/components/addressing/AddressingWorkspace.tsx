@@ -251,7 +251,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
             <h2 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
               Addressing & Translation Studio
               <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                Authoritative Rust Core
+                Authoritative Python Core
               </span>
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">

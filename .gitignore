@@ -33,3 +33,15 @@ src-tauri/gen/
 .codegraph/
 codegraph.json
 .serena/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+
+# Playwright
+test-results/
+playwright-report/
+.playwright-cli/

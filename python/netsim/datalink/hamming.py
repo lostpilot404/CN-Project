@@ -1,0 +1,350 @@
+"""Hamming Code (m, r) forward error correction and detection with SECDED."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any
+
+
+class ParityMode(str, Enum):
+    EVEN = "even"
+    ODD = "odd"
+
+
+@dataclass
+class ParityBitDetail:
+    parity_index: int  # 1-indexed power of 2
+    label: str  # "p1", "p2", "p4"
+    covered_indices: list[int]
+    covered_bits: list[int]
+    parity_value: int
+    formula: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "parity_index": self.parity_index,
+            "label": self.label,
+            "covered_indices": self.covered_indices,
+            "covered_bits": self.covered_bits,
+            "parity_value": self.parity_value,
+            "formula": self.formula,
+        }
+
+
+@dataclass
+class HammingBitInfo:
+    position: int
+    is_parity: bool
+    bit_value: int
+    label: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "position": self.position,
+            "is_parity": self.is_parity,
+            "bit_value": self.bit_value,
+            "label": self.label,
+        }
+
+
+@dataclass
+class HammingEncodeResult:
+    raw_data_bits: str
+    data_bit_count: int
+    parity_bit_count: int
+    total_bit_count: int
+    parity_mode: ParityMode
+    encoded_bits: str
+    bit_positions: list[HammingBitInfo]
+    parity_details: list[ParityBitDetail]
+    overall_parity: int
+    encoded_bits_secded: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "raw_data_bits": self.raw_data_bits,
+            "data_bit_count": self.data_bit_count,
+            "parity_bit_count": self.parity_bit_count,
+            "total_bit_count": self.total_bit_count,
+            "parity_mode": self.parity_mode.value,
+            "encoded_bits": self.encoded_bits,
+            "bit_positions": [b.to_dict() for b in self.bit_positions],
+            "parity_details": [p.to_dict() for p in self.parity_details],
+            "overall_parity": self.overall_parity,
+            "encoded_bits_secded": self.encoded_bits_secded,
+        }
+
+
+@dataclass
+class HammingVerifyResult:
+    received_bits: str
+    parity_mode: ParityMode
+    syndrome_bits: str
+    syndrome_value: int
+    has_error: bool
+    is_correctable: bool
+    error_type: str
+    error_position: int | None
+    corrected_bits: str | None
+    extracted_data_bits: str | None
+    syndrome_details: list[ParityBitDetail]
+    status_message: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "received_bits": self.received_bits,
+            "parity_mode": self.parity_mode.value,
+            "syndrome_bits": self.syndrome_bits,
+            "syndrome_value": self.syndrome_value,
+            "has_error": self.has_error,
+            "is_correctable": self.is_correctable,
+            "error_type": self.error_type,
+            "error_position": self.error_position,
+            "corrected_bits": self.corrected_bits,
+            "extracted_data_bits": self.extracted_data_bits,
+            "syndrome_details": [s.to_dict() for s in self.syndrome_details],
+            "status_message": self.status_message,
+        }
+
+
+def calculate_required_parity_bits(data_bits_len: int) -> int:
+    r = 1
+    while (1 << r) < (data_bits_len + r + 1):
+        r += 1
+    return r
+
+
+def is_power_of_two(n: int) -> bool:
+    return n > 0 and (n & (n - 1)) == 0
+
+
+def encode_hamming(data_bits: str, parity_mode: ParityMode) -> HammingEncodeResult:
+    clean_data = "".join(c for c in data_bits if not c.isspace())
+    if not clean_data:
+        raise ValueError("Hamming encode error: data bits cannot be empty")
+    for i, ch in enumerate(clean_data):
+        if ch not in ("0", "1"):
+            raise ValueError(f"Hamming encode error: invalid character '{ch}' at index {i}. Must be '0' or '1'.")
+
+    m = len(clean_data)
+    r = calculate_required_parity_bits(m)
+    total_len = m + r
+
+    codeword = [0] * (total_len + 1)
+    data_chars = iter(clean_data)
+    bit_positions = []
+
+    data_idx = 1
+    for pos in range(1, total_len + 1):
+        if is_power_of_two(pos):
+            bit_positions.append(
+                HammingBitInfo(
+                    position=pos,
+                    is_parity=True,
+                    bit_value=0,
+                    label=f"p{pos}",
+                )
+            )
+        else:
+            bit_val = int(next(data_chars))
+            codeword[pos] = bit_val
+            bit_positions.append(
+                HammingBitInfo(
+                    position=pos,
+                    is_parity=False,
+                    bit_value=bit_val,
+                    label=f"d{data_idx}",
+                )
+            )
+            data_idx += 1
+
+    parity_details = []
+    for k in range(r):
+        p_pos = 1 << k
+        covered_indices = []
+        covered_bits = []
+        s = 0
+
+        for pos in range(1, total_len + 1):
+            if (pos & p_pos) != 0 and pos != p_pos:
+                covered_indices.append(pos)
+                covered_bits.append(codeword[pos])
+                s ^= codeword[pos]
+
+        parity_value = s if parity_mode == ParityMode.EVEN else (s ^ 1)
+        codeword[p_pos] = parity_value
+
+        for b in bit_positions:
+            if b.position == p_pos:
+                b.bit_value = parity_value
+                break
+
+        formula = (
+            f"p{p_pos} = {'EvenParity' if parity_mode == ParityMode.EVEN else 'OddParity'} "
+            f"over positions {covered_indices}"
+        )
+
+        parity_details.append(
+            ParityBitDetail(
+                parity_index=p_pos,
+                label=f"p{p_pos}",
+                covered_indices=covered_indices,
+                covered_bits=covered_bits,
+                parity_value=parity_value,
+                formula=formula,
+            )
+        )
+
+    encoded_bits = "".join(str(codeword[i]) for i in range(1, total_len + 1))
+    overall_sum = 0
+    for i in range(1, total_len + 1):
+        overall_sum ^= codeword[i]
+    overall_parity = overall_sum if parity_mode == ParityMode.EVEN else (overall_sum ^ 1)
+    encoded_bits_secded = f"{overall_parity}{encoded_bits}"
+
+    return HammingEncodeResult(
+        raw_data_bits=clean_data,
+        data_bit_count=m,
+        parity_bit_count=r,
+        total_bit_count=total_len,
+        parity_mode=parity_mode,
+        encoded_bits=encoded_bits,
+        bit_positions=bit_positions,
+        parity_details=parity_details,
+        overall_parity=overall_parity,
+        encoded_bits_secded=encoded_bits_secded,
+    )
+
+
+def verify_and_correct_hamming(codeword_str: str, parity_mode: ParityMode) -> HammingVerifyResult:
+    clean_code = "".join(c for c in codeword_str if not c.isspace())
+    if not clean_code:
+        raise ValueError("Hamming verify error: codeword cannot be empty")
+    for i, ch in enumerate(clean_code):
+        if ch not in ("0", "1"):
+            raise ValueError(f"Hamming verify error: invalid character '{ch}' at index {i}. Must be '0' or '1'.")
+
+    n = len(clean_code)
+    if n < 3:
+        raise ValueError("Hamming codeword must have at least 3 bits (e.g. Hamming(3,1))")
+
+    bits = [0] + [int(ch) for ch in clean_code]
+
+    r = 0
+    while (1 << r) <= n:
+        r += 1
+
+    syndrome_details = []
+    syndrome_bits_vec = []
+    syndrome_value = 0
+
+    for k in range(r):
+        p_pos = 1 << k
+        covered_indices = []
+        covered_bits = []
+        chk = 0
+
+        for pos in range(1, n + 1):
+            if (pos & p_pos) != 0:
+                covered_indices.append(pos)
+                covered_bits.append(bits[pos])
+                chk ^= bits[pos]
+
+        syn_bit = chk if parity_mode == ParityMode.EVEN else (chk ^ 1)
+        syndrome_bits_vec.append(syn_bit)
+        if syn_bit == 1:
+            syndrome_value += p_pos
+
+        formula = f"s{p_pos} = XOR({covered_indices}) -> {syn_bit}"
+        syndrome_details.append(
+            ParityBitDetail(
+                parity_index=p_pos,
+                label=f"s{p_pos}",
+                covered_indices=covered_indices,
+                covered_bits=covered_bits,
+                parity_value=syn_bit,
+                formula=formula,
+            )
+        )
+
+    syndrome_bits = "".join(str(b) for b in reversed(syndrome_bits_vec))
+    has_error = syndrome_value != 0
+
+    if not has_error:
+        extracted = "".join(str(bits[pos]) for pos in range(1, n + 1) if not is_power_of_two(pos))
+        return HammingVerifyResult(
+            received_bits=clean_code,
+            parity_mode=parity_mode,
+            syndrome_bits=syndrome_bits,
+            syndrome_value=0,
+            has_error=False,
+            is_correctable=True,
+            error_type="none",
+            error_position=None,
+            corrected_bits=clean_code,
+            extracted_data_bits=extracted,
+            syndrome_details=syndrome_details,
+            status_message="Codeword is valid. No bit errors detected.",
+        )
+
+    if syndrome_value <= n:
+        corrected_vec = list(bits)
+        corrected_vec[syndrome_value] ^= 1
+
+        corrected_str = "".join(str(corrected_vec[i]) for i in range(1, n + 1))
+        extracted = "".join(str(corrected_vec[pos]) for pos in range(1, n + 1) if not is_power_of_two(pos))
+
+        return HammingVerifyResult(
+            received_bits=clean_code,
+            parity_mode=parity_mode,
+            syndrome_bits=syndrome_bits,
+            syndrome_value=syndrome_value,
+            has_error=True,
+            is_correctable=True,
+            error_type="single_bit",
+            error_position=syndrome_value,
+            corrected_bits=corrected_str,
+            extracted_data_bits=extracted,
+            syndrome_details=syndrome_details,
+            status_message=f"Single-bit error detected and corrected at position {syndrome_value} (1-indexed).",
+        )
+    else:
+        return HammingVerifyResult(
+            received_bits=clean_code,
+            parity_mode=parity_mode,
+            syndrome_bits=syndrome_bits,
+            syndrome_value=syndrome_value,
+            has_error=True,
+            is_correctable=False,
+            error_type="multiple_bit_unrecoverable",
+            error_position=syndrome_value,
+            corrected_bits=None,
+            extracted_data_bits=None,
+            syndrome_details=syndrome_details,
+            status_message=(
+                f"Unrecoverable multiple-bit error: calculated syndrome {syndrome_value} exceeds codeword length {n}."
+            ),
+        )
+
+
+@dataclass
+class HammingDecodeResult:
+    has_error: bool
+    corrected_bit_position: int | None
+    decoded_data_bits: str
+
+
+def hamming_encode(data_bits: str, even_parity: bool = True) -> HammingEncodeResult:
+    mode = ParityMode.EVEN if even_parity else ParityMode.ODD
+    return encode_hamming(data_bits, mode)
+
+
+def hamming_decode(codeword_str: str, even_parity: bool = True) -> HammingDecodeResult:
+    mode = ParityMode.EVEN if even_parity else ParityMode.ODD
+    res = verify_and_correct_hamming(codeword_str, mode)
+    return HammingDecodeResult(
+        has_error=(res.error_type != "no_error"),
+        corrected_bit_position=res.error_position,
+        decoded_data_bits=res.extracted_data_bits or "",
+    )

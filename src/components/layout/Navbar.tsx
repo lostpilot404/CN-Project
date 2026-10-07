@@ -90,7 +90,7 @@ export const Navbar = ({
 
         <div className="flex items-center space-x-1 text-[11px] text-emerald-400 bg-emerald-950/40 border border-emerald-900/60 px-2 py-1 rounded">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Rust Authoritative</span>
+          <span>Python Authoritative</span>
         </div>
       </div>
     </header>

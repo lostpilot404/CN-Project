@@ -1,0 +1,13 @@
+[project]
+name = "netsim"
+version = "0.8.0"
+description = "NetSim network simulator core"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP"]
+ignore = ["E501", "UP035", "UP042"]

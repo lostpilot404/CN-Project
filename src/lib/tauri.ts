@@ -75,13 +75,31 @@ export const isTauri = (): boolean => {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 };
 
-// Safe invoke wrapper
+// Safe invoke wrapper: queries Python simulation service first, then Tauri IPC, then fallback
 async function invokeTauri<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   if (isTauri()) {
     const { invoke } = await import('@tauri-apps/api/core');
     return await invoke<T>(cmd, args);
   }
-  // In pure browser environment, fall back to mock memory store
+  // In live browser / dev / Playwright mode, route to authoritative Python simulation server
+  const metaEnv = (import.meta as unknown as { env?: { MODE?: string } }).env;
+  if (typeof window !== 'undefined' && metaEnv?.MODE !== 'test') {
+    try {
+      const res = await fetch(`http://127.0.0.1:8765/api/${cmd}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(args || {}),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'ok') {
+          return data.result as T;
+        }
+      }
+    } catch {
+      // Fallback if server is not reachable
+    }
+  }
   return mockInvoke<T>(cmd, args);
 }
 

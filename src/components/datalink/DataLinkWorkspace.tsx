@@ -218,7 +218,7 @@ export const DataLinkWorkspace: React.FC = () => {
               Data Link Layer Protocol & Algorithm Studio
             </h1>
             <p className="text-[11px] text-slate-400">
-              Authoritative deterministic Rust algorithms: Error Control, Flow Control & Multiple Access
+              Authoritative deterministic Python algorithms: Error Control, Flow Control & Multiple Access
             </p>
           </div>
         </div>
@@ -455,7 +455,7 @@ export const DataLinkWorkspace: React.FC = () => {
                     <span className="text-xs font-semibold text-slate-200">
                       Step-by-Step Parity Bit Traces
                     </span>
-                    <span className="text-[11px] text-slate-400">Rust Authoritative Calculation</span>
+                    <span className="text-[11px] text-slate-400">Python Authoritative Calculation</span>
                   </div>
 
                   <div className="space-y-2.5 overflow-x-auto">
