@@ -8,6 +8,8 @@ import { DataLinkWorkspace } from './components/datalink/DataLinkWorkspace';
 import { TransportWorkspace } from './components/transport/TransportWorkspace';
 import { ApplicationWorkspace } from './components/application/ApplicationWorkspace';
 import { SimulationStudio } from './components/simulation/SimulationStudio';
+import { QosWorkspace } from './components/experiments/QosWorkspace';
+import { ExperimentsWorkspace } from './components/experiments/ExperimentsWorkspace';
 import { ControlBar } from './components/simulation/ControlBar';
 import { TimelineDrawer } from './components/timeline/TimelineDrawer';
 import { api } from './lib/tauri';
@@ -321,6 +323,10 @@ export function App() {
             <TransportWorkspace project={project} />
           ) : activeTab === 'application' ? (
             <ApplicationWorkspace project={project} />
+          ) : activeTab === 'qos' ? (
+            <QosWorkspace project={project} />
+          ) : activeTab === 'experiments' ? (
+            <ExperimentsWorkspace project={project} />
           ) : activeTab === 'simulation' ? (
             <SimulationStudio project={project} />
           ) : (

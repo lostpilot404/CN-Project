@@ -8,10 +8,11 @@ use super::metrics::SimulationMetrics;
 use super::queue::{LinkQueue, QueueSnapshot};
 use super::rng::DeterministicRng;
 use crate::domain::{
-    AppHeader, DataLinkHeader, EncapsulationStack, Link, NetworkHeader, Packet, PacketHopRecord,
-    PacketState, PhysicalLayerInfo, TransportHeader,
+    AppHeader, DataLinkHeader, EncapsulationStack, Link, LinkStatus, NetworkHeader, Packet,
+    PacketHopRecord, PacketState, PhysicalLayerInfo, TransportHeader,
 };
 use crate::error::Result;
+use crate::faults::{fault_target_id, fault_type_label, FaultType};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -47,6 +48,12 @@ pub struct SimulationEngine {
     next_event_id: u64,
     next_packet_id: u64,
     links_cache: HashMap<String, Link>,
+    /// Pending fault data keyed by "fault_id" for deferred processing.
+    pending_faults: HashMap<String, FaultType>,
+    /// Saved link statuses per-node before node failure, for recovery.
+    node_pre_fault_link_states: HashMap<String, HashMap<String, LinkStatus>>,
+    /// Set of node IDs currently in a failed state.
+    failed_nodes: std::collections::HashSet<String>,
 }
 
 impl SimulationEngine {
@@ -63,7 +70,37 @@ impl SimulationEngine {
             next_event_id: 1,
             next_packet_id: 1,
             links_cache: HashMap::new(),
+            pending_faults: HashMap::new(),
+            node_pre_fault_link_states: HashMap::new(),
+            failed_nodes: std::collections::HashSet::new(),
         }
+    }
+
+    /// Schedule a fault to be executed at the specified SimTime.
+    /// The fault is enqueued as a FaultInjected event and will be
+    /// processed authoritatively when the engine reaches that time.
+    pub fn schedule_fault(&mut self, fault_id: &str, timestamp_us: u64, fault_type: FaultType) {
+        let target_id = fault_target_id(&fault_type);
+        let ft_label = fault_type_label(&fault_type);
+        self.pending_faults.insert(fault_id.to_string(), fault_type);
+        self.schedule_event(
+            SimTime::from_micros(timestamp_us),
+            SimEventType::FaultInjected {
+                target_id,
+                fault_type: format!("{}:{}", ft_label, fault_id),
+            },
+            format!("Fault '{}' scheduled at {} µs", fault_id, timestamp_us),
+        );
+    }
+
+    /// Public accessor for all processed events.
+    pub fn processed_events(&self) -> &[SimEvent] {
+        &self.processed_events
+    }
+
+    /// Public accessor for all packets.
+    pub fn all_packets(&self) -> Vec<Packet> {
+        self.packets.values().cloned().collect()
     }
 
     pub fn update_links(&mut self, links: &[Link]) {
@@ -610,7 +647,16 @@ impl SimulationEngine {
             SimEventType::Timeout { .. } => {}
             SimEventType::Retransmission { .. } => {}
             SimEventType::RouteUpdated { .. } => {}
-            SimEventType::FaultInjected { .. } => {}
+            SimEventType::FaultInjected {
+                fault_type: ft_str, ..
+            } => {
+                // Extract fault_id from the encoded fault_type string
+                if let Some(fault_id) = ft_str.rsplit(':').next() {
+                    if let Some(fault) = self.pending_faults.remove(fault_id) {
+                        self.execute_fault(&fault);
+                    }
+                }
+            }
             SimEventType::ApplicationEvent { .. } => {}
         }
     }
@@ -776,6 +822,121 @@ impl SimulationEngine {
         self.rng.reseed(seed);
         self.next_event_id = 1;
         self.next_packet_id = 1;
+        self.pending_faults.clear();
+        self.node_pre_fault_link_states.clear();
+        self.failed_nodes.clear();
+    }
+
+    // ========================================================================
+    // Authoritative fault execution
+    // ========================================================================
+
+    fn execute_fault(&mut self, fault: &FaultType) {
+        match fault {
+            FaultType::LinkDown { link_id } => {
+                if let Some(link) = self.links_cache.get_mut(link_id) {
+                    link.status = LinkStatus::Down;
+                }
+            }
+            FaultType::LinkRestore { link_id } => {
+                if let Some(link) = self.links_cache.get_mut(link_id) {
+                    link.status = LinkStatus::Up;
+                }
+            }
+            FaultType::BandwidthDegradation {
+                link_id,
+                new_bandwidth_bps,
+            } => {
+                if let Some(link) = self.links_cache.get_mut(link_id) {
+                    link.bandwidth_bps = *new_bandwidth_bps;
+                }
+            }
+            FaultType::QueueCapacityChange {
+                link_id,
+                new_capacity,
+            } => {
+                if let Some(link) = self.links_cache.get_mut(link_id) {
+                    link.queue_capacity = *new_capacity;
+                }
+                if let Some(queue) = self.link_queues.get_mut(link_id) {
+                    queue.capacity = (*new_capacity).max(1);
+                }
+            }
+            FaultType::NodeFailure { node_id } => {
+                // Save pre-fault link states for all connected links
+                let mut saved_states: HashMap<String, LinkStatus> = HashMap::new();
+                for link in self.links_cache.values() {
+                    if link.source.node_id == *node_id || link.target.node_id == *node_id {
+                        saved_states.insert(link.id.clone(), link.status);
+                    }
+                }
+                self.node_pre_fault_link_states
+                    .insert(node_id.clone(), saved_states);
+                self.failed_nodes.insert(node_id.clone());
+                // Set all connected links to Down
+                let connected_link_ids: Vec<String> = self
+                    .links_cache
+                    .values()
+                    .filter(|l| l.source.node_id == *node_id || l.target.node_id == *node_id)
+                    .map(|l| l.id.clone())
+                    .collect();
+                for lid in connected_link_ids {
+                    if let Some(link) = self.links_cache.get_mut(&lid) {
+                        link.status = LinkStatus::Down;
+                    }
+                }
+            }
+            FaultType::NodeRecovery { node_id } => {
+                self.failed_nodes.remove(node_id);
+                // Restore each connected link to its pre-fault state
+                if let Some(saved) = self.node_pre_fault_link_states.remove(node_id) {
+                    for (lid, prev_status) in saved {
+                        if let Some(link) = self.links_cache.get_mut(&lid) {
+                            link.status = prev_status;
+                        }
+                    }
+                } else {
+                    // No saved state — restore to Up for links that connect to this node
+                    for link in self.links_cache.values_mut() {
+                        if (link.source.node_id == *node_id || link.target.node_id == *node_id)
+                            && link.status == LinkStatus::Down
+                        {
+                            link.status = LinkStatus::Up;
+                        }
+                    }
+                }
+            }
+            FaultType::PacketDrop { packet_id } => {
+                if let Some(pkt) = self.packets.get_mut(packet_id) {
+                    // Only drop if still eligible (not already delivered or dropped)
+                    if pkt.state != PacketState::Delivered
+                        && pkt.state != PacketState::DroppedQueueFull
+                        && pkt.state != PacketState::DroppedBitError
+                        && pkt.state != PacketState::DroppedLinkDown
+                    {
+                        pkt.state = PacketState::DroppedBitError;
+                        let hop_idx = pkt.hop_history.len();
+                        pkt.hop_history.push(PacketHopRecord {
+                            hop_index: hop_idx,
+                            node_id: pkt.current_node_id.clone(),
+                            link_id: None,
+                            timestamp_us: self.current_time.as_micros(),
+                            state: PacketState::DroppedBitError,
+                            description: format!("Packet {} dropped by fault injection", packet_id),
+                        });
+                        self.metrics.record_dropped_loss();
+                    }
+                }
+            }
+            FaultType::BitError {
+                link_id,
+                error_rate,
+            } => {
+                if let Some(link) = self.links_cache.get_mut(link_id) {
+                    link.bit_error_rate = *error_rate;
+                }
+            }
+        }
     }
 
     pub fn get_snapshot(&self) -> SimulationStateSnapshot {

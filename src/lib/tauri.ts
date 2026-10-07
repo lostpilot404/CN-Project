@@ -60,6 +60,14 @@ import {
   SnmpConfig,
   SnmpSimResult,
 } from '../types/application';
+import {
+  QosMetrics,
+  FaultScheduleEntry,
+  SweepConfig,
+  SweepExperimentResult,
+  ComparativeExperimentConfig,
+  ComparativeExperimentResult,
+} from '../types/experiments';
 
 
 // Check if running inside Tauri window
@@ -2772,6 +2780,153 @@ function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
       } as unknown as T);
     }
 
+    case 'get_current_qos_metrics': {
+      return Promise.resolve({
+        measurement_interval_us: 100000,
+        throughput_bits_per_sec: 8000000,
+        throughput_bytes_per_sec: 1000000,
+        goodput_bits_per_sec: 7600000,
+        end_to_end_latencies_us: [1000, 1050, 1020, 1080],
+        average_latency_us: 1037.5,
+        min_latency_us: 1000,
+        max_latency_us: 1080,
+        jitter_us: 43.3,
+        jitter_samples: [50, 30, 60],
+        packets_sent: 10,
+        packets_delivered: 9,
+        packets_lost: 1,
+        packet_loss_rate: 0.1,
+        loss_by_category: {
+          queue_overflow: 0,
+          link_down: 1,
+          bit_error: 0,
+          stochastic_loss: 0,
+        },
+        retransmissions: 1,
+        link_utilization: [
+          {
+            link_id: 'link-1',
+            busy_time_us: 32000,
+            measurement_time_us: 100000,
+            utilization: 0.32,
+          },
+        ],
+        queue_occupancy_average: 1.2,
+        queue_occupancy_max: 3,
+        queue_drops: 0,
+        average_rtt_us: 2100,
+      } as unknown as T);
+    }
+
+    case 'schedule_fault_command': {
+      return Promise.resolve(undefined as unknown as T);
+    }
+
+    case 'run_parameter_sweep_command': {
+      const cfg = (args?.config || {}) as SweepConfig;
+      const vals = cfg.parameter_values || [1000000, 10000000, 100000000];
+      const points = vals.map((v) => ({
+        parameter_value: v,
+        aggregated_qos: {
+          run_count: (cfg.seeds || [42]).length,
+          mean_throughput_bps: Math.min(v, 8000000),
+          mean_goodput_bps: Math.min(v * 0.95, 7600000),
+          mean_latency_us: Math.max(200, 2000000 / v),
+          min_latency_us: Math.max(150, 1800000 / v),
+          max_latency_us: Math.max(250, 2200000 / v),
+          mean_jitter_us: 25.0,
+          mean_loss_rate: 0.0,
+          mean_retransmissions: 0,
+          stddev_latency_us: 12.5,
+          stddev_throughput_bps: 50000,
+        },
+        runs: (cfg.seeds || [42]).map((s) => ({
+          parameter_value: v,
+          seed: s,
+          qos: {
+            measurement_interval_us: cfg.simulation_duration_us || 50000,
+            throughput_bits_per_sec: Math.min(v, 8000000),
+            throughput_bytes_per_sec: Math.min(v / 8, 1000000),
+            goodput_bits_per_sec: Math.min(v * 0.95, 7600000),
+            end_to_end_latencies_us: [1000, 1020],
+            average_latency_us: Math.max(200, 2000000 / v),
+            min_latency_us: Math.max(150, 1800000 / v),
+            max_latency_us: Math.max(250, 2200000 / v),
+            jitter_us: 20.0,
+            jitter_samples: [20.0],
+            packets_sent: 5,
+            packets_delivered: 5,
+            packets_lost: 0,
+            packet_loss_rate: 0.0,
+            loss_by_category: { queue_overflow: 0, link_down: 0, bit_error: 0, stochastic_loss: 0 },
+            retransmissions: 0,
+            link_utilization: [],
+            queue_occupancy_average: 1.0,
+            queue_occupancy_max: 2,
+            queue_drops: 0,
+            average_rtt_us: null,
+          },
+          route_changes: [],
+        })),
+      }));
+
+      return Promise.resolve({
+        experiment_name: cfg.experiment_name || 'Parameter Sweep',
+        parameter_name: 'parameter',
+        points,
+        total_runs: points.length * (cfg.seeds?.length || 1),
+        seeds: cfg.seeds || [42],
+        execution_time_ms: 120,
+      } as unknown as T);
+    }
+
+    case 'run_comparative_experiment_command': {
+      const cfg = (args?.config || {}) as ComparativeExperimentConfig;
+      return Promise.resolve({
+        experiment_name: cfg.experiment_name || 'Comparative Test',
+        scenario_a_name: cfg.scenario_a?.name || 'Scenario A',
+        scenario_b_name: cfg.scenario_b?.name || 'Scenario B',
+        qos_a: {
+          run_count: 1,
+          mean_throughput_bps: 10000000,
+          mean_goodput_bps: 9500000,
+          mean_latency_us: 800,
+          min_latency_us: 750,
+          max_latency_us: 850,
+          mean_jitter_us: 15.0,
+          mean_loss_rate: 0.0,
+          mean_retransmissions: 0,
+          stddev_latency_us: 0.0,
+          stddev_throughput_bps: 0.0,
+        },
+        qos_b: {
+          run_count: 1,
+          mean_throughput_bps: 1000000,
+          mean_goodput_bps: 950000,
+          mean_latency_us: 4200,
+          min_latency_us: 4000,
+          max_latency_us: 4400,
+          mean_jitter_us: 85.0,
+          mean_loss_rate: 0.05,
+          mean_retransmissions: 1,
+          stddev_latency_us: 0.0,
+          stddev_throughput_bps: 0.0,
+        },
+        deltas: [
+          { metric_name: 'throughput_bps', val_a: 10000000, val_b: 1000000, diff: -9000000, percent_change: -90 },
+          { metric_name: 'goodput_bps', val_a: 9500000, val_b: 950000, diff: -8550000, percent_change: -90 },
+          { metric_name: 'latency_us', val_a: 800, val_b: 4200, diff: 3400, percent_change: 425 },
+          { metric_name: 'jitter_us', val_a: 15.0, val_b: 85.0, diff: 70.0, percent_change: 466.6 },
+          { metric_name: 'loss_rate', val_a: 0.0, val_b: 0.05, diff: 0.05, percent_change: null },
+          { metric_name: 'retransmissions', val_a: 0, val_b: 1, diff: 1, percent_change: null },
+        ],
+        route_changes_a: [],
+        route_changes_b: [],
+        runs_count_per_scenario: cfg.seeds?.length || 1,
+        execution_time_ms: 180,
+      } as unknown as T);
+    }
+
     default:
       return Promise.reject(new Error(`Command ${cmd} not implemented in mock mode`));
 
@@ -2998,6 +3153,15 @@ export const api = {
     invokeTauri<SmtpSimResult>('simulate_smtp', { config }),
   simulateSnmp: (config: SnmpConfig) =>
     invokeTauri<SnmpSimResult>('simulate_snmp', { config }),
+  // Phase 7: QoS Performance & Experiments
+  getCurrentQosMetrics: () =>
+    invokeTauri<QosMetrics>('get_current_qos_metrics'),
+  scheduleFault: (entry: FaultScheduleEntry) =>
+    invokeTauri<void>('schedule_fault_command', { entry }),
+  runParameterSweep: (config: SweepConfig) =>
+    invokeTauri<SweepExperimentResult>('run_parameter_sweep_command', { config }),
+  runComparativeExperiment: (config: ComparativeExperimentConfig) =>
+    invokeTauri<ComparativeExperimentResult>('run_comparative_experiment_command', { config }),
 };
 
 

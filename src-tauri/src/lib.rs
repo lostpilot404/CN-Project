@@ -5,6 +5,9 @@ pub mod congestion;
 pub mod datalink;
 pub mod domain;
 pub mod error;
+pub mod experiments;
+pub mod faults;
+pub mod qos;
 pub mod routing;
 pub mod simulation;
 pub mod state;
@@ -81,6 +84,10 @@ pub fn run() {
             commands::algorithms::simulate_ftp,
             commands::algorithms::simulate_smtp,
             commands::algorithms::simulate_snmp,
+            commands::experiments::run_parameter_sweep_command,
+            commands::experiments::run_comparative_experiment_command,
+            commands::experiments::get_current_qos_metrics,
+            commands::experiments::schedule_fault_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running NetSim application");

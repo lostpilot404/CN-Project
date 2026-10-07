@@ -29,3 +29,7 @@ pnpm-debug.log*
 # Tauri
 src-tauri/target/
 src-tauri/gen/
+.seer/
+.codegraph/
+codegraph.json
+.serena/

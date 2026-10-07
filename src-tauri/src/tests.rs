@@ -5177,3 +5177,563 @@ fn test_phase6_application_packet_encapsulation_stack() {
     // Application-layer packet builder does not set signal_encoding (educational simplification)
     assert_eq!(phys.signal_encoding, None);
 }
+
+// ============================================================================
+// Phase 7: QoS, Fault Injection & Experimentation Tests
+// ============================================================================
+
+use crate::experiments::{
+    run_comparative_experiment, run_parameter_sweep, ComparativeExperimentConfig,
+    ComparativeScenarioConfig, SweepConfig, SweepParameter,
+};
+use crate::faults::{FaultSchedule, FaultScheduleEntry, FaultType};
+use crate::qos::{aggregate_qos, compute_network_qos, QosMetrics};
+use crate::simulation::metrics::SimulationMetrics;
+
+#[test]
+fn test_phase7_qos_metrics_safe_division_and_bounds() {
+    let sim_metrics = SimulationMetrics::new();
+    let qos_zero = compute_network_qos(&sim_metrics, &[], &[], &[], 0);
+
+    assert_eq!(qos_zero.measurement_interval_us, 0);
+    assert_eq!(qos_zero.throughput_bits_per_sec, 0.0);
+    assert_eq!(qos_zero.throughput_bytes_per_sec, 0.0);
+    assert_eq!(qos_zero.goodput_bits_per_sec, 0.0);
+    assert_eq!(qos_zero.packet_loss_rate, 0.0);
+    assert_eq!(qos_zero.average_latency_us, 0.0);
+    assert_eq!(qos_zero.jitter_us, 0.0);
+    assert!(!qos_zero.throughput_bits_per_sec.is_nan());
+    assert!(!qos_zero.packet_loss_rate.is_nan());
+}
+
+#[test]
+fn test_phase7_qos_jitter_ipdv_per_flow() {
+    let mut metrics = SimulationMetrics::new();
+    let mut engine = SimulationEngine::new(42);
+    let mut packets = Vec::new();
+    let latencies = [100u64, 150u64, 120u64];
+    for &lat in &latencies {
+        metrics.record_created(1000);
+        metrics.record_delivered(1000, lat);
+        let pid = engine.inject_packet(
+            "node-1".to_string(),
+            "node-2".to_string(),
+            1000,
+            "HTTP".to_string(),
+            "TCP".to_string(),
+        );
+        let mut pkt = engine.get_packet(&pid).unwrap().clone();
+        pkt.created_at_us = 0;
+        pkt.state = PacketState::Delivered;
+        pkt.hop_history.push(crate::domain::PacketHopRecord {
+            hop_index: 1,
+            node_id: "node-2".to_string(),
+            link_id: None,
+            timestamp_us: lat,
+            state: PacketState::Delivered,
+            description: "delivered".to_string(),
+        });
+        packets.push(pkt);
+    }
+
+    let qos = compute_network_qos(&metrics, &packets, &[], &[], 1000);
+    assert_eq!(qos.packets_sent, 3);
+    assert_eq!(qos.packets_delivered, 3);
+    assert_eq!(qos.end_to_end_latencies_us, vec![100, 150, 120]);
+    assert_eq!(qos.min_latency_us, Some(100));
+    assert_eq!(qos.max_latency_us, Some(150));
+    assert_eq!(qos.average_latency_us, 370.0 / 3.0);
+    assert_eq!(qos.jitter_samples.len(), 2);
+    assert_eq!(qos.jitter_samples[0], 50.0);
+    assert_eq!(qos.jitter_samples[1], 30.0);
+    assert_eq!(qos.jitter_us, 40.0);
+}
+
+#[test]
+fn test_phase7_loss_category_breakdown_no_double_counting() {
+    let mut metrics = SimulationMetrics::new();
+    metrics.record_created(1000);
+    metrics.record_created(1000);
+    metrics.record_created(1000);
+    metrics.record_created(1000);
+
+    metrics.record_dropped_overflow();
+    metrics.record_dropped_link_down();
+    metrics.record_dropped_error();
+    metrics.record_dropped_loss();
+
+    assert_eq!(metrics.total_dropped(), 4);
+
+    let qos = compute_network_qos(&metrics, &[], &[], &[], 1000);
+    assert_eq!(qos.packets_lost, 4);
+    assert_eq!(qos.loss_by_category.queue_overflow, 1);
+    assert_eq!(qos.loss_by_category.link_down, 1);
+    assert_eq!(qos.loss_by_category.bit_error, 1);
+    assert_eq!(qos.loss_by_category.stochastic_loss, 1);
+    assert_eq!(
+        qos.loss_by_category.queue_overflow
+            + qos.loss_by_category.link_down
+            + qos.loss_by_category.bit_error
+            + qos.loss_by_category.stochastic_loss,
+        qos.packets_lost
+    );
+}
+
+#[test]
+fn test_phase7_qos_aggregation_preserves_outliers() {
+    let run1 = QosMetrics {
+        throughput_bits_per_sec: 1000.0,
+        average_latency_us: 10.0,
+        min_latency_us: Some(5),
+        max_latency_us: Some(15),
+        packet_loss_rate: 0.0,
+        ..Default::default()
+    };
+
+    let run2 = QosMetrics {
+        throughput_bits_per_sec: 2000.0,
+        average_latency_us: 20.0,
+        min_latency_us: Some(10),
+        max_latency_us: Some(30),
+        packet_loss_rate: 0.1,
+        ..Default::default()
+    };
+
+    // Outlier run
+    let run3 = QosMetrics {
+        throughput_bits_per_sec: 10000.0,
+        average_latency_us: 150.0,
+        min_latency_us: Some(2),
+        max_latency_us: Some(500),
+        packet_loss_rate: 0.5,
+        ..Default::default()
+    };
+
+    let agg = aggregate_qos(&[run1, run2, run3]);
+    assert_eq!(agg.run_count, 3);
+    // Outliers are preserved in mean and global min/max
+    assert_eq!(agg.min_latency_us, Some(2));
+    assert_eq!(agg.max_latency_us, Some(500));
+    assert_eq!(agg.mean_throughput_bps, (1000.0 + 2000.0 + 10000.0) / 3.0);
+    assert_eq!(agg.mean_latency_us, (10.0 + 20.0 + 150.0) / 3.0);
+    assert!(agg.stddev_latency_us > 0.0);
+    assert!(agg.stddev_throughput_bps > 0.0);
+}
+
+#[test]
+fn test_phase7_runtime_fault_injection_link_down_and_restore() {
+    let mut project = Project::new("Fault Injection Test".to_string());
+    let n1 = Node::new(
+        "pc-1".to_string(),
+        "PC 1".to_string(),
+        NodeType::Pc,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let n2 = Node::new(
+        "pc-2".to_string(),
+        "PC 2".to_string(),
+        NodeType::Pc,
+        Position { x: 100.0, y: 0.0 },
+    );
+    let link = Link::new(
+        "link-1".to_string(),
+        LinkEndpoint {
+            node_id: "pc-1".to_string(),
+            interface_id: "eth0".to_string(),
+        },
+        LinkEndpoint {
+            node_id: "pc-2".to_string(),
+            interface_id: "eth0".to_string(),
+        },
+    );
+    project.nodes = vec![n1, n2];
+    project.links = vec![link];
+
+    let mut engine = SimulationEngine::new(42);
+    engine.update_links(&project.links);
+
+    // Schedule LinkDown at 100 µs
+    engine.schedule_fault(
+        "f-down",
+        100,
+        FaultType::LinkDown {
+            link_id: "link-1".to_string(),
+        },
+    );
+    // Schedule LinkRestore at 500 µs
+    engine.schedule_fault(
+        "f-up",
+        500,
+        FaultType::LinkRestore {
+            link_id: "link-1".to_string(),
+        },
+    );
+
+    // Run until 200 µs (past fault 1)
+    let _ = engine.run_until(SimTime::from_micros(200));
+
+    // Inject packet while link is down
+    engine.inject_packet(
+        "pc-1".to_string(),
+        "pc-2".to_string(),
+        500,
+        "HTTP".to_string(),
+        "TCP".to_string(),
+    );
+
+    // Run until 400 µs
+    let _ = engine.run_until(SimTime::from_micros(400));
+    // Packet should have been dropped due to link down
+    assert_eq!(engine.metrics().packets_dropped_link_down, 1);
+
+    // Run until 600 µs (past link restore)
+    let _ = engine.run_until(SimTime::from_micros(600));
+
+    // Inject packet after restore
+    engine.inject_packet(
+        "pc-1".to_string(),
+        "pc-2".to_string(),
+        500,
+        "HTTP".to_string(),
+        "TCP".to_string(),
+    );
+
+    // Run all events until empty
+    let _ = engine.run_all();
+    assert_eq!(engine.metrics().packets_delivered, 1);
+}
+
+#[test]
+fn test_phase7_runtime_fault_node_failure_and_recovery() {
+    let mut project = Project::new("Node Failure Test".to_string());
+    let n1 = Node::new(
+        "pc-1".to_string(),
+        "PC 1".to_string(),
+        NodeType::Pc,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let n2 = Node::new(
+        "r-1".to_string(),
+        "Router 1".to_string(),
+        NodeType::Router,
+        Position { x: 100.0, y: 0.0 },
+    );
+    let link = Link::new(
+        "link-1".to_string(),
+        LinkEndpoint {
+            node_id: "pc-1".to_string(),
+            interface_id: "eth0".to_string(),
+        },
+        LinkEndpoint {
+            node_id: "r-1".to_string(),
+            interface_id: "eth0".to_string(),
+        },
+    );
+    project.nodes = vec![n1, n2];
+    project.links = vec![link];
+
+    let mut engine = SimulationEngine::new(42);
+    engine.update_links(&project.links);
+
+    // Fail node r-1 at 50 µs
+    engine.schedule_fault(
+        "f-node-down",
+        50,
+        FaultType::NodeFailure {
+            node_id: "r-1".to_string(),
+        },
+    );
+    let _ = engine.run_until(SimTime::from_micros(100));
+
+    // Connected link must be Down
+    engine.inject_packet(
+        "pc-1".to_string(),
+        "r-1".to_string(),
+        500,
+        "HTTP".to_string(),
+        "TCP".to_string(),
+    );
+    let _ = engine.run_until(SimTime::from_micros(200));
+    assert_eq!(engine.metrics().packets_dropped_link_down, 1);
+
+    // Recover node r-1 at 300 µs
+    engine.schedule_fault(
+        "f-node-up",
+        300,
+        FaultType::NodeRecovery {
+            node_id: "r-1".to_string(),
+        },
+    );
+    let _ = engine.run_until(SimTime::from_micros(400));
+
+    // Next packet succeeds
+    engine.inject_packet(
+        "pc-1".to_string(),
+        "r-1".to_string(),
+        500,
+        "HTTP".to_string(),
+        "TCP".to_string(),
+    );
+    let _ = engine.run_all();
+    assert_eq!(engine.metrics().packets_delivered, 1);
+}
+
+#[test]
+fn test_phase7_dynamic_routing_observation_route_change_records() {
+    let mut project = Project::new("Diamond Routing Topology".to_string());
+    let r1 = Node::new(
+        "r1".to_string(),
+        "Router 1".to_string(),
+        NodeType::Router,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let r2 = Node::new(
+        "r2".to_string(),
+        "Router 2".to_string(),
+        NodeType::Router,
+        Position { x: 100.0, y: -50.0 },
+    );
+    let r3 = Node::new(
+        "r3".to_string(),
+        "Router 3".to_string(),
+        NodeType::Router,
+        Position { x: 100.0, y: 50.0 },
+    );
+    let r4 = Node::new(
+        "r4".to_string(),
+        "Router 4".to_string(),
+        NodeType::Router,
+        Position { x: 200.0, y: 0.0 },
+    );
+
+    let l_12 = Link::new(
+        "l12".to_string(),
+        LinkEndpoint {
+            node_id: "r1".to_string(),
+            interface_id: "e1".to_string(),
+        },
+        LinkEndpoint {
+            node_id: "r2".to_string(),
+            interface_id: "e1".to_string(),
+        },
+    );
+    let l_24 = Link::new(
+        "l24".to_string(),
+        LinkEndpoint {
+            node_id: "r2".to_string(),
+            interface_id: "e2".to_string(),
+        },
+        LinkEndpoint {
+            node_id: "r4".to_string(),
+            interface_id: "e1".to_string(),
+        },
+    );
+    let l_13 = Link::new(
+        "l13".to_string(),
+        LinkEndpoint {
+            node_id: "r1".to_string(),
+            interface_id: "e2".to_string(),
+        },
+        LinkEndpoint {
+            node_id: "r3".to_string(),
+            interface_id: "e1".to_string(),
+        },
+    );
+    let l_34 = Link::new(
+        "l34".to_string(),
+        LinkEndpoint {
+            node_id: "r3".to_string(),
+            interface_id: "e2".to_string(),
+        },
+        LinkEndpoint {
+            node_id: "r4".to_string(),
+            interface_id: "e2".to_string(),
+        },
+    );
+
+    project.nodes = vec![r1, r2, r3, r4];
+    project.links = vec![l_12, l_24, l_13, l_34];
+
+    let mut fault_sched = FaultSchedule::default();
+    fault_sched.entries.push(FaultScheduleEntry {
+        fault_id: "fault-l12-down".to_string(),
+        timestamp_us: 1000,
+        fault_type: FaultType::LinkDown {
+            link_id: "l12".to_string(),
+        },
+        description: "Sever primary path".to_string(),
+    });
+
+    let config = SweepConfig {
+        experiment_name: "Diamond Reroute Test".to_string(),
+        parameter: SweepParameter::TrafficIntervalUs,
+        parameter_values: vec![5000.0],
+        seeds: vec![42],
+        simulation_duration_us: 50_000,
+        base_project: Some(project.clone()),
+        traffic_src_id: Some("r1".to_string()),
+        traffic_dst_id: Some("r4".to_string()),
+        packet_size_bytes: Some(1000),
+        traffic_interval_us: Some(5000),
+        packet_count: Some(5),
+        fault_schedule: Some(fault_sched),
+    };
+
+    let result = run_parameter_sweep(&config, &project).expect("Sweep must succeed");
+    assert_eq!(result.points.len(), 1);
+    let rc = &result.points[0].runs[0].route_changes;
+    assert_eq!(rc.len(), 1);
+    let change = &rc[0];
+    assert_eq!(change.fault_id, "fault-l12-down");
+    assert!(change.reachable_before);
+    assert!(change.reachable_after);
+    assert_eq!(
+        change.before_path,
+        Some(vec!["r1".to_string(), "r2".to_string(), "r4".to_string()])
+    );
+    assert_eq!(
+        change.after_path,
+        Some(vec!["r1".to_string(), "r3".to_string(), "r4".to_string()])
+    );
+}
+
+#[test]
+fn test_phase7_deterministic_parameter_sweep() {
+    let mut project = Project::new("Bandwidth Sweep Test".to_string());
+    let n1 = Node::new(
+        "pc-1".to_string(),
+        "PC 1".to_string(),
+        NodeType::Pc,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let n2 = Node::new(
+        "pc-2".to_string(),
+        "PC 2".to_string(),
+        NodeType::Pc,
+        Position { x: 100.0, y: 0.0 },
+    );
+    let link = Link::new(
+        "link-1".to_string(),
+        LinkEndpoint {
+            node_id: "pc-1".to_string(),
+            interface_id: "eth0".to_string(),
+        },
+        LinkEndpoint {
+            node_id: "pc-2".to_string(),
+            interface_id: "eth0".to_string(),
+        },
+    );
+    project.nodes = vec![n1, n2];
+    project.links = vec![link];
+
+    let config = SweepConfig {
+        experiment_name: "Bandwidth Sweep".to_string(),
+        parameter: SweepParameter::LinkBandwidth { link_id: None },
+        parameter_values: vec![1_000_000.0, 10_000_000.0, 100_000_000.0],
+        seeds: vec![101, 102],
+        simulation_duration_us: 50_000,
+        base_project: Some(project.clone()),
+        traffic_src_id: Some("pc-1".to_string()),
+        traffic_dst_id: Some("pc-2".to_string()),
+        packet_size_bytes: Some(1000),
+        traffic_interval_us: Some(2000),
+        packet_count: Some(5),
+        fault_schedule: None,
+    };
+
+    let result1 = run_parameter_sweep(&config, &project).expect("Sweep 1 must succeed");
+    let result2 = run_parameter_sweep(&config, &project).expect("Sweep 2 must succeed");
+
+    assert_eq!(result1.points.len(), 3);
+    assert_eq!(result1.total_runs, 6);
+
+    // Bit-for-bit deterministic reproducibility across identical runs
+    for (p1, p2) in result1.points.iter().zip(result2.points.iter()) {
+        assert_eq!(p1.parameter_value, p2.parameter_value);
+        assert_eq!(
+            p1.aggregated_qos.mean_throughput_bps,
+            p2.aggregated_qos.mean_throughput_bps
+        );
+        assert_eq!(
+            p1.aggregated_qos.mean_latency_us,
+            p2.aggregated_qos.mean_latency_us
+        );
+    }
+}
+
+#[test]
+fn test_phase7_comparative_experiment_ab_testing() {
+    let mut project = Project::new("Comparative A/B Test".to_string());
+    let n1 = Node::new(
+        "pc-1".to_string(),
+        "PC 1".to_string(),
+        NodeType::Pc,
+        Position { x: 0.0, y: 0.0 },
+    );
+    let n2 = Node::new(
+        "pc-2".to_string(),
+        "PC 2".to_string(),
+        NodeType::Pc,
+        Position { x: 100.0, y: 0.0 },
+    );
+    let link = Link::new(
+        "link-1".to_string(),
+        LinkEndpoint {
+            node_id: "pc-1".to_string(),
+            interface_id: "eth0".to_string(),
+        },
+        LinkEndpoint {
+            node_id: "pc-2".to_string(),
+            interface_id: "eth0".to_string(),
+        },
+    );
+    project.nodes = vec![n1, n2];
+    project.links = vec![link];
+
+    // Scenario A: High bandwidth (100 Mbps)
+    let scenario_a = ComparativeScenarioConfig {
+        name: "High Bandwidth".to_string(),
+        description: "100 Mbps link".to_string(),
+        project_override: None,
+        fault_schedule: None,
+        parameter_overrides: Some(vec![(
+            SweepParameter::LinkBandwidth { link_id: None },
+            100_000_000.0,
+        )]),
+    };
+
+    // Scenario B: Low bandwidth (1 Mbps)
+    let scenario_b = ComparativeScenarioConfig {
+        name: "Low Bandwidth".to_string(),
+        description: "1 Mbps link".to_string(),
+        project_override: None,
+        fault_schedule: None,
+        parameter_overrides: Some(vec![(
+            SweepParameter::LinkBandwidth { link_id: None },
+            1_000_000.0,
+        )]),
+    };
+
+    let config = ComparativeExperimentConfig {
+        experiment_name: "Bandwidth Comparison A/B".to_string(),
+        scenario_a,
+        scenario_b,
+        seeds: vec![42],
+        simulation_duration_us: 100_000,
+        base_project: Some(project.clone()),
+        traffic_src_id: Some("pc-1".to_string()),
+        traffic_dst_id: Some("pc-2".to_string()),
+        packet_size_bytes: Some(1000),
+        traffic_interval_us: Some(10000),
+        packet_count: Some(5),
+    };
+
+    let result =
+        run_comparative_experiment(&config, &project).expect("Comparative experiment must succeed");
+    assert_eq!(result.scenario_a_name, "High Bandwidth");
+    assert_eq!(result.scenario_b_name, "Low Bandwidth");
+    assert!(!result.deltas.is_empty());
+
+    // Higher bandwidth in A means lower serialization latency than in B
+    assert!(result.qos_a.mean_latency_us < result.qos_b.mean_latency_us);
+}
