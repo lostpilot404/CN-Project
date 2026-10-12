@@ -21,7 +21,7 @@ export const FtpStudio: React.FC<FtpStudioProps> = ({
   onPacketSelect,
   selectedPacketId,
 }) => {
-  const [clientNode, setClientNode] = useState<string>('host-a');
+  const [clientNode, setClientNode] = useState<string>('');
   const [serverNode, setServerNode] = useState<string>('ftp-server');
   const [username, setUsername] = useState<string>('anonymous');
   const [password, setPassword] = useState<string>('guest@example.com');
@@ -44,6 +44,10 @@ export const FtpStudio: React.FC<FtpStudioProps> = ({
   }, [project]);
 
   const runSimulation = async () => {
+    if (!clientNode || !serverNode) {
+      setErrorMsg('Add at least two devices to the topology before running a simulation.');
+      return;
+    }
     setIsRunning(true);
     setErrorMsg(null);
     try {

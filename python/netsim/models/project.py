@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from netsim.core.schema import require_dict
+
 from .link import Link
 from .node import Node
 
@@ -115,6 +117,7 @@ class Project:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Project:
+        data = require_dict(data, "project")
         schema_v = int(data.get("schemaVersion", data.get("schema_version", 1)))
         meta = ProjectMetadata.from_dict(data.get("metadata", {}))
         nodes = [Node.from_dict(n) for n in data.get("nodes", [])]

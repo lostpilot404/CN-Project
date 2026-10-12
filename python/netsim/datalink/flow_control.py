@@ -252,12 +252,28 @@ class FlowControlSimResult:
 
 
 def validate_flow_control_config(config: FlowControlConfig) -> None:
-    if config.window_size == 0:
-        raise ValueError("Window size must be at least 1")
-    if config.sequence_space == 0:
-        raise ValueError("Sequence space must be greater than 0")
-    if config.total_frames_to_send == 0:
-        raise ValueError("Total frames to send must be at least 1")
+    if config.window_size < 1:
+        raise ValueError(f"Window size must be at least 1 (received {config.window_size})")
+    if config.sequence_space < 1:
+        raise ValueError(f"Sequence space must be greater than 0 (received {config.sequence_space})")
+    if config.total_frames_to_send < 1:
+        raise ValueError(f"Total frames to send must be at least 1 (received {config.total_frames_to_send})")
+    if config.frame_tx_time_us <= 0:
+        raise ValueError(f"Frame transmission time must be greater than 0 us (received {config.frame_tx_time_us})")
+    if config.prop_delay_us < 0:
+        raise ValueError(f"Propagation delay cannot be negative (received {config.prop_delay_us})")
+    if config.ack_tx_time_us <= 0:
+        raise ValueError(f"ACK transmission time must be greater than 0 us (received {config.ack_tx_time_us})")
+    if config.timeout_us <= 0:
+        raise ValueError(f"Retransmission timeout must be greater than 0 us (received {config.timeout_us})")
+    for name, indices in (
+        ("dropped_frame_indices", config.dropped_frame_indices),
+        ("corrupted_frame_indices", config.corrupted_frame_indices),
+        ("dropped_ack_seqs", config.dropped_ack_seqs),
+    ):
+        for idx in indices:
+            if int(idx) < 0:
+                raise ValueError(f"{name} cannot contain negative frame indices (received {idx})")
 
     if config.protocol in (FlowControlProtocol.SLIDING_WINDOW, FlowControlProtocol.GO_BACK_N):
         if config.sequence_space < config.window_size + 1:

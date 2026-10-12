@@ -168,12 +168,15 @@ def compute_network_qos(
 
     link_busy: dict[str, int] = {}
     for event in events:
-        if event.event_type == SimEventType.TRANSMISSION_STARTED:
-            # tx_delay is in event payload or link_id
+        if event.event_type.get("type") == SimEventType.TRANSMISSION_STARTED.value:
             link_id = event.link_id or ""
-            # in SimEvent, tx_delay can be inferred or extracted
-            if link_id:
-                link_busy[link_id] = link_busy.get(link_id, 0) + 100
+            if not link_id:
+                continue
+            # Busy time is the measured serialization delay of the transmission.
+            tx_delay_us = event.event_type.get("data", {}).get("tx_delay_us")
+            if tx_delay_us is None:
+                continue
+            link_busy[link_id] = link_busy.get(link_id, 0) + int(tx_delay_us)
 
     for link_id, busy_us in link_busy.items():
         util = safe_div(float(busy_us), elapsed_f)

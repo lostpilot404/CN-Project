@@ -456,7 +456,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     <div className="text-xl font-bold text-emerald-400 mt-0.5">
                       {sweepResult.execution_time_ms} ms
                     </div>
-                    <span className="text-[11px] text-slate-400">Deterministic Rust execution</span>
+                    <span className="text-[11px] text-slate-400">Deterministic Python execution</span>
                   </div>
                 </div>
 

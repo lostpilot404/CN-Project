@@ -224,7 +224,7 @@ describe('Phase 5: Packet / Protocol Visualization & Event Timeline Acceptance S
   // =========================================================================
   // 4. Packet journey renders actual hop history
   // =========================================================================
-  it('4. Packet journey renders actual hop history from Rust engine', () => {
+  it('4. Packet journey renders the authoritative hop history', () => {
     const journey: PacketJourney = {
       packetId: sampleTcpPacket.id,
       sourceNodeId: sampleTcpPacket.src_node_id,
@@ -289,12 +289,12 @@ describe('Phase 5: Packet / Protocol Visualization & Event Timeline Acceptance S
   // =========================================================================
   // 6. Timeline renders authoritative event order
   // =========================================================================
-  it('6. Timeline preserves authoritative Rust event tie-break ordering', () => {
+  it('6. Timeline preserves authoritative event tie-break ordering', () => {
     const rawEvents: SimEvent[] = [
       {
         id: 10,
         timestamp: 500,
-        event_type: { PacketCreated: { packet_id: 'pkt-1' } },
+        event_type: { type: 'packet_created', data: { packet_id: 'pkt-1' } },
         packet_id: 'pkt-1',
         node_id: 'node-a',
         layer: 'Application',
@@ -304,7 +304,7 @@ describe('Phase 5: Packet / Protocol Visualization & Event Timeline Acceptance S
       {
         id: 11,
         timestamp: 500, // Same timestamp, higher ID
-        event_type: { PacketCreated: { packet_id: 'pkt-2' } },
+        event_type: { type: 'packet_created', data: { packet_id: 'pkt-2' } },
         packet_id: 'pkt-2',
         node_id: 'node-a',
         layer: 'Application',
@@ -314,7 +314,7 @@ describe('Phase 5: Packet / Protocol Visualization & Event Timeline Acceptance S
       {
         id: 12,
         timestamp: 520,
-        event_type: { TransmissionStarted: { packet_id: 'pkt-1', link_id: 'link-1' } },
+        event_type: { type: 'transmission_started', data: { packet_id: 'pkt-1', link_id: 'link-1' } },
         packet_id: 'pkt-1',
         link_id: 'link-1',
         layer: 'Physical',
@@ -356,7 +356,7 @@ describe('Phase 5: Packet / Protocol Visualization & Event Timeline Acceptance S
         rawEvent: {
           id: 1,
           timestamp: 10,
-          event_type: {},
+          event_type: { type: 'packet_created', data: {} },
           description: 'HTTP request',
         },
       },
@@ -374,7 +374,7 @@ describe('Phase 5: Packet / Protocol Visualization & Event Timeline Acceptance S
         rawEvent: {
           id: 2,
           timestamp: 20,
-          event_type: {},
+          event_type: { type: 'packet_created', data: {} },
           description: 'DNS query',
         },
       },
@@ -392,7 +392,7 @@ describe('Phase 5: Packet / Protocol Visualization & Event Timeline Acceptance S
         rawEvent: {
           id: 3,
           timestamp: 30,
-          event_type: {},
+          event_type: { type: 'packet_created', data: {} },
           description: 'Dijkstra route converged',
         },
       },
@@ -427,7 +427,7 @@ describe('Phase 5: Packet / Protocol Visualization & Event Timeline Acceptance S
     const ev: SimEvent = {
       id: 5,
       timestamp: 150,
-      event_type: { PacketArrived: { packet_id: 'pkt-tcp-test-01', node_id: 'router-1' } },
+      event_type: { type: 'packet_arrived', data: { packet_id: 'pkt-tcp-test-01', node_id: 'router-1' } },
       packet_id: 'pkt-tcp-test-01',
       node_id: 'router-1',
       layer: 'Network',
@@ -450,7 +450,7 @@ describe('Phase 5: Packet / Protocol Visualization & Event Timeline Acceptance S
     const ev: SimEvent = {
       id: 7,
       timestamp: 250,
-      event_type: { TransmissionFinished: { packet_id: 'pkt-tcp-test-01', link_id: 'link-host-router' } },
+      event_type: { type: 'transmission_finished', data: { packet_id: 'pkt-tcp-test-01', link_id: 'link-host-router' } },
       packet_id: 'pkt-tcp-test-01',
       node_id: 'host-a',
       link_id: 'link-host-router',
@@ -547,7 +547,7 @@ describe('Phase 5: Packet / Protocol Visualization & Event Timeline Acceptance S
     const queueEvent: SimEvent = {
       id: 15,
       timestamp: 320,
-      event_type: { QueueEntered: { packet_id: 'pkt-tcp-test-01', link_id: 'link-1' } },
+      event_type: { type: 'queue_entered', data: { packet_id: 'pkt-tcp-test-01', link_id: 'link-1' } },
       packet_id: 'pkt-tcp-test-01',
       link_id: 'link-1',
       node_id: 'router-1',
@@ -566,7 +566,7 @@ describe('Phase 5: Packet / Protocol Visualization & Event Timeline Acceptance S
     const routeEvent: SimEvent = {
       id: 18,
       timestamp: 400,
-      event_type: { RouteUpdated: { node_id: 'router-1', algorithm: 'Dijkstra' } },
+      event_type: { type: 'route_updated', data: { node_id: 'router-1', algorithm: 'Dijkstra' } },
       node_id: 'router-1',
       layer: 'Network',
       protocol: 'Routing',
@@ -586,7 +586,7 @@ describe('Phase 5: Packet / Protocol Visualization & Event Timeline Acceptance S
     const collisionEvent: SimEvent = {
       id: 22,
       timestamp: 650,
-      event_type: { CollisionDetected: { node_id: 'station-a', link_id: 'shared-bus-1' } },
+      event_type: { type: 'collision_detected', data: { node_id: 'station-a', link_id: 'shared-bus-1' } },
       node_id: 'station-a',
       link_id: 'shared-bus-1',
       layer: 'Data Link',

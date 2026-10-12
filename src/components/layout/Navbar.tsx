@@ -1,6 +1,7 @@
-import { Activity, Cpu, FileDown, FolderPlus, RotateCcw, ShieldCheck } from 'lucide-react';
+import { Activity, Cpu, FileDown, FolderPlus, RotateCcw, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { Project } from '../../types/project';
 import { formatTimeUs } from '../../lib/utils';
+import type { BackendStatus } from '../../lib/apiClient';
 
 interface NavbarProps {
   project: Project | null;
@@ -8,6 +9,7 @@ interface NavbarProps {
   onNewProject: () => void;
   onSaveProject: () => void;
   onResetProject: () => void;
+  backendStatus?: BackendStatus;
 }
 
 export const Navbar = ({
@@ -16,7 +18,9 @@ export const Navbar = ({
   onNewProject,
   onSaveProject,
   onResetProject,
+  backendStatus = 'unknown',
 }: NavbarProps) => {
+  const connected = backendStatus === 'online';
   return (
     <header className="h-14 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 select-none z-20">
       {/* Brand & Project Info */}
@@ -61,7 +65,7 @@ export const Navbar = ({
       <div className="flex items-center space-x-2">
         <button
           onClick={onNewProject}
-          className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-md transition-colors"
+          className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md transition-colors"
           title="Create New Project"
         >
           <FolderPlus className="w-3.5 h-3.5" />
@@ -70,7 +74,7 @@ export const Navbar = ({
 
         <button
           onClick={onSaveProject}
-          className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-md transition-colors"
+          className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md transition-colors"
           title="Export Project JSON"
         >
           <FileDown className="w-3.5 h-3.5" />
@@ -88,9 +92,25 @@ export const Navbar = ({
 
         <div className="h-4 w-px bg-slate-800 mx-1" />
 
-        <div className="flex items-center space-x-1 text-[11px] text-emerald-400 bg-emerald-950/40 border border-emerald-900/60 px-2 py-1 rounded">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Python Authoritative</span>
+        <div
+          data-testid="authority-badge"
+          title={
+            connected
+              ? 'Connected to the authoritative Python simulation service.'
+              : 'The Python simulation service is not reachable. Start it with: python python/netsim/server.py 8765'
+          }
+          className={
+            connected
+              ? 'flex items-center space-x-1 text-[11px] text-emerald-400 bg-emerald-950/40 border border-emerald-900/60 px-2 py-1 rounded'
+              : 'flex items-center space-x-1 text-[11px] text-rose-300 bg-rose-950/40 border border-rose-900/60 px-2 py-1 rounded'
+          }
+        >
+          {connected ? (
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+          ) : (
+            <ShieldAlert className="w-3.5 h-3.5 text-rose-300" />
+          )}
+          <span>{connected ? 'Python Authoritative' : 'Backend Offline'}</span>
         </div>
       </div>
     </header>

@@ -1,8 +1,12 @@
 [project]
 name = "netsim"
-version = "0.8.0"
-description = "NetSim network simulator core"
+version = "0.9.0"
+description = "NetSim authoritative network simulation core"
 requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["python/tests"]
+addopts = "-ra"
 
 [tool.ruff]
 line-length = 120

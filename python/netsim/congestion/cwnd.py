@@ -93,20 +93,21 @@ class CongestionController:
                     f"Slow Start: cwnd increased to {self.cwnd_mss:.2f} MSS",
                 )
         elif self.phase == CongestionPhase.CONGESTION_AVOIDANCE:
+            # RFC 5681 additive increase: cwnd += MSS * MSS / cwnd once per ACK that covers new
+            # data, i.e. +1/cwnd MSS per ACK and therefore +1 MSS per round trip. The accumulator
+            # only tracks when a full MSS worth of increase has been applied, so the +1 MSS
+            # milestone is reported exactly once per RTT; adding it to cwnd as well would double
+            # the additive-increase rate to +2 MSS per RTT.
             step = 1.0 / max(1.0, self.cwnd_mss)
+            self.cwnd_mss += step
             self.ca_accumulator += step
             if self.ca_accumulator >= 1.0:
-                import math
-
-                full_mss = math.floor(self.ca_accumulator)
-                self.cwnd_mss += full_mss
-                self.ca_accumulator -= full_mss
+                self.ca_accumulator -= 1.0
                 self.record_point(
                     timestamp_us,
-                    f"Congestion Avoidance: additive increase (+1 MSS) -> cwnd is now {self.cwnd_mss:.2f} MSS",
+                    f"Congestion Avoidance: additive increase (+1 MSS per round trip) -> cwnd is now {self.cwnd_mss:.2f} MSS",
                 )
             else:
-                self.cwnd_mss += step
                 self.record_point(
                     timestamp_us,
                     f"Congestion Avoidance: cwnd incremental update -> {self.cwnd_mss:.2f} MSS",

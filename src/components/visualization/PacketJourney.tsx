@@ -41,7 +41,7 @@ export const PacketJourney: React.FC<PacketJourneyProps> = ({
             </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            Authoritative traversal recorded by the Rust simulation engine.
+            Authoritative traversal recorded by the Python simulation engine.
           </p>
         </div>
 
@@ -81,7 +81,7 @@ export const PacketJourney: React.FC<PacketJourneyProps> = ({
       {/* Actual Traversed Hops Timeline */}
       <div className="space-y-3">
         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">
-          Actual Observed Traversal (Rust Source of Truth)
+          Actual Observed Traversal (Python Source of Truth)
         </div>
 
         {hops.length === 0 ? (

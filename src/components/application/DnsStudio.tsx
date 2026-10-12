@@ -37,7 +37,7 @@ export const DnsStudio: React.FC<DnsStudioProps> = ({
   onPacketSelect,
   selectedPacketId,
 }) => {
-  const [clientNode, setClientNode] = useState<string>('host-a');
+  const [clientNode, setClientNode] = useState<string>('');
   const [serverNode, setServerNode] = useState<string>('dns-resolver');
   const [authServerNode, setAuthServerNode] = useState<string>('dns-auth');
   const [queryName, setQueryName] = useState<string>('www.example.com');
@@ -62,6 +62,10 @@ export const DnsStudio: React.FC<DnsStudioProps> = ({
   }, [project]);
 
   const runSimulation = async () => {
+    if (!clientNode || !serverNode) {
+      setErrorMsg('Add at least two devices to the topology before running a simulation.');
+      return;
+    }
     setIsRunning(true);
     setErrorMsg(null);
     try {

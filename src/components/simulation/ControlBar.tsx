@@ -58,7 +58,7 @@ export const ControlBar = ({
 
         <button
           onClick={onRunAll}
-          className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+          className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
           title="Run until event queue is empty"
         >
           <FastForward className="w-3.5 h-3.5" />
@@ -67,7 +67,7 @@ export const ControlBar = ({
 
         <button
           onClick={onStep}
-          className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+          className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
           title="Step Next Discrete Event"
         >
           <StepForward className="w-3.5 h-3.5" />
@@ -76,7 +76,7 @@ export const ControlBar = ({
 
         <button
           onClick={onReset}
-          className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+          className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
           title="Reset Simulation Engine"
         >
           <RotateCcw className="w-3.5 h-3.5" />

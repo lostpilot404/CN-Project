@@ -37,8 +37,17 @@ export const TimelineDrawer: React.FC<TimelineDrawerProps> = ({
             {events.length} events logged
           </span>
         </div>
-        <button className="text-slate-400 hover:text-white">
-          {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+        <button
+          type="button"
+          aria-label={isOpen ? 'Collapse the event timeline' : 'Expand the event timeline'}
+          aria-expanded={isOpen}
+          className="text-slate-400 hover:text-white cursor-pointer"
+        >
+          {isOpen ? (
+            <ChevronDown className="w-4 h-4" aria-hidden="true" />
+          ) : (
+            <ChevronUp className="w-4 h-4" aria-hidden="true" />
+          )}
         </button>
       </div>
 

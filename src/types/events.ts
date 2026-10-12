@@ -1,9 +1,16 @@
 // Authoritative Simulation and Protocol Event DTOs
 
+export interface SimEventEnvelope {
+  /** Authoritative event name emitted by the Python simulation core. */
+  type: string;
+  /** Event payload (packet/link/node identifiers and layer-specific detail). */
+  data?: Record<string, unknown>;
+}
+
 export interface SimEvent {
   id: number;
   timestamp: { 0: number } | number; // SimTime micros
-  event_type: Record<string, unknown>;
+  event_type: SimEventEnvelope;
   description: string;
   packet_id?: string | null;
   node_id?: string | null;

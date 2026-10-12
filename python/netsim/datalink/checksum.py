@@ -292,11 +292,34 @@ def internet_checksum(data: bytes | list[int] | str) -> ChecksumCalculationResul
     return calculate_internet_checksum(words)
 
 
-def verify_checksum(data: bytes | list[int] | str, checksum: int) -> ChecksumVerifyResult:
+def parse_checksum_word(checksum: int | str) -> int:
+    """Normalise a checksum supplied as an int or a hexadecimal string (with or without 0x)."""
+    if isinstance(checksum, bool):  # guard: bool is an int subclass
+        raise ValueError("Checksum must be an integer or hexadecimal string")
+    if isinstance(checksum, int):
+        if not (0 <= checksum <= 0xFFFF):
+            raise ValueError("Checksum must fit in 16 bits (0x0000 - 0xFFFF)")
+        return checksum
+    if isinstance(checksum, str):
+        clean = checksum.strip().lower()
+        if clean.startswith("0x"):
+            clean = clean[2:]
+        if not clean:
+            raise ValueError("Checksum cannot be empty")
+        if any(c not in "0123456789abcdef" for c in clean):
+            raise ValueError(f"Invalid hexadecimal checksum '{checksum}'")
+        value = int(clean, 16)
+        if value > 0xFFFF:
+            raise ValueError("Checksum must fit in 16 bits (0x0000 - 0xFFFF)")
+        return value
+    raise ValueError("Checksum must be an integer or hexadecimal string")
+
+
+def verify_checksum(data: bytes | list[int] | str, checksum: int | str) -> ChecksumVerifyResult:
     if isinstance(data, (bytes, bytearray)):
         words = parse_bytes_to_16bit_words(bytes(data))
     elif isinstance(data, str):
         words = parse_hex_to_16bit_words(data)
     else:
         words = list(data)
-    return verify_internet_checksum(words, checksum)
+    return verify_internet_checksum(words, parse_checksum_word(checksum))

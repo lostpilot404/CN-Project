@@ -20,7 +20,7 @@ export const SmtpStudio: React.FC<SmtpStudioProps> = ({
   onPacketSelect,
   selectedPacketId,
 }) => {
-  const [clientNode, setClientNode] = useState<string>('host-a');
+  const [clientNode, setClientNode] = useState<string>('');
   const [serverNode, setServerNode] = useState<string>('mail-server');
   const [mailFrom, setMailFrom] = useState<string>('alice@example.com');
   const [rcptTo, setRcptTo] = useState<string>('bob@example.com');
@@ -44,6 +44,10 @@ export const SmtpStudio: React.FC<SmtpStudioProps> = ({
   }, [project]);
 
   const runSimulation = async () => {
+    if (!clientNode || !serverNode) {
+      setErrorMsg('Add at least two devices to the topology before running a simulation.');
+      return;
+    }
     setIsRunning(true);
     setErrorMsg(null);
     try {

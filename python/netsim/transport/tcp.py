@@ -835,7 +835,7 @@ def simulate_tcp(
         sender_window_occupancy_avg=sender_window_occupancy_avg,
         receiver_window_occupancy_max=receiver_window_occupancy_max,
         congestion_window_final=congestion_controller.cwnd_mss,
-        congestion_window_max=max_observed_cwnd,
+        congestion_window_max=max(max_observed_cwnd, congestion_controller.cwnd_mss),
         timeout_count=timeout_count,
         fast_retransmit_count=fast_retransmit_count,
     )

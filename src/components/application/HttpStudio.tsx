@@ -22,7 +22,7 @@ export const HttpStudio: React.FC<HttpStudioProps> = ({
   onPacketSelect,
   selectedPacketId,
 }) => {
-  const [clientNode, setClientNode] = useState<string>('host-a');
+  const [clientNode, setClientNode] = useState<string>('');
   const [serverNode, setServerNode] = useState<string>('web-server');
   const [method, setMethod] = useState<HttpMethod>('GET');
   const [path, setPath] = useState<string>('/index.html');
@@ -62,6 +62,10 @@ export const HttpStudio: React.FC<HttpStudioProps> = ({
   };
 
   const runSimulation = async () => {
+    if (!clientNode || !serverNode) {
+      setErrorMsg('Add at least two devices to the topology before running a simulation.');
+      return;
+    }
     setIsRunning(true);
     setErrorMsg(null);
     try {

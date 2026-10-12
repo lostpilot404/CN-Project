@@ -31,8 +31,8 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
   const [activeStudio, setActiveStudio] = useState<SubStudio>('tcp');
 
   // TCP Configuration State
-  const [srcNode, setSrcNode] = useState<string>('host-a');
-  const [dstNode, setDstNode] = useState<string>('host-b');
+  const [srcNode, setSrcNode] = useState<string>('');
+  const [dstNode, setDstNode] = useState<string>('');
   const [srcPort, setSrcPort] = useState<number>(49152);
   const [dstPort, setDstPort] = useState<number>(80);
   const [payloadBytes, setPayloadBytes] = useState<number>(4000);
@@ -71,6 +71,10 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
   };
 
   const runTcpSimulation = async () => {
+    if (!srcNode || !dstNode) {
+      setErrorMsg('Add at least two devices to the topology before running a simulation.');
+      return;
+    }
     setIsRunning(true);
     setErrorMsg(null);
     try {
@@ -102,6 +106,10 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
   };
 
   const runUdpSimulation = async () => {
+    if (!srcNode || !dstNode) {
+      setErrorMsg('Add at least two devices to the topology before running a simulation.');
+      return;
+    }
     setIsRunning(true);
     setErrorMsg(null);
     try {

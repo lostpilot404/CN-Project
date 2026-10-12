@@ -1,5 +1,12 @@
 # NetSim --- Academic Project Report
 
+> **Historical document (superseded, quality audit 2026-10).** Parts of this document
+> describe a Rust simulation core. The authoritative simulation and domain engine is now
+> `python/netsim/` (Python 3.11+), reached over HTTP by the React front-end; `src-tauri/`
+> is a native shell that contains no simulation logic and is not covered by the current
+> test suites. See `README.md` for the current architecture and verification status and
+> `QUALITY_AUDIT_REPORT.md` for audit evidence.
+
 ## 1. Abstract
 
 NetSim is an interactive computer-network simulation and

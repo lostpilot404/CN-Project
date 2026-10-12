@@ -39,6 +39,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
   const [selectedHopIndex, setSelectedHopIndex] = useState<number | undefined>(undefined);
   const [filter, setFilter] = useState<EventFilter>(initialEventFilter);
   const [rightPanelTab, setRightPanelTab] = useState<'encapsulation' | 'inspector'>('encapsulation');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Packet Injection Modal / Form State
   const [showInjectModal, setShowInjectModal] = useState<boolean>(false);
@@ -68,7 +69,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
         setSelectedPacketId((prev) => prev || snap.packets![0].id);
       }
     } catch (err) {
-      console.error('Failed to sync simulation state:', err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   }, []);
 
@@ -94,7 +95,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
       }
       await refreshSimulation();
     } catch (err) {
-      console.error('Step simulation error:', err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -103,7 +104,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
       await api.runSimulationMicros(50_000); // 50ms burst
       await refreshSimulation();
     } catch (err) {
-      console.error('Run burst error:', err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -112,7 +113,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
       await api.runSimulationUntilEmpty();
       await refreshSimulation();
     } catch (err) {
-      console.error('Run all error:', err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -122,7 +123,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
       setSnapshot(snap);
       await refreshSimulation();
     } catch (err) {
-      console.error('Pause simulation error:', err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -136,7 +137,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
       setSelectedEvent(null);
       setSelectedHopIndex(undefined);
     } catch (err) {
-      console.error('Reset simulation error:', err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -154,7 +155,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
       await refreshSimulation();
       setSelectedPacketId(pktId);
     } catch (err) {
-      console.error('Inject packet error:', err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -183,6 +184,22 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
 
   return (
     <div data-testid="simulation-studio" className="flex flex-col h-full bg-slate-950 text-slate-100 overflow-hidden select-none">
+      {errorMsg && (
+        <div
+          role="alert"
+          data-testid="simulation-error"
+          className="flex items-center justify-between px-4 py-2 bg-rose-950/80 border-b border-rose-800 text-rose-200 text-xs font-mono"
+        >
+          <span>Simulation command failed: {errorMsg}</span>
+          <button
+            type="button"
+            onClick={() => setErrorMsg(null)}
+            className="ml-4 px-2 py-0.5 rounded border border-rose-700 hover:bg-rose-900 cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {/* Top Playback & Metrics Toolbar */}
       <div className="h-14 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between px-4 z-10">
         {/* Playback action buttons */}
@@ -208,7 +225,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
 
           <button
             onClick={handleStep}
-            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
             title="Step Next Discrete Event"
           >
             <StepForward className="w-3.5 h-3.5" />
@@ -217,7 +234,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
 
           <button
             onClick={handleRunAll}
-            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
             title="Run until event queue is empty"
           >
             <FastForward className="w-3.5 h-3.5" />
@@ -226,7 +243,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
 
           <button
             onClick={handleReset}
-            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
             title="Reset Simulation Engine"
           >
             <RotateCcw className="w-3.5 h-3.5" />

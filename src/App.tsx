@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar, ActiveTab } from './components/layout/Sidebar';
 import { TopologyCanvas } from './components/topology/TopologyCanvas';
@@ -12,7 +12,8 @@ import { QosWorkspace } from './components/experiments/QosWorkspace';
 import { ExperimentsWorkspace } from './components/experiments/ExperimentsWorkspace';
 import { ControlBar } from './components/simulation/ControlBar';
 import { TimelineDrawer } from './components/timeline/TimelineDrawer';
-import { api } from './lib/tauri';
+import { api, subscribeBackendStatus, checkBackendHealth } from './lib/tauri';
+import type { BackendStatus } from './lib/apiClient';
 import { Project } from './types/project';
 import { NodeType, NodeState, LinkStatus, HistoryStatus } from './types/topology';
 import { SimulationStatus, SimEvent, SimulationMetrics } from './types/simulation';
@@ -34,14 +35,37 @@ export function App() {
     message: string;
     type: 'error' | 'success' | 'info';
   } | null>(null);
+  const [backendStatus, setBackendStatus] = useState<BackendStatus>('connecting');
+  const [backendVersion, setBackendVersion] = useState<string | null>(null);
+
+  const toastTimer = useRef<number | null>(null);
 
   const showToast = useCallback(
     (message: string, type: 'error' | 'success' | 'info' = 'error') => {
       setToast({ message, type });
-      setTimeout(() => setToast(null), 4000);
+      // Keep a single timer so rapid failures cannot leave expired timers behind, and so the
+      // timer is disposed when the app unmounts.
+      if (toastTimer.current !== null) {
+        window.clearTimeout(toastTimer.current);
+      }
+      toastTimer.current = window.setTimeout(() => {
+        toastTimer.current = null;
+        setToast(null);
+      }, 4000);
     },
     []
   );
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current !== null) {
+        window.clearTimeout(toastTimer.current);
+        toastTimer.current = null;
+      }
+    };
+  }, []);
+
+  const describeError = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
   // Load project on mount
   const refreshProject = useCallback(async () => {
@@ -52,12 +76,12 @@ export function App() {
         const hStatus = await api.getTopologyHistoryStatus();
         setHistoryStatus(hStatus);
       } catch {
-        // history status fallback
+        // history status is advisory only; the topology itself already loaded
       }
     } catch (err) {
-      console.error('Failed to load project from core:', err);
+      showToast(`Could not load topology: ${describeError(err)}`, 'error');
     }
-  }, []);
+  }, [showToast]);
 
   const refreshSimulation = useCallback(async () => {
     try {
@@ -68,8 +92,18 @@ export function App() {
       setPendingEventsCount(snap.pending_events_count);
       setMetrics(snap.metrics);
     } catch (err) {
-      console.error('Failed to sync simulation state:', err);
+      showToast(`Could not read simulation state: ${describeError(err)}`, 'error');
     }
+  }, [showToast]);
+
+  // Track the authoritative Python service connection state.
+  useEffect(() => {
+    const unsubscribe = subscribeBackendStatus((status, health) => {
+      setBackendStatus(status);
+      setBackendVersion(health?.version ?? null);
+    });
+    checkBackendHealth(false);
+    return unsubscribe;
   }, []);
 
   useEffect(() => {
@@ -84,7 +118,7 @@ export function App() {
       await refreshProject();
       await refreshSimulation();
     } catch (err) {
-      console.error('Error creating project:', err);
+      showToast(describeError(err), 'error');
     }
   };
 
@@ -99,7 +133,7 @@ export function App() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Error exporting project:', err);
+      showToast(`Export failed: ${describeError(err)}`, 'error');
     }
   };
 
@@ -110,7 +144,7 @@ export function App() {
       setSimStatus(snap.status);
       setEvents([]);
     } catch (err) {
-      console.error('Error resetting simulation:', err);
+      showToast(`Reset failed: ${describeError(err)}`, 'error');
     }
   };
 
@@ -121,7 +155,7 @@ export function App() {
       await api.addNode(label, type, x, y);
       await refreshProject();
     } catch (err) {
-      console.error('Error adding node:', err);
+      showToast(`Could not add device: ${describeError(err)}`, 'error');
     }
   };
 
@@ -138,7 +172,8 @@ export function App() {
       await api.updateNode(nodeId, undefined, undefined, position);
       await refreshProject();
     } catch (err) {
-      console.error('Error updating node position:', err);
+      showToast(`Could not save node position: ${describeError(err)}`, 'error');
+      await refreshProject();
     }
   };
 
@@ -213,7 +248,7 @@ export function App() {
       await refreshProject();
       await refreshSimulation();
     } catch (err) {
-      console.error('Error executing undo:', err);
+      showToast(`Undo failed: ${describeError(err)}`, 'error');
     }
   };
 
@@ -223,7 +258,7 @@ export function App() {
       await refreshProject();
       await refreshSimulation();
     } catch (err) {
-      console.error('Error executing redo:', err);
+      showToast(`Redo failed: ${describeError(err)}`, 'error');
     }
   };
 
@@ -235,7 +270,7 @@ export function App() {
       }
       await refreshSimulation();
     } catch (err) {
-      console.error('Error stepping simulation:', err);
+      showToast(`Step failed: ${describeError(err)}`, 'error');
     }
   };
 
@@ -244,7 +279,7 @@ export function App() {
       await api.runSimulationMicros(50_000); // 50 ms virtual time burst
       await refreshSimulation();
     } catch (err) {
-      console.error('Error running simulation burst:', err);
+      showToast(`Run failed: ${describeError(err)}`, 'error');
     }
   };
 
@@ -253,7 +288,7 @@ export function App() {
       await api.runSimulationUntilEmpty();
       await refreshSimulation();
     } catch (err) {
-      console.error('Error running simulation to empty:', err);
+      showToast(`Run failed: ${describeError(err)}`, 'error');
     }
   };
 
@@ -263,7 +298,7 @@ export function App() {
       setSimStatus(snap.status);
       await refreshSimulation();
     } catch (err) {
-      console.error('Error pausing simulation:', err);
+      showToast(`Pause failed: ${describeError(err)}`, 'error');
     }
   };
 
@@ -278,7 +313,7 @@ export function App() {
       }
       await refreshSimulation();
     } catch (err) {
-      console.error('Error injecting packet:', err);
+      showToast(`Packet injection failed: ${describeError(err)}`, 'error');
     }
   };
 
@@ -291,11 +326,17 @@ export function App() {
         onNewProject={handleNewProject}
         onSaveProject={handleSaveProject}
         onResetProject={handleResetProject}
+        backendStatus={backendStatus}
       />
 
       {/* Main App Body */}
       <div className="flex-1 flex overflow-hidden">
-        <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+        <Sidebar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          backendStatus={backendStatus}
+          backendVersion={backendVersion}
+        />
 
         <main className="flex-1 flex flex-col relative overflow-hidden">
           {activeTab === 'topology' ? (
@@ -327,19 +368,8 @@ export function App() {
             <QosWorkspace project={project} />
           ) : activeTab === 'experiments' ? (
             <ExperimentsWorkspace project={project} />
-          ) : activeTab === 'simulation' ? (
-            <SimulationStudio project={project} />
           ) : (
-            <div className="flex-1 flex items-center justify-center bg-slate-950 text-slate-400 p-8 text-center">
-              <div>
-                <h3 className="text-base font-semibold text-slate-200 capitalize">
-                  {activeTab.replace('_', ' ')} Workspace
-                </h3>
-                <p className="text-xs text-slate-400 mt-1 max-w-md">
-                  Phase 5 authoritative packet and protocol visualization active: 5-layer OSI encapsulation viewer, packet inspector, packet journey visualizer, and chronological event timeline.
-                </p>
-              </div>
-            </div>
+            <SimulationStudio project={project} />
           )}
 
           {/* Bottom Timeline Drawer (visible on topology canvas) */}

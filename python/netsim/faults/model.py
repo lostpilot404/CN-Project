@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from netsim.core.schema import require_int
+
 
 @dataclass
 class RouteChangeRecord:
@@ -131,10 +133,26 @@ class FaultType:
             d["drop_probability"] = self.drop_probability
         return d
 
+    KNOWN_TYPES = (
+        "link_down",
+        "link_restore",
+        "bandwidth_degradation",
+        "queue_capacity_change",
+        "node_failure",
+        "node_recovery",
+        "packet_drop",
+        "bit_error",
+    )
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> FaultType:
+        if "type" not in data:
+            raise ValueError(f"Fault type is required. Expected one of: {', '.join(cls.KNOWN_TYPES)}")
+        fault_type = str(data["type"])
+        if fault_type not in cls.KNOWN_TYPES:
+            raise ValueError(f"Unknown fault type '{fault_type}'. Expected one of: {', '.join(cls.KNOWN_TYPES)}")
         return cls(
-            type=data.get("type", "link_down"),
+            type=fault_type,
             link_id=data.get("link_id"),
             node_id=data.get("node_id"),
             new_bandwidth_bps=data.get("new_bandwidth_bps"),
@@ -166,7 +184,7 @@ class FaultScheduleEntry:
         ft = FaultType.from_dict(ft_raw) if isinstance(ft_raw, dict) else ft_raw
         return cls(
             fault_id=data["fault_id"],
-            timestamp_us=int(data.get("timestamp_us", 0)),
+            timestamp_us=require_int(data.get("timestamp_us", 0), "fault timestamp_us", minimum=0),
             fault_type=ft,
             description=data.get("description", ""),
         )
@@ -183,8 +201,23 @@ class FaultSchedule:
         return {"entries": [e.to_dict() for e in self.entries]}
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> FaultSchedule:
-        entries = [FaultScheduleEntry.from_dict(e) for e in data.get("entries", [])]
+    def from_dict(cls, data: dict[str, Any] | list[Any]) -> FaultSchedule:
+        """Deserialise a fault schedule from ``{"entries": [...]}`` or a bare entry list."""
+        if isinstance(data, list):
+            raw_entries = data
+        elif isinstance(data, dict):
+            raw_entries = data.get("entries", [])
+        else:
+            raise ValueError("Fault schedule must be an object with an 'entries' list")
+        if not isinstance(raw_entries, list):
+            raise ValueError("Fault schedule 'entries' must be a list")
+        entries: list[FaultScheduleEntry] = []
+        for index, raw in enumerate(raw_entries):
+            if not isinstance(raw, dict):
+                raise ValueError(f"Fault schedule entry {index} must be an object")
+            fault_id = raw.get("fault_id") or f"fault-{index + 1}"
+            entry = FaultScheduleEntry.from_dict({**raw, "fault_id": fault_id})
+            entries.append(entry)
         return cls(entries=entries)
 
 

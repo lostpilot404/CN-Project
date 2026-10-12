@@ -16,8 +16,23 @@ class PacketState(str, Enum):
     DROPPED_QUEUE_FULL = "dropped_queue_full"
     DROPPED_BIT_ERROR = "dropped_bit_error"
     DROPPED_LINK_DOWN = "dropped_link_down"
+    DROPPED_LINK_LOSS = "dropped_link_loss"
     DROPPED_TTL_EXPIRED = "dropped_ttl_expired"
     RETRANSMITTED = "retransmitted"
+
+    @classmethod
+    def terminal_drop_states(cls) -> tuple[PacketState, ...]:
+        """States that represent a final, non-recoverable packet outcome."""
+        return (
+            cls.DROPPED_QUEUE_FULL,
+            cls.DROPPED_BIT_ERROR,
+            cls.DROPPED_LINK_DOWN,
+            cls.DROPPED_LINK_LOSS,
+            cls.DROPPED_TTL_EXPIRED,
+        )
+
+    def is_terminal_drop(self) -> bool:
+        return self in PacketState.terminal_drop_states()
 
 
 @dataclass

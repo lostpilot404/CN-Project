@@ -99,14 +99,23 @@ export const LayerCard: React.FC<LayerCardProps> = ({
               }}
               title="Toggle raw hex preview"
               className={`p-1 rounded text-slate-400 hover:text-white transition-colors ${
-                showRawHex ? 'bg-slate-750 text-cyan-300' : 'hover:bg-slate-800'
+                showRawHex ? 'bg-slate-700 text-cyan-300' : 'hover:bg-slate-800'
               }`}
             >
               <Binary className="w-3.5 h-3.5" />
             </button>
           )}
-          <button className="text-slate-400 hover:text-white">
-            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          <button
+            type="button"
+            aria-label={isExpanded ? `Collapse the ${layer.title} layer` : `Expand the ${layer.title} layer`}
+            aria-expanded={isExpanded}
+            className="text-slate-400 hover:text-white cursor-pointer"
+          >
+            {isExpanded ? (
+              <ChevronUp className="w-4 h-4" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="w-4 h-4" aria-hidden="true" />
+            )}
           </button>
         </div>
       </div>

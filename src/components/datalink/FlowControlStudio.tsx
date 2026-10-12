@@ -387,7 +387,7 @@ export const FlowControlStudio: React.FC = () => {
               </h3>
             </div>
             <p className="text-xs text-slate-400 mb-6">
-              Both protocols simulated under identical conditions: {totalFrames} frames, window size {windowSize}, sequence space {sequenceSpace}, dropped frames [{droppedFrames.join(', ')}], and seed {seed}. All values are measured from the Rust discrete-event state machines. No winner or ranking is hardcoded.
+              Both protocols simulated under identical conditions: {totalFrames} frames, window size {windowSize}, sequence space {sequenceSpace}, dropped frames [{droppedFrames.join(', ')}], and seed {seed}. All values are measured by the authoritative Python discrete-event state machines. No winner or ranking is hardcoded.
             </p>
 
             <div className="overflow-x-auto">

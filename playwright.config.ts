@@ -1,22 +1,63 @@
 import { defineConfig, devices } from '@playwright/test';
 
+/**
+ * Playwright configuration.
+ *
+ * The suite is a full-stack end-to-end test: it starts the authoritative Python simulation
+ * service and the Vite dev server, and the browser talks to the service through the frontend
+ * (no mocks, no stub backend).
+ *
+ *   npx playwright install chromium     # one-off browser download
+ *   npx playwright test                 # runs everything below
+ *
+ * `webServer` starts both processes (reusing any that are already listening locally, which
+ * keeps the suite usable next to a running dev server) and tears them down again in CI.
+ */
+const API_PORT = Number(process.env.NETSIM_API_PORT ?? 8765);
+const WEB_PORT = Number(process.env.NETSIM_WEB_PORT ?? 1420);
+const BASE_URL = `http://127.0.0.1:${WEB_PORT}`;
+
 export default defineConfig({
   testDir: './e2e',
-  timeout: 30000,
+  timeout: 60_000,
+  expect: { timeout: 10_000 },
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: 0,
+  retries: process.env.CI ? 1 : 0,
   workers: 1,
-  reporter: 'list',
+  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: BASE_URL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    video: 'off',
   },
   projects: [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+    },
+  ],
+  webServer: [
+    {
+      command: `python3 python/netsim/server.py ${API_PORT}`,
+      url: `http://127.0.0.1:${API_PORT}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+    {
+      command: `npm run dev -- --port ${WEB_PORT} --strictPort`,
+      url: BASE_URL,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+      env: {
+        // The dev server proxies /netsim-api to the Python service, and the browser also talks
+        // to it directly on loopback, so either resolution path is exercised.
+        NETSIM_API_TARGET: `http://127.0.0.1:${API_PORT}`,
+        VITE_NETSIM_API_URL: `http://127.0.0.1:${API_PORT}`,
+      },
     },
   ],
 });

@@ -1,4 +1,4 @@
-// Authoritative 5-Layer Packet and Header representations mirroring Rust domain DTOs
+// Authoritative 5-Layer Packet and Header representations produced by the Python simulation core
 
 export type PacketState =
   | 'created'

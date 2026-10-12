@@ -56,7 +56,7 @@ export const CustomNode = memo(({ data, selected }: { data: CustomNodeData; sele
       <Handle type="source" position={Position.Right} className="!w-2.5 !h-2.5 !bg-brand-500 !border-slate-900" />
 
       <div className="flex items-center space-x-2.5">
-        <div className="p-2 rounded-lg bg-slate-800/80 border border-slate-750">
+        <div className="p-2 rounded-lg bg-slate-800/80 border border-slate-700">
           {getNodeIcon(data.nodeType)}
         </div>
         <div className="overflow-hidden">
