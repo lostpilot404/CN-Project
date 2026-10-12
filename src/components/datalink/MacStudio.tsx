@@ -6,7 +6,7 @@ import {
   Layers,
   TrendingUp,
 } from 'lucide-react';
-import { api } from '../../lib/tauri';
+import { api } from '../../lib/api';
 import {
   MacConfig,
   MacSimResult,

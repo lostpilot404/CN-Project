@@ -2,8 +2,13 @@
 
 ## 1. Purpose
 
-Define authoritative algorithms and educational protocol models for the
-Rust simulation core.
+Define the algorithms and educational protocol models implemented by the simulator. These formulas
+are the reference the Python implementation in `python/netsim/` is written against, and the values
+in `python/tests/test_independent_validation.py` were derived from them by hand.
+
+> **Note on earlier revisions.** This document once described these algorithms as belonging to a
+> Rust core. The Rust engine has been removed; `python/netsim/` is the sole implementation. The
+> formulas themselves are unchanged and remain authoritative.
 
 ## 2. Routing
 

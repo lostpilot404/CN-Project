@@ -12,7 +12,7 @@
  * Without `NETSIM_LIVE_API` the suite is skipped so the default `npm test` stays hermetic.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { api, getSimulationAuthority } from '../lib/tauri';
+import { api, getSimulationAuthority } from '../lib/api';
 import { checkBackendHealth, getBackendStatus } from '../lib/apiClient';
 
 const live = process.env.NETSIM_LIVE_API === '1';

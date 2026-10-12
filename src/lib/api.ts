@@ -1,3 +1,13 @@
+/**
+ * The NetSim front-end's typed command surface.
+ *
+ * Python is the sole simulation authority: every command in this module is executed by the
+ * simulation service in `python/netsim/server.py`, and the results are rendered exactly as they
+ * are returned. The front-end contains no second engine and no fallback that could fabricate a
+ * simulation result -- an unreachable backend surfaces an error to the user instead.
+ *
+ * Transport details (endpoint resolution, health probing, retries) live in `./apiClient`.
+ */
 import { Project } from '../types/project';
 import {
   Node,
@@ -70,17 +80,12 @@ import {
 } from '../types/experiments';
 
 
-import {
-  callBackend,
-  isTestMode,
-  liveApiRequested,
-  BackendUnavailableError,
-} from './apiClient';
+import { callBackend, isTestMode, liveApiRequested } from './apiClient';
 
 export { checkBackendHealth, subscribeBackendStatus, getBackendStatus } from './apiClient';
 export type { BackendHealth, BackendStatus } from './apiClient';
 
-export type SimulationAuthority = 'python' | 'desktop-ipc' | 'test-double';
+export type SimulationAuthority = 'python' | 'test-double';
 
 let authority: SimulationAuthority = 'python';
 
@@ -89,71 +94,45 @@ export function getSimulationAuthority(): SimulationAuthority {
   return authority;
 }
 
-// Check if running inside Tauri window
-export const isTauri = (): boolean => {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-};
-
 /**
  * Command dispatch.
  *
- *  - Inside the Tauri desktop shell the command is executed over IPC.
- *  - Inside a browser (development, preview, Playwright) the command is executed by the
- *    authoritative Python simulation service over HTTP.
- *  - Inside the unit-test runner (`vitest`) an in-memory double is used so components can be
- *    tested in isolation. This double is NEVER used in a browser: a missing backend raises
- *    `BackendUnavailableError` instead of inventing a result.
+ *  - In a browser (development, preview, Playwright) the command is executed by the authoritative
+ *    Python simulation service over HTTP. This is the production path.
+ *  - In the unit-test runner (`vitest`) an in-memory double is used so components can be tested in
+ *    isolation. That double is aliased away in every other build (see `vite.config.ts`) and is
+ *    never reachable from a browser: an unreachable backend raises `BackendUnavailableError`
+ *    instead of inventing a result.
  *
- * Set `NETSIM_LIVE_API=1` when running vitest to bypass the double and exercise the real
- * Python service (see `src/integration/liveApi.test.ts`).
+ * Set `NETSIM_LIVE_API=1` when running vitest to bypass the double and exercise the real Python
+ * service (see `src/integration/liveApi.test.ts`).
  */
-async function invokeTauri<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  const usePython = typeof window !== 'undefined' && (!isTestMode() || liveApiRequested());
-  if (usePython) {
-    try {
-      const result = await callBackend<T>(cmd, args);
-      authority = 'python';
-      return result;
-    } catch (err) {
-      // Inside the desktop shell a native IPC compatibility layer is available. It is only
-      // used when the authoritative Python service is genuinely unreachable, so the browser
-      // path always fails loudly instead of silently switching engines.
-      if (isTauri() && err instanceof BackendUnavailableError) {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const result = await invoke<T>(cmd, args);
-        authority = 'desktop-ipc';
-        return result;
-      }
-      throw err;
-    }
-  }
-  if (isTauri()) {
-    const { invoke } = await import('@tauri-apps/api/core');
-    const result = await invoke<T>(cmd, args);
-    authority = 'desktop-ipc';
+async function callCommand<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  if (typeof window !== 'undefined' && (!isTestMode() || liveApiRequested())) {
+    const result = await callBackend<T>(cmd, args);
+    authority = 'python';
     return result;
   }
   authority = 'test-double';
-  // The double is aliased away in every non-test build (see `vite.config.ts`).
   const { mockInvoke } = await import('@netsim/test-double');
   return mockInvoke<T>(cmd, args);
 }
 
 // Exported typed API
 export const api = {
-  getProject: () => invokeTauri<Project>('get_project'),
-  createProject: (name: string) => invokeTauri<Project>('create_project', { name }),
-  saveProjectJson: () => invokeTauri<string>('save_project_json'),
-  loadProjectJson: (jsonContent: string) => invokeTauri<Project>('load_project_json', { jsonContent }),
+  getProject: () => callCommand<Project>('get_project'),
+  createProject: (name: string) => callCommand<Project>('create_project', { name }),
+  saveProjectJson: () => callCommand<string>('save_project_json'),
+  loadProjectJson: (jsonContent: string) => callCommand<Project>('load_project_json', { jsonContent }),
   addNode: (label: string, nodeType: NodeType, x: number, y: number, id?: string) =>
-    invokeTauri<Node>('add_node', { label, nodeType, x, y, id }),
+    callCommand<Node>('add_node', { label, nodeType, x, y, id }),
   updateNode: (
     nodeId: string,
     label?: string,
     nodeState?: NodeState,
     position?: Position
-  ) => invokeTauri<Node>('update_node', { nodeId, label, nodeState, position }),
-  removeNode: (nodeId: string) => invokeTauri<void>('remove_node', { nodeId }),
+  ) => callCommand<Node>('update_node', { nodeId, label, nodeState, position }),
+  removeNode: (nodeId: string) => callCommand<void>('remove_node', { nodeId }),
   addLink: (
     sourceNodeId: string,
     targetNodeId: string,
@@ -166,7 +145,7 @@ export const api = {
     bitErrorRate?: number,
     queueCapacity?: number
   ) =>
-    invokeTauri<Link>('add_link', {
+    callCommand<Link>('add_link', {
       sourceNodeId,
       targetNodeId,
       id,
@@ -187,7 +166,7 @@ export const api = {
     queueCapacity?: number,
     status?: LinkStatus
   ) =>
-    invokeTauri<Link>('update_link', {
+    callCommand<Link>('update_link', {
       linkId,
       bandwidthBps,
       propagationDelayUs,
@@ -196,7 +175,7 @@ export const api = {
       queueCapacity,
       status,
     }),
-  removeLink: (linkId: string) => invokeTauri<void>('remove_link', { linkId }),
+  removeLink: (linkId: string) => callCommand<void>('remove_link', { linkId }),
   updateInterface: (
     nodeId: string,
     interfaceId: string,
@@ -206,7 +185,7 @@ export const api = {
     macAddress?: string,
     status?: 'up' | 'down'
   ) =>
-    invokeTauri<Interface>('update_interface', {
+    callCommand<Interface>('update_interface', {
       nodeId,
       interfaceId,
       ipv4,
@@ -215,16 +194,16 @@ export const api = {
       macAddress,
       status,
     }),
-  undoTopology: () => invokeTauri<Project>('undo_topology'),
-  redoTopology: () => invokeTauri<Project>('redo_topology'),
-  getTopologyHistoryStatus: () => invokeTauri<HistoryStatus>('get_topology_history_status'),
-  getSimulationState: () => invokeTauri<SimulationStateSnapshot>('get_simulation_state'),
-  stepSimulation: () => invokeTauri<SimEvent | null>('step_simulation'),
+  undoTopology: () => callCommand<Project>('undo_topology'),
+  redoTopology: () => callCommand<Project>('redo_topology'),
+  getTopologyHistoryStatus: () => callCommand<HistoryStatus>('get_topology_history_status'),
+  getSimulationState: () => callCommand<SimulationStateSnapshot>('get_simulation_state'),
+  stepSimulation: () => callCommand<SimEvent | null>('step_simulation'),
   runSimulationMicros: (durationUs: number) =>
-    invokeTauri<number>('run_simulation_micros', { durationUs }),
-  runSimulationUntilEmpty: () => invokeTauri<number>('run_simulation_until_empty'),
-  pauseSimulation: () => invokeTauri<SimulationStateSnapshot>('pause_simulation'),
-  resetSimulation: () => invokeTauri<SimulationStateSnapshot>('reset_simulation'),
+    callCommand<number>('run_simulation_micros', { durationUs }),
+  runSimulationUntilEmpty: () => callCommand<number>('run_simulation_until_empty'),
+  pauseSimulation: () => callCommand<SimulationStateSnapshot>('pause_simulation'),
+  resetSimulation: () => callCommand<SimulationStateSnapshot>('reset_simulation'),
   injectPacket: (
     srcNodeId: string,
     dstNodeId: string,
@@ -232,7 +211,7 @@ export const api = {
     appProtocol?: string,
     transportProtocol?: string
   ) =>
-    invokeTauri<string>('inject_packet', {
+    callCommand<string>('inject_packet', {
       srcNodeId,
       dstNodeId,
       sizeBytes,
@@ -240,26 +219,26 @@ export const api = {
       transportProtocol,
     }),
   getPacketDetails: (packetId: string) =>
-    invokeTauri<Packet | null>('get_packet_details', { packetId }),
+    callCommand<Packet | null>('get_packet_details', { packetId }),
   scheduleDemoPacket: (srcNodeId: string, dstNodeId: string) =>
-    invokeTauri<number>('schedule_demo_packet', { srcNodeId, dstNodeId }),
+    callCommand<number>('schedule_demo_packet', { srcNodeId, dstNodeId }),
   // Phase 4A: Routing & Addressing Authoritative APIs
   calculateRoutingTable: (nodeId: string, algorithm: RoutingAlgorithm, metricType: MetricType) =>
-    invokeTauri<RoutingTable>('calculate_routing_table', { nodeId, algorithm, metricType }),
+    callCommand<RoutingTable>('calculate_routing_table', { nodeId, algorithm, metricType }),
   simulateRoutingConvergence: (sourceNodeId: string, metricType: MetricType) =>
-    invokeTauri<ConvergenceTelemetry>('simulate_routing_convergence', { sourceNodeId, metricType }),
+    callCommand<ConvergenceTelemetry>('simulate_routing_convergence', { sourceNodeId, metricType }),
   calculateIpv4Subnet: (input: string) =>
-    invokeTauri<Ipv4SubnetInfo>('calculate_ipv4_subnet', { input }),
+    callCommand<Ipv4SubnetInfo>('calculate_ipv4_subnet', { input }),
   splitIpv4Subnet: (baseCidr: string, newPrefix: number) =>
-    invokeTauri<SubnetSplitResult>('split_ipv4_subnet', { baseCidr, newPrefix }),
+    callCommand<SubnetSplitResult>('split_ipv4_subnet', { baseCidr, newPrefix }),
   allocateVlsmSubnets: (baseCidr: string, requirements: VlsmSubnetRequirement[]) =>
-    invokeTauri<VlsmAllocationResult>('allocate_vlsm_subnets', { baseCidr, requirements }),
+    callCommand<VlsmAllocationResult>('allocate_vlsm_subnets', { baseCidr, requirements }),
   detectDuplicateIps: () =>
-    invokeTauri<DuplicateIpConflict[]>('detect_duplicate_ips_command'),
+    callCommand<DuplicateIpConflict[]>('detect_duplicate_ips_command'),
   validateIpv6Address: (input: string) =>
-    invokeTauri<Ipv6Info>('validate_ipv6_address', { input }),
+    callCommand<Ipv6Info>('validate_ipv6_address', { input }),
   getOrCreateNatTable: (routerNodeId: string, publicIp: string) =>
-    invokeTauri<NatTable>('get_or_create_nat_table', { routerNodeId, publicIp }),
+    callCommand<NatTable>('get_or_create_nat_table', { routerNodeId, publicIp }),
   addStaticDnatRule: (
     routerNodeId: string,
     publicIp: string,
@@ -269,7 +248,7 @@ export const api = {
     privatePort: number,
     description: string
   ) =>
-    invokeTauri<NatTable>('add_static_dnat_rule', {
+    callCommand<NatTable>('add_static_dnat_rule', {
       routerNodeId,
       publicIp,
       protocol,
@@ -287,7 +266,7 @@ export const api = {
     dstPort: number,
     protocol: NatProtocol
   ) =>
-    invokeTauri<NatTranslationResult>('simulate_nat_outbound', {
+    callCommand<NatTranslationResult>('simulate_nat_outbound', {
       routerNodeId,
       publicIp,
       srcIp,
@@ -305,7 +284,7 @@ export const api = {
     dstPort: number,
     protocol: NatProtocol
   ) =>
-    invokeTauri<NatTranslationResult>('simulate_nat_inbound', {
+    callCommand<NatTranslationResult>('simulate_nat_inbound', {
       routerNodeId,
       publicIp,
       srcIp,
@@ -315,59 +294,59 @@ export const api = {
       protocol,
     }),
   calculateHammingEncode: (dataBits: string, parityMode: ParityMode) =>
-    invokeTauri<HammingEncodeResult>('calculate_hamming_encode', { dataBits, parityMode }),
+    callCommand<HammingEncodeResult>('calculate_hamming_encode', { dataBits, parityMode }),
   verifyAndCorrectHamming: (codeword: string, parityMode: ParityMode) =>
-    invokeTauri<HammingVerifyResult>('verify_and_correct_hamming', { codeword, parityMode }),
+    callCommand<HammingVerifyResult>('verify_and_correct_hamming', { codeword, parityMode }),
   calculateCrc: (dataBits: string, polynomial: string, polyName?: string) =>
-    invokeTauri<CrcCalculationResult>('calculate_crc', { dataBits, polynomial, polyName }),
+    callCommand<CrcCalculationResult>('calculate_crc', { dataBits, polynomial, polyName }),
   verifyCrc: (codeword: string, polynomial: string, polyName?: string) =>
-    invokeTauri<CrcVerifyResult>('verify_crc', { codeword, polynomial, polyName }),
+    callCommand<CrcVerifyResult>('verify_crc', { codeword, polynomial, polyName }),
   calculateInternetChecksum: (inputHex: string) =>
-    invokeTauri<ChecksumCalculationResult>('calculate_internet_checksum', { inputHex }),
+    callCommand<ChecksumCalculationResult>('calculate_internet_checksum', { inputHex }),
   verifyInternetChecksum: (payloadHex: string, checksumHex: string) =>
-    invokeTauri<ChecksumVerifyResult>('verify_internet_checksum', { payloadHex, checksumHex }),
+    callCommand<ChecksumVerifyResult>('verify_internet_checksum', { payloadHex, checksumHex }),
   // Phase 4C: Flow Control and Multiple Access
   simulateSlidingWindow: (config: FlowControlConfig) =>
-    invokeTauri<FlowControlSimResult>('simulate_sliding_window', { config }),
+    callCommand<FlowControlSimResult>('simulate_sliding_window', { config }),
   simulateGoBackN: (config: FlowControlConfig) =>
-    invokeTauri<FlowControlSimResult>('simulate_go_back_n', { config }),
+    callCommand<FlowControlSimResult>('simulate_go_back_n', { config }),
   simulateSelectiveRepeat: (config: FlowControlConfig) =>
-    invokeTauri<FlowControlSimResult>('simulate_selective_repeat', { config }),
+    callCommand<FlowControlSimResult>('simulate_selective_repeat', { config }),
   simulatePureAloha: (config: MacConfig) =>
-    invokeTauri<MacSimResult>('simulate_pure_aloha', { config }),
+    callCommand<MacSimResult>('simulate_pure_aloha', { config }),
   simulateSlottedAloha: (config: MacConfig) =>
-    invokeTauri<MacSimResult>('simulate_slotted_aloha', { config }),
+    callCommand<MacSimResult>('simulate_slotted_aloha', { config }),
   simulateCsma: (config: MacConfig) =>
-    invokeTauri<MacSimResult>('simulate_csma', { config }),
+    callCommand<MacSimResult>('simulate_csma', { config }),
   simulateCsmaCd: (config: MacConfig) =>
-    invokeTauri<MacSimResult>('simulate_csma_cd', { config }),
+    callCommand<MacSimResult>('simulate_csma_cd', { config }),
   // Phase 4D: Transport Layer & Congestion Control Authoritative APIs
   simulateTcp: (config: TransportConfig) =>
-    invokeTauri<TransportSimResult>('simulate_tcp', { config }),
+    callCommand<TransportSimResult>('simulate_tcp', { config }),
   simulateUdp: (config: TransportConfig) =>
-    invokeTauri<TransportSimResult>('simulate_udp', { config }),
+    callCommand<TransportSimResult>('simulate_udp', { config }),
   simulateTcpCongestion: (config: TransportConfig) =>
-    invokeTauri<TransportSimResult>('simulate_tcp_congestion', { config }),
+    callCommand<TransportSimResult>('simulate_tcp_congestion', { config }),
   // Phase 6: Application Layer Protocols
   simulateDns: (config: DnsConfig) =>
-    invokeTauri<DnsSimResult>('simulate_dns', { config }),
+    callCommand<DnsSimResult>('simulate_dns', { config }),
   simulateHttp: (config: HttpConfig) =>
-    invokeTauri<HttpSimResult>('simulate_http', { config }),
+    callCommand<HttpSimResult>('simulate_http', { config }),
   simulateFtp: (config: FtpConfig) =>
-    invokeTauri<FtpSimResult>('simulate_ftp', { config }),
+    callCommand<FtpSimResult>('simulate_ftp', { config }),
   simulateSmtp: (config: SmtpConfig) =>
-    invokeTauri<SmtpSimResult>('simulate_smtp', { config }),
+    callCommand<SmtpSimResult>('simulate_smtp', { config }),
   simulateSnmp: (config: SnmpConfig) =>
-    invokeTauri<SnmpSimResult>('simulate_snmp', { config }),
+    callCommand<SnmpSimResult>('simulate_snmp', { config }),
   // Phase 7: QoS Performance & Experiments
   getCurrentQosMetrics: () =>
-    invokeTauri<QosMetrics>('get_current_qos_metrics'),
+    callCommand<QosMetrics>('get_current_qos_metrics'),
   scheduleFault: (entry: FaultScheduleEntry) =>
-    invokeTauri<void>('schedule_fault_command', { entry }),
+    callCommand<void>('schedule_fault_command', { entry }),
   runParameterSweep: (config: SweepConfig) =>
-    invokeTauri<SweepExperimentResult>('run_parameter_sweep_command', { config }),
+    callCommand<SweepExperimentResult>('run_parameter_sweep_command', { config }),
   runComparativeExperiment: (config: ComparativeExperimentConfig) =>
-    invokeTauri<ComparativeExperimentResult>('run_comparative_experiment_command', { config }),
+    callCommand<ComparativeExperimentResult>('run_comparative_experiment_command', { config }),
 };
 
 

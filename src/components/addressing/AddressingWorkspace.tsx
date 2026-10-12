@@ -27,7 +27,7 @@ import {
   NatTable,
   NatTranslationResult,
 } from '../../types/addressing';
-import { api } from '../../lib/tauri';
+import { api } from '../../lib/api';
 
 interface AddressingWorkspaceProps {
   project: Project | null;

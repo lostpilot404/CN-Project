@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { api } from './lib/tauri';
+import { api } from './lib/api';
 import { Packet, PacketHopRecord } from './types/packet';
 import { SimEvent, TimelineEvent, EventFilter } from './types/events';
 import { PacketJourney, TopologySyncState, EncapsulationMode } from './types/visualization';

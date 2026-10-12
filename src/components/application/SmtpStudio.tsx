@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Play, Mail, CheckCircle2, XCircle, AlertTriangle, UserCheck, UserX } from 'lucide-react';
-import { api } from '../../lib/tauri';
+import { api } from '../../lib/api';
 import { Project } from '../../types/project';
 import {
   SmtpConfig,

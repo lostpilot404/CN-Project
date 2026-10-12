@@ -2,11 +2,12 @@
  * Authoritative transport layer for the NetSim frontend.
  *
  * The simulation itself lives in the Python service (`python/netsim/server.py`). Everything the
- * UI displays is produced by that service; the frontend never fabricates simulation results.
+ * UI displays is produced by that service; the frontend never fabricates simulation results and
+ * has no secondary engine to fall back to.
  *
  * Resolution order for the service endpoint:
  *   1. `VITE_NETSIM_API_URL` (explicit override, e.g. `http://127.0.0.1:8765`)
- *   2. `http://127.0.0.1:8765` (default desktop / local development endpoint)
+ *   2. `http://127.0.0.1:8765` (default local development endpoint)
  *   3. same-origin `/netsim-api` (used when the UI is served through a proxy/preview host that
  *      forwards that prefix to the Python service -- see `vite.config.ts`)
  *
@@ -58,10 +59,10 @@ export function candidateEndpoints(): string[] {
   const configured = configuredEndpoint();
   if (configured) return [configured];
   // Same-origin first when the page is not served from loopback: that is the proxied/preview
-  // deployment. Loopback is preferred for the desktop shell and local development.
+  // deployment. Loopback is preferred for local development.
   const isLoopbackPage =
     typeof window !== 'undefined' &&
-    ['127.0.0.1', 'localhost', '::1', 'tauri.localhost'].includes(window.location.hostname);
+    ['127.0.0.1', 'localhost', '::1'].includes(window.location.hostname);
   return isLoopbackPage
     ? [DEFAULT_ENDPOINT, PROXY_ENDPOINT]
     : [PROXY_ENDPOINT, DEFAULT_ENDPOINT];

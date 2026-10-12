@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { api } from './lib/tauri';
+import { api } from './lib/api';
 import { FlowControlConfig } from './types/flowControl';
 import { MacConfig } from './types/mac';
 

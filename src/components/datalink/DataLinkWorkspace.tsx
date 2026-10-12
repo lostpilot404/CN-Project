@@ -10,7 +10,7 @@ import {
   AlertTriangle,
   Sparkles,
 } from 'lucide-react';
-import { api } from '../../lib/tauri';
+import { api } from '../../lib/api';
 import {
   ParityMode,
   HammingEncodeResult,

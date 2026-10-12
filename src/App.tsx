@@ -12,7 +12,7 @@ import { QosWorkspace } from './components/experiments/QosWorkspace';
 import { ExperimentsWorkspace } from './components/experiments/ExperimentsWorkspace';
 import { ControlBar } from './components/simulation/ControlBar';
 import { TimelineDrawer } from './components/timeline/TimelineDrawer';
-import { api, subscribeBackendStatus, checkBackendHealth } from './lib/tauri';
+import { api, subscribeBackendStatus, checkBackendHealth } from './lib/api';
 import type { BackendStatus } from './lib/apiClient';
 import { Project } from './types/project';
 import { NodeType, NodeState, LinkStatus, HistoryStatus } from './types/topology';

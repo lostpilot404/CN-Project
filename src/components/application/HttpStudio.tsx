@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Play, Globe2, FileText, AlertTriangle } from 'lucide-react';
-import { api } from '../../lib/tauri';
+import { api } from '../../lib/api';
 import { Project } from '../../types/project';
 import {
   HttpConfig,

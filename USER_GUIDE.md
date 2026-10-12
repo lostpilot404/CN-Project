@@ -1,282 +1,222 @@
-# NetSim --- User Guide
+# NetSim — User Guide
 
-## 1. Launch
+This guide describes the application that exists in this repository. It is a **web** application:
+a Python simulation service plus a browser front-end. There is no desktop build.
 
-Open the NetSim desktop application.
+> **Note on earlier revisions.** This file used to describe a desktop application with a dashboard,
+> "Demo Scenarios", "Learning Mode", "Exam Mode" and "Reports". Those screens do not exist. The
+> navigation described below is the real one.
 
-The dashboard provides:
+## 1. Starting NetSim
 
--   New Project
--   Open Project
--   Demo Scenarios
--   Experiments
--   Learning Mode
--   Exam Mode
+Two processes, in two terminals:
 
-## 2. Create a Project
+```bash
+# terminal 1 — the simulation service
+.venv/bin/python python/netsim/server.py 8765
 
-Select **New Project**.
-
-Enter a project name and choose an optional template.
-
-## 3. Build a Topology
-
-Open **Topology**.
-
-Drag devices onto the canvas:
-
--   PC
--   Server
--   Router
--   Switch
--   Wireless Access Point
-
-Connect devices with links.
-
-## 4. Configure a Link
-
-Select a link.
-
-Set:
-
--   bandwidth
--   latency
--   packet loss
--   bit-error rate
--   queue size
--   status
-
-## 5. Configure an Interface
-
-Select a node and interface.
-
-Enter:
-
--   IPv4 address
--   CIDR/subnet mask
--   optional IPv6 address
-
-Invalid values are rejected.
-
-## 6. Routing
-
-Open **Routing**.
-
-Choose:
-
--   Link State
--   Distance Vector
-
-Run the calculation.
-
-Inspect:
-
--   routing tables
--   path
--   next hop
--   cost
--   hop count
--   route changes
-
-## 7. Send a Packet
-
-Choose:
-
--   source
--   destination
--   protocol
--   packet size
--   packet count
-
-Press **Run**.
-
-## 8. Simulation Controls
-
-Controls:
-
--   Run
--   Pause
--   Resume
--   Stop
--   Reset
--   Next Event
--   Speed
-
-Speed options should control UI animation, not alter simulation time
-semantics.
-
-## 9. Packet Inspector
-
-Click a packet.
-
-Inspect:
-
--   application data
--   transport header
--   network header
--   data-link frame
--   source
--   destination
--   sequence
--   TTL
--   state
--   route
--   timestamps
-
-## 10. Event Timeline
-
-Open the event timeline.
-
-Events include:
-
--   packet creation
--   queueing
--   transmission
--   arrival
--   loss
--   ACK
--   timeout
--   retransmission
--   route changes
-
-Selecting an event should highlight related objects.
-
-## 11. Error Control
-
-Open **Error Control**.
-
-Choose:
-
--   Hamming
--   CRC
--   Checksum
-
-Enter data and optionally inject an error.
-
-Inspect intermediate calculations.
-
-## 12. Flow Control
-
-Choose:
-
--   Sliding Window
--   Go-Back-N
--   Selective Repeat
-
-Configure:
-
--   window size
--   packet count
--   loss
--   delay
-
-Run and inspect ACK/retransmission behavior.
-
-## 13. TCP/UDP
-
-Open **Transport**.
-
-Choose TCP or UDP.
-
-Inspect:
-
--   sequence numbers
--   ACKs
--   RTT
--   retransmissions
--   throughput
--   loss
-
-## 14. Fault Injection
-
-Open **Faults**.
-
-Choose:
-
--   packet loss
--   bit error
--   link failure
--   router failure
--   queue overflow
--   latency change
--   bandwidth reduction
-
-Run the simulation and inspect the result.
-
-## 15. Experiments
-
-Create a parameterized experiment.
-
-Example:
-
-``` text
-TCP performance
-
-Packet loss:
-0, 2, 5, 10, 20%
-
-Packets:
-100
-
-Bandwidth:
-10 Mbps
-
-Latency:
-30 ms
+# terminal 2 — the user interface
+npm install    # first run only
+npm run dev
 ```
 
-Run all configurations.
+Open <http://127.0.0.1:1420>.
 
-## 16. Comparison
+The top-right badge tells you the state of the service:
 
-Compare measured results.
+| Badge | Meaning |
+|---|---|
+| **Python Authoritative** (green) | Connected. Every result you see comes from the Python engine. |
+| **Backend Offline** (red) | The service is unreachable. Start it with the command above and reload. |
 
-Do not interpret the chart as an automatic universal ranking; it
-represents the selected simulation conditions.
+The sidebar footer shows the same state as `ONLINE` / `CHECKING` / `OFFLINE`.
 
-## 17. Learning Mode
+**If the badge is red, nothing on screen is a simulation result.** NetSim deliberately refuses to
+invent data when the engine is down.
 
-Learning Mode explains each algorithm step.
+## 2. Workspaces
 
-Use it for:
+The sidebar lists nine workspaces. Each is a view onto the same project and the same engine.
 
--   routing
--   CRC
--   Hamming
--   flow control
--   congestion
+| Workspace | What it is for |
+|---|---|
+| **Topology Canvas** | Build the network: add nodes, drag to reposition, connect them |
+| **Routing Studio** | Routing tables, link-state vs distance-vector convergence |
+| **Addressing & NAT** | IPv4 subnetting, VLSM, IPv6 validation, static/dynamic NAT |
+| **Simulation & Events** | Inject packets, step the clock, run to completion, read the timeline |
+| **Algorithm Studio** | Error control: Hamming, CRC, internet checksum, flow control, MAC |
+| **Transport Layer** | TCP, UDP, congestion window, side-by-side comparison |
+| **Application Layer** | DNS, HTTP, FTP, SMTP, SNMP |
+| **QoS Performance** | Throughput, goodput, latency, jitter, loss, queue occupancy |
+| **Batch Experiments** | Parameter sweeps across seeds, and A/B comparisons |
 
-## 18. Exam Mode
+The navbar (always visible) has **New**, **Export JSON** and **Reset**, and displays the virtual
+clock. The clock advances as the engine runs; it is simulation time in microseconds, not wall-clock
+time.
 
-Exam Mode provides controlled exercises.
+## 3. Building a topology
 
-The application should evaluate configured network states and show
-whether the submitted solution satisfies the exercise.
+1. Open **Topology Canvas**.
+2. Add nodes with the palette (host, router, switch).
+3. Move a node by dragging its body.
+4. **Connect two nodes by dragging from a node's connection handle to another node's handle.** The
+   drop target must be a handle, not the node body.
+5. Select a node to edit its label, state and interfaces in the inspector.
 
-## 19. Save
+Links carry bandwidth, propagation delay, loss probability, bit error rate and queue capacity.
+`add_link` provisions a new interface when all existing ports are occupied; naming a port that is
+already in use is rejected.
 
-Use **Save Project**.
+## 4. Running a simulation
 
-Project files should be versioned and portable.
+In **Simulation & Events**:
 
-## 20. Reports
+| Control | Effect |
+|---|---|
+| **Inject Packet** | Creates a packet from a source to a destination node |
+| **Step Event** | Processes exactly one scheduled event |
+| **Run** | Advances the virtual clock by the given duration |
+| **Run All** | Drains the queue until no events remain |
+| **Pause** / **Reset** | Stops advancing / clears simulation state |
 
-Select an experiment and choose **Generate Report**.
+The event timeline shows engine events with their type, layer and timestamp. The first events of a
+freshly injected packet occur at `t = 0`, so the clock may not change on the very first step.
 
-Reports contain:
+**Reset** clears simulation state. **New** (navbar) starts a fresh project and also clears NAT
+tables, so port forwards never leak between projects.
 
--   objective
--   configuration
--   methodology
--   results
--   charts
--   observations
+## 5. Packet inspector
 
-## 21. Python Toolkit
+Select a packet to inspect it. The inspector shows the five protocol layers the engine actually
+produced for that packet — L1 through L5 — with real header fields: addresses, ports, TTL, MAC
+addresses, EtherType, and the link the frame travelled over.
 
-Python is optional.
+Two tabs accompany it:
 
-Export experiment data from NetSim and analyze it with the Python
-toolkit.
+- **Encapsulation** — how each layer wraps the one above it
+- **Journey** — the packet's path hop by hop
 
-Python is not required to launch NetSim or run ordinary simulations.
+Nothing in the inspector is synthesised in the browser; it all comes from the engine's packet record.
+
+## 6. Error control (Algorithm Studio)
+
+| Tool | What to enter | What you get |
+|---|---|---|
+| **Hamming** | data bits, parity mode | the codeword, and with SECDED the extended codeword |
+| **CRC** | data bits, generator polynomial | the remainder and the transmitted frame |
+| **Internet checksum** | hex words (RFC 1071) | the folded sum and the checksum |
+
+Worked examples you can reproduce:
+
+- Hamming(7,4) + SECDED, input `1011` → codeword `0110011`, extended `00110011`
+- CRC `1101011011` ÷ `10011` → remainder `1110`, frame `11010110111110`
+- Checksum `0001 F203 F4F5 F6F7` → folded sum `0xDDF2`, checksum `0x220D`
+
+There is also a **Verify** path for each: corrupt a codeword and watch the verifier detect and, where
+the code allows, correct it.
+
+## 7. Flow control and multiple access
+
+Choose a flow-control mode — **Sliding Window (Base)**, **Go-Back-N ARQ**, **Selective Repeat ARQ**
+or a **GBN vs SR comparison** — and configure the window size, sequence space, timeout, loss and
+corruption. The result shows the sequence of frames, ACKs, timeouts and retransmissions against the
+virtual clock. Go-Back-N requires a sequence space of at least *window + 1*; Selective Repeat
+requires at least *2 × window*. The studio validates this before sending the request.
+
+The multiple-access tools simulate Pure ALOHA, Slotted ALOHA, CSMA and CSMA/CD and report
+throughput against offered load.
+
+## 8. Addressing and NAT
+
+- **Subnet calculator** — enter an address in CIDR form (for example `192.168.1.130/26`) to get the
+  network address, broadcast address, usable range and host count.
+- **VLSM** — give a base network and per-subnet host requirements to get an allocation with
+  utilisation.
+- **IPv6** — validate and expand/compress an address.
+- **NAT** — create a NAT table on a router, add static port forwards (DNAT), and simulate outbound
+  and inbound translations. The protocol selector accepts the usual `TCP` / `UDP` spellings.
+
+## 9. Transport layer
+
+| Tab | Purpose |
+|---|---|
+| **TCP Studio** | Three-way handshake, slow start, congestion avoidance, fast retransmit, timeouts, RTT estimation |
+| **UDP Studio** | Connectionless datagrams, no retransmission |
+| **Congestion** | The congestion-window timeline across the run |
+| **Comparison** | TCP and UDP on the same topology, side by side |
+
+Each studio has its own **Run** button; the result panel appears after a run. Before that it shows a
+ready state — that is not an error.
+
+## 10. Application layer
+
+Choose a protocol and its parameters, then run it:
+
+- **DNS** — presets for A, AAAA, CNAME, MX and NXDOMAIN; shows the query, response and resolution
+- **HTTP** — request method, path and headers; shows the request/response exchange
+- **FTP** — control and data connections
+- **SMTP** — envelope and message transfer
+- **SNMP** — agent requests and responses
+
+Application-layer results appear in the packet inspector with their own packet identifiers. They are
+produced by the protocol model rather than travelling through the topology, so they will not appear
+in the engine's general packet store.
+
+## 11. QoS and experiments
+
+**QoS Performance** reports metrics accumulated from the actual run: throughput, goodput, mean and
+extreme latency, jitter, loss rate, retransmissions and queue occupancy. An idle project reports
+zeros rather than `NaN`.
+
+**Batch Experiments** offers:
+
+- **Parameter sweep** — vary one link or traffic parameter across values and seeds
+- **A/B comparison** — run two configurations and report the measured deltas
+
+Sweeps are reproducible: the same seed set produces the same results. `execution_time_ms` varies
+because it measures wall-clock execution, and is excluded from comparisons.
+
+At very low offered load every bandwidth shows the same throughput — the traffic never saturates the
+link. Use at least ~40 packets with a short inter-packet interval to see a bandwidth effect.
+
+## 12. Faults
+
+Link faults (down/restore), bit error rate, queue resizing and packet drops can be scheduled against
+the virtual clock. When a fault fires, the engine emits an event and the timeline shows it. A
+malformed fault is rejected with a message rather than being silently accepted.
+
+## 13. Saving and loading
+
+| Action | Result |
+|---|---|
+| **Export JSON** (navbar) | The whole project as versioned JSON |
+| **save_project_json** | The same document, via the API |
+| **load_project_json** | Rebuilds topology, positions, interfaces, link parameters and node states |
+
+Loading validates the document and reports what is wrong rather than partially applying it.
+
+## 14. Analysing exported results
+
+`python-tools/` contains two optional standalone scripts for exported experiment results:
+
+```bash
+pip install -r python-tools/requirements.txt
+python python-tools/analyze_results.py sweep.json     # console summary table
+python python-tools/plot_metrics.py sweep.json out.png # throughput/latency chart
+```
+
+They read the JSON produced by the parameter-sweep experiment and fail with a clear message if given
+something else.
+
+## 15. When something goes wrong
+
+| Symptom | Cause and fix |
+|---|---|
+| Badge says **Backend Offline** | The service is not running. Start it (§1) and reload. |
+| Form rejects your input | The message states what is wrong (for example an invalid prefix length). Nothing is sent. |
+| A studio shows its "ready" panel | That studio has not been run yet. Press its Run button. |
+| A sweep shows flat throughput | Offered load is too low to saturate the link; see §11. |
+| Port already in use | Another instance is running. Stop it, or start on a different port and point the UI at it with `VITE_NETSIM_API_URL`. |
+
+Errors are reported as structured client errors (`HTTP 400` with a message) or, for an unknown
+command, `HTTP 404`. A rejected command never returns a substitute result.

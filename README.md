@@ -1,18 +1,20 @@
 # NetSim — Interactive Computer Network Simulation Platform
 
 NetSim is an educational computer-network simulator: a discrete-event simulation core written in
-**Python 3.11+**, a **React 18 + TypeScript** front-end, and an optional **Tauri 2.x** desktop
-shell.
+**Python 3.11+** and a **React 18 + TypeScript** front-end that renders what the core returns.
 
 ## Architecture and ownership
 
-The Python core is the single source of simulation truth. The UI renders what the core returns
-and never fabricates results: when the service is unreachable the UI reports it instead of
-falling back to stub data.
+**Python is the sole simulation authority.** All simulation state, protocol execution, packet
+processing, routing, timing, metrics, event generation and experiment results are produced by
+`python/netsim/`. The front-end is a presentation and input layer: it renders the results it is
+given and never computes or fabricates a simulation result. When the service is unreachable the UI
+says so instead of substituting data.
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
 │  Presentation (React 18 · TypeScript · Tailwind · xyflow)    │
+│  src/          — UI only, no simulation logic                │
 └───────────────────────────┬──────────────────────────────────┘
                             │ HTTP JSON  (POST /api/<command>)
                             ▼
@@ -28,67 +30,109 @@ falling back to stub data.
 │  transport/   TCP (slow start, congestion avoidance, fast    │
 │               retransmit, timeouts, Jacobson/Karn RTT), UDP  │
 │  application/ DNS · HTTP · FTP · SMTP · SNMP                 │
-│  qos/         throughput · goodput · IPDV jitter · loss mix   │
-│  faults/      link down/restore · BER · queue resize          │
+│  qos/         throughput · goodput · IPDV jitter · loss mix  │
+│  faults/      link down/restore · BER · queue resize         │
 │  experiments/ parameter sweeps · multi-seed · A/B comparison │
-└───────────────────────────┬──────────────────────────────────┘
-                            │ optional native shell
-                            ▼
-┌──────────────────────────────────────────────────────────────┐
-│  src-tauri/  Tauri window, packaging and IPC command shims   │
-│  (native-shell only: it contains no simulation logic)        │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-`src-tauri/` still exposes an IPC compatibility layer for the historical Rust engine, but no
-simulation model lives there and it is not exercised by any test in this repository. On hosts
-without a Rust toolchain it is inert; the browser front-end talks to the Python service.
+There is no second engine and no alternative runtime. The front-end has no fallback that could
+produce a simulation result on its own: an unreachable backend raises an error that the UI displays.
+
+## Prerequisites
+
+- **Python 3.11 or newer** (the core and the service).
+- **Node.js 18 or newer** with npm (the front-end build and tests).
+- A Chromium browser for the browser test suite. Playwright can install one itself, or you can
+  point it at an existing binary — see [Browser tests](#browser-tests).
 
 ## Quickstart
 
 ```bash
-# 1. Python service (authoritative simulation core)
-python3 -m venv .venv && .venv/bin/pip install pytest ruff
+# 1. Python service (authoritative simulation core) — terminal 1
+python3 -m venv .venv
+.venv/bin/pip install pytest ruff
 .venv/bin/python python/netsim/server.py 8765      # http://127.0.0.1:8765/health
 
-# 2. Front-end
+# 2. Front-end — terminal 2
 npm install
 npm run dev                                        # http://127.0.0.1:1420
 ```
 
-The dev server also proxies `/netsim-api/*` to the Python service, so the UI works when it is
-reached through a forwarded host instead of loopback. Point it elsewhere with
-`NETSIM_API_TARGET=http://host:port npm run dev`.
+The front-end resolves the service in this order:
+
+1. `VITE_NETSIM_API_URL` when set (for example `http://127.0.0.1:8765`).
+2. `http://127.0.0.1:8765` — the default for local development.
+3. Same-origin `/netsim-api` — used when the UI is reached through a forwarded host rather than
+   loopback. The Vite dev server proxies that prefix to the Python service, so the UI works behind
+   a proxy without any change to the browser-facing URLs.
+
+Point the proxy somewhere else with `NETSIM_API_TARGET=http://host:port npm run dev`.
+
+### Ports
+
+| Component | Default port | How to change |
+|---|---|---|
+| Python simulation service | `8765` | `python python/netsim/server.py <port>` |
+| Vite dev server | `1420` | `vite.config.ts` → `server.port` |
+| Vite API proxy target | `http://127.0.0.1:8765` | `NETSIM_API_TARGET` env var |
+
+The Python service binds loopback (`127.0.0.1`) only. Starting a second instance on the same port
+fails loudly with the operating system's bind error rather than silently serving on a different one.
 
 ## Verification status
 
-Counts below are from the audit run recorded in
-[`QUALITY_AUDIT_REPORT.md`](QUALITY_AUDIT_REPORT.md). Anything that could not be executed in the
-audit environment is listed as *not verified* rather than assumed to pass.
+Every count below was produced by running the command in this repository. See
+[`QUALITY_AUDIT_REPORT.md`](QUALITY_AUDIT_REPORT.md) for the full evidence and for the list of
+checks that could not be executed in the audit environment.
 
 | Suite | Command | Result |
 |---|---|---|
-| Python tests | `.venv/bin/python -m pytest python/tests -q` | **137 passed** |
-| Python lint + format | `.venv/bin/ruff check python/ && .venv/bin/ruff format --check python/` | clean (67 files) |
+| Python tests | `.venv/bin/python -m pytest python/tests -q` | **154 passed** |
+| Python lint + format | `.venv/bin/ruff check python/ && .venv/bin/ruff format --check python/` | clean (64 files) |
 | Front-end typecheck | `npx tsc --noEmit` | clean |
-| Front-end unit/component tests | `npx vitest run` | **93 passed, 7 skipped** (live suite opt-in) |
+| Front-end unit/component tests | `npx vitest run` | **93 passed, 11 skipped** (live suite opt-in) |
 | Front-end ↔ service integration | `NETSIM_LIVE_API=1 npx vitest run src/integration` | **11 passed** (real service) |
 | Production build | `npm run build` | succeeds |
 | Browser end-to-end | `npx playwright test` | **22 passed** in a real Chromium (9 workspaces, 3 viewports) |
-| Rust shell | `cargo test` | **not verified** (no Rust toolchain; the shell holds no simulation logic) |
 
-Optional live/end-to-end runs require the Python service to be up:
+### Running the tests
 
 ```bash
-.venv/bin/python python/netsim/server.py 8765          # terminal 1
-NETSIM_LIVE_API=1 npx vitest run src/integration       # integration against the real service
-npx playwright install chromium && npx playwright test # browser E2E (starts both servers)
+# Python — no service required
+.venv/bin/python -m pytest python/tests -q
+.venv/bin/ruff check python/ && .venv/bin/ruff format --check python/
+
+# Front-end — no service required
+npx tsc --noEmit
+npx vitest run
+npm run build
+
+# Integration against the real Python service (service must be running)
+.venv/bin/python python/netsim/server.py 8765 &        # terminal 1
+NETSIM_LIVE_API=1 npx vitest run src/integration       # terminal 2
+
+# Browser end-to-end (starts both servers itself via playwright.config.ts)
+npx playwright test
 ```
 
-### Running the browser suite where downloads are blocked
+The integration suite is skipped unless `NETSIM_LIVE_API=1` is set, which is why `npx vitest run`
+reports 11 skipped tests. They are not disabled — they require a running service.
 
-Some sandboxes (including CI containers with restricted egress) cannot reach
-`cdn.playwright.dev`, so `npx playwright install` fails with `ECONNRESET`. Two workarounds:
+### Browser tests
+
+`npx playwright test` starts both the Python service and the Vite dev server itself and drives a
+real Chromium. Playwright's own browser download is the normal way to get one:
+
+```bash
+npx playwright install chromium
+npx playwright test
+```
+
+#### Running the browser suite where downloads are blocked
+
+Some sandboxes (including CI containers with restricted egress) cannot reach `cdn.playwright.dev`,
+so `npx playwright install` fails with `ECONNRESET`. Two workarounds:
 
 **1. Use a browser that is already on the machine**
 
@@ -142,10 +186,12 @@ command never returns a substitute result.
 
 ## Known limitations
 
-- **Parity is semantic, not bit-exact.** The Python deterministic PRNG is an LCG with the same
-  observable behaviour as the historical Rust `ChaCha8Rng` stream, but it is *not* a bit-exact
-  reproduction; absolute values from the Rust era are not reproducible and the repository makes
-  no claim that they are.
+- **Determinism is reproducible for a given seed, but is not a bit-exact reproduction of the
+  pre-Python era.** The engine seeds CPython's `random.Random` (`python/netsim/core/rng.py`), so the
+  same seed produces the same run — verified: two runs at seed 1234 yield the identical sequence
+  `0.966454, 0.440733, 0.007491, ...`, and a different seed diverges. Absolute values recorded
+  against the historical Rust `ChaCha8Rng` stream are **not** reproducible and no claim is made
+  that they are.
 - **Interface limit.** Nodes hold up to 24 interfaces. `add_link` provisions a new port when all
   existing ports are occupied; an explicitly named busy port is still rejected.
 - **Sweeps at very low offered load** show identical throughput across bandwidths because the
@@ -153,13 +199,28 @@ command never returns a substitute result.
   a bandwidth effect.
 - **`dropped_segments` drops the first transmission** of each listed segment index. The
   retransmission is delivered, so TCP recovers; UDP records the loss without recovery.
-- **Rust desktop shell** is untested in this repository (no toolchain) and contains no simulation
-  logic; the deployable, verified path today is the browser front-end plus the Python service.
+- **NAT state is per-project.** `create_project` and `load_project_json` clear the static and
+  dynamic NAT tables so a new project cannot inherit port forwards from a previous one.
+
+## Repository layout
+
+| Path | Contents |
+|---|---|
+| `python/netsim/` | Authoritative simulation core and HTTP command surface |
+| `python/tests/` | Python test suite (unit + in-process HTTP integration) |
+| `src/` | React front-end (UI only) |
+| `src/lib/apiClient.ts` | Service endpoint resolution, health probing, retries |
+| `src/lib/api.ts` | Typed command surface consumed by the UI |
+| `src/lib/testDouble.ts` | In-memory double used **only** by the vitest runner |
+| `e2e/` | Playwright browser suite |
+| `python-tools/` | Optional standalone scripts for analysing exported experiment JSON |
 
 ## Further documentation
 
 `ARCHITECTURE.md` (component detail), `ALGORITHMS.md` (formulas), `TESTING.md` (test strategy),
 `USER_GUIDE.md` (walkthrough), `QUALITY_AUDIT_REPORT.md` (audit findings and evidence).
-`PRD.md`, `SRS.md`, `MASTER_SPECIFICATION.md`, `ANTIGRAVITY_PROMPT.md` and `PROJECT_REPORT.md` are
-historical planning documents; where they describe Rust as the simulation authority they are
-superseded by this file.
+
+`PRD.md`, `SRS.md`, `MASTER_SPECIFICATION.md`, `ANTIGRAVITY_PROMPT.md`, `PROJECT_REPORT.md` and
+`walkthrough.md` are **historical planning documents** from an earlier Rust-based design. They are
+kept for project history only. Where any of them describes Rust or Tauri as the simulation
+authority, that description is obsolete: the authoritative engine is `python/netsim/`.

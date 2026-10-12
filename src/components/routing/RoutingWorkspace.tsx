@@ -18,7 +18,7 @@ import {
   RoutingTable,
   ConvergenceTelemetry,
 } from '../../types/routing';
-import { api } from '../../lib/tauri';
+import { api } from '../../lib/api';
 
 interface RoutingWorkspaceProps {
   project: Project | null;

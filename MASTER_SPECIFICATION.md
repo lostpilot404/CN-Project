@@ -1,11 +1,11 @@
 # NetSim --- Master Specification
 
-> **Historical document (superseded, quality audit 2026-10).** Parts of this document
-> describe a Rust simulation core. The authoritative simulation and domain engine is now
-> `python/netsim/` (Python 3.11+), reached over HTTP by the React front-end; `src-tauri/`
-> is a native shell that contains no simulation logic and is not covered by the current
-> test suites. See `README.md` for the current architecture and verification status and
-> `QUALITY_AUDIT_REPORT.md` for audit evidence.
+> **Historical document (superseded).** This was written for an earlier design in which a Rust
+> engine was the simulation authority. That engine and its `src-tauri/` tree have since been
+> removed: **Python (`python/netsim/`) is the sole simulation authority**, reached over HTTP by the
+> React front-end. Parts of this document therefore describe components, layers and test commands
+> that no longer exist, and any statement naming Rust or Tauri as authoritative is obsolete.
+> See `README.md` for the current architecture and `QUALITY_AUDIT_REPORT.md` for audit evidence.
 
 ## 1. Purpose
 

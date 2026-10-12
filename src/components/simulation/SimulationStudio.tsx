@@ -15,7 +15,7 @@ import { Project } from '../../types/project';
 import { SimulationStateSnapshot } from '../../types/simulation';
 import { SimEvent, TimelineEvent, EventFilter } from '../../types/events';
 import { Packet, PacketHopRecord } from '../../types/packet';
-import { api } from '../../lib/tauri';
+import { api } from '../../lib/api';
 import { formatTimeUs } from '../../lib/utils';
 import { PacketInspector } from '../inspector/PacketInspector';
 import { EncapsulationViewer } from '../visualization/EncapsulationViewer';

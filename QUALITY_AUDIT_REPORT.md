@@ -50,7 +50,7 @@ TypeScript compilation or production bundling would have surfaced a frozen clock
 
 Verification totals on the final tree: **154 Python tests pass**, **93 front-end tests pass**
 (11 more against the live service), **22/22 Playwright tests pass in a real Chromium**, ruff/tsc
-clean, production build succeeds. The Rust desktop shell remains NOT VERIFIED — see §18.
+clean, production build succeeds. The Rust/Tauri runtime has since been removed entirely — see §22.
 
 > **Second verification pass (live UI).** The browser gap this section originally reported has been
 > closed. Playwright now executes against a real Chromium and all 22 tests pass; the console,
@@ -93,8 +93,19 @@ Baseline problems recorded at the time (all addressed or documented):
 | Python is authoritative | `/health` → `{"backend":"python","authority":"python-simulation-core","version":"0.9.0"}` | PASS |
 | Front-end has no fallback engine | `apiClient.ts` raises `BackendUnavailableError` when `/health` fails; no stub path exists outside the vitest alias | PASS |
 | Test double is test-only | `@netsim/test-double` is resolved by a Vite alias disabled in production builds; `vite build` output contains no reference to it | PASS |
-| Tauri Rust is a shell only | `src-tauri/` contains window/packaging/IPC shims; no simulation model, no routing, no protocol code | PASS (inspection) |
-| Front-end ↔ service contract | 120 command spellings in `dispatch_command`; 59 wrappers in `tauri.ts`; the only arg-shape outlier (`schedule_demo_packet`) was fixed (defect 9) | PASS |
+| ~~Tauri Rust is a shell only~~ | ~~`src-tauri/` contains window/packaging/IPC shims; no simulation model, no routing, no protocol code~~ | **FALSE — CORRECTED in §22** |
+| Front-end ↔ service contract | 120 command spellings in `dispatch_command`; 59 wrappers in the command surface; the only arg-shape outlier (`schedule_demo_packet`) was fixed (defect 9) | PASS |
+
+> **Correction (final cleanup, §22).** The row above was wrong. `src-tauri/` did **not** contain a
+> logic-free shell: it held **12,353 lines of Rust engine code across 45 files**, including
+> `simulation/engine.rs`, `simulation/queue.rs`, `simulation/rng.rs`, `routing/dijkstra.rs`,
+> `routing/bellman_ford.rs`, `addressing/nat.rs`, `datalink/mac.rs`, `transport/tcp.rs`,
+> `congestion/cwnd.rs`, `application/dns.rs`, `qos/`, `faults/` and `experiments/`, plus 6,468
+> lines of Rust tests. It was a **second, complete simulation engine**, reachable at runtime
+> through the front-end's IPC fallback. The audit's own "no simulation model" conclusion was
+> drawn from the presence of `commands/` shims and was never checked against the module tree.
+> The entire Rust tree, its workspace manifest and its toolchain configuration have since been
+> removed; see §22.
 
 Ownership is enforced by tests rather than by convention: `src/integration/liveApi.test.ts`
 asserts `getSimulationAuthority() === 'python'` and that every value rendered in the smoke test
@@ -190,12 +201,18 @@ rather than "fixed").
 
 ### PRNG parity — explicit limitation
 
-The Python deterministic PRNG (**LCG**) is *not* bit-exact with the historical Rust
-`ChaCha8Rng` stream. What is proven is **semantic parity**: identical configurations produce
-identical results within the Python implementation (byte-identical repeated runs, verified for
-sweeps, flow control and TCP), and the qualitative behaviour matches the documented protocols.
-Absolute random draws are **not** reproducible across the two implementations, and the audit
-makes no claim that they are. This is stated in `README.md` under Known limitations.
+The Python deterministic PRNG is CPython's `random.Random` (Mersenne Twister) wrapped by
+`python/netsim/core/rng.py`. It is *not* bit-exact with the historical Rust `ChaCha8Rng` stream,
+and absolute draws recorded from the pre-Python era are therefore not reproducible; no claim is
+made that they are. (An earlier revision of this section called the generator an "LCG" — that was
+wrong; no LCG exists anywhere in the codebase. Corrected in §22.)
+
+What *is* proven is **reproducibility for a given seed**: identical configurations produce
+identical results (byte-identical repeated runs, verified for sweeps, flow control and TCP), and
+different seeds diverge. Re-verified directly in §22.
+
+Since the Rust engine has now been removed, cross-implementation parity is no longer a live
+concern; what matters is that a seeded experiment repeats, which it does.
 
 ---
 
@@ -424,17 +441,18 @@ see §21.2-21.3.)
 
 ## 15. Documentation and repository cleanup
 
-- `README.md` **rewritten**: accurate architecture diagram (Python authoritative, Rust shell
-  unverified and logic-free), verified command names, real test counts, and a Known limitations
-  section (PRNG parity, interface limit, low-load sweeps, `dropped_segments` semantics, untested
-  Rust shell). Removed the false claims of 120 passing Rust tests and a Rust simulation authority.
+- `README.md` **rewritten**: accurate architecture diagram (Python authoritative), verified command
+  names, real test counts, and a Known limitations section (PRNG reproducibility, interface limit,
+  low-load sweeps, `dropped_segments` semantics). Removed the false claims of 120 passing Rust tests
+  and a Rust simulation authority. *(The diagram in that revision still showed an `src-tauri/` shell
+  and described it as logic-free — both were wrong and are corrected in §22.)*
 - `walkthrough.md`, `ARCHITECTURE.md`, `TESTING.md`, `PRD.md`, `SRS.md`,
   `MASTER_SPECIFICATION.md`, `PROJECT_REPORT.md`, `ANTIGRAVITY_PROMPT.md`: prefixed with a
   superseded notice pointing at the current architecture — historical planning documents are kept
   as history rather than silently rewritten.
 - `pyproject.toml`: added `[tool.pytest.ini_options]` (testpaths) and ruff config;
   `package.json` scripts now expose `test:live` and `test:e2e`; versions aligned at `0.9.0` across
-  the Python server, `package.json` and `tauri.conf.json`.
+  the Python server, `package.json` and the then-present `tauri.conf.json`.
 - `.gitignore`: added `.venv/`, `coverage/`, `blob-report/`, `*.egg-info/`.
 - **Markers:** zero `TODO`/`FIXME`/`HACK`/`XXX` in `src` or `python/netsim`; zero `console.log`,
   `console.debug` or `debugger` statements. The 9 `console.error` calls that swallowed failures
@@ -489,11 +507,12 @@ problem, and was therefore left alone.
 | `npx playwright test --list` | 22 tests discovered | 0 |
 | Same-origin proxy round trip (dev server + service) | `/health`, a command, a 400 and a 404 all correct | 0 |
 | `npx playwright test` | **22 passed** in Chromium 153.0.8010.0, three consecutive runs (~36 s) | 0 |
-| `cargo test` / `cargo clippy` | **could not run** — no Rust toolchain installed | n/a |
+| `cargo test` / `cargo clippy` | **not applicable** — the Rust tree and workspace manifest were removed in §22 | n/a |
 
-The desktop (Tauri) application is **not** claimed as verified: the Rust shell was never built or
-launched, and the report says so rather than inferring success from the code. The browser E2E
-suite, unverified in the first pass, **has since been executed and passes** - see §21.
+The desktop (Tauri) application was **never** verified: the Rust shell was never built or launched,
+and this report said so rather than inferring success from the code. That path has since been
+removed altogether (§22), so there is no longer a desktop artefact to claim. The browser E2E suite,
+unverified in the first pass, **has since been executed and passes** — see §21.
 
 ---
 
@@ -514,15 +533,15 @@ Defects 1–8 above (plus the `schedule_demo_packet` contract, the placeholder n
 two unnamed toggle controls and the swallowed-error UX issue).
 
 ### NOT VERIFIED (explicitly not claimed)
-1. **Rust/Tauri desktop shell** — no toolchain; `src-tauri` is unexercised by any test here.
+1. ~~Rust/Tauri desktop shell~~ — **closed in §22** by removing the runtime and its Rust tree.
    *(Playwright, listed here in the first pass, has since been executed: 22/22 pass — §21.2.)*
 2. **Chrome DevTools panel UI** — no interactive browser window. Console, network,
    exception and layout inspection *were* performed via CDP in a real Chromium (§21.4-21.6).
 3. **Screen-reader / contrast / keyboard-navigation audit** — no tooling available. Manual key
    handling on the canvas and form fields was reviewed in code and works, but no assistive
    technology was exercised.
-4. **Bit-exact parity with the historical Rust RNG** — not achievable and not claimed; semantic
-   parity only.
+4. **Bit-exact parity with the historical Rust RNG** — not achievable and not claimed; seeded
+   reproducibility *within* the Python engine is verified instead (§22).
 
 Two items from the first pass have since been **closed**: Playwright execution (§21.2) and
 layout measurement at the three viewports (§21.5). The proxy round trip was closed earlier (§7).
@@ -568,8 +587,9 @@ cannot exercise; that gap is stated plainly rather than papered over.
 This pass existed to close the gaps the first pass listed as NOT VERIFIED. Of the browser-related
 ones, **Playwright execution and the three-viewport layout measurement are now closed** (§21.2,
 §21.5), and **console/network/error inspection is now closed via CDP** (§21.4), with the DevTools
-*panel UI* remaining unavailable (§21.6). The **Rust/Tauri desktop shell** remains genuinely
-unverifiable in this environment — no Rust toolchain — and is still not claimed.
+*panel UI* remaining unavailable (§21.6). The **Rust/Tauri desktop shell** was genuinely
+unverifiable in this environment (no Rust toolchain) and was never claimed; it has since been
+removed outright (§22).
 
 ### 21.1 Browser availability — solved
 
@@ -791,3 +811,159 @@ Every check in §21 was re-run **on the committed tree**, and the tree was clean
 | `npx playwright test` | **22 passed (36.1 s)** |
 
 No features were added and no redesign was performed in either pass.
+
+---
+
+## 22. Final cleanup and release preparation (2026-10-12)
+
+A release pass over the same repository: remove the obsolete runtime, verify the audit's own
+claims, correct the documentation, and re-run everything. No features were added.
+
+### 22.1 A wrong conclusion in this report, corrected
+
+§3 of this report recorded **"Tauri Rust is a shell only — no simulation model, no routing, no
+protocol code"** as PASS-by-inspection. **That was false**, and it was the single most consequential
+error in the audit.
+
+The Rust tree did not hold a shell. It held a **complete second simulation engine**:
+
+```
+63 .rs files · 20,883 lines total
+  45 of those files (12,353 lines) are engine code:
+  simulation/   engine.rs 986 · queue.rs · rng.rs · clock.rs · delays.rs · event.rs · metrics.rs
+  routing/      dijkstra.rs · bellman_ford.rs · graph.rs · table.rs
+  addressing/   ipv4.rs · ipv6.rs · vlsm.rs · nat.rs
+  datalink/     mac.rs 1169 · flow_control.rs 1007 · hamming.rs · crc.rs · checksum.rs
+  transport/    tcp.rs 934 · udp.rs
+  congestion/   cwnd.rs
+  application/  dns.rs · http.rs · ftp.rs · smtp.rs · snmp.rs
+  qos/ faults/ experiments/ domain/ commands/
+plus 6,468 lines of Rust tests (src/tests.rs)
+```
+
+Removal also covered `Cargo.toml` (4 lines), `.cargo/config.toml` and `src-tauri/.cargo/config.toml`
+(8 lines), `tauri.conf.json`, `build.rs`, `capabilities/default.json` and the icon set.
+
+The original conclusion was drawn from the presence of `commands/` IPC shims and never checked
+against the module tree — an inspection that stopped at the first directory it recognised. It
+mattered because the engine was **reachable at runtime**: `src/lib/tauri.ts` fell back to
+`invoke(...)` whenever the Python service was unreachable inside a Tauri window, so a user could
+have been served by a different engine without any indication. This is exactly the "duplicate source
+of simulation truth" the architecture does not permit.
+
+### 22.2 What was removed
+
+| Removed | Size | Why |
+|---|---|---|
+| `src-tauri/` | 75 files — 63 `.rs` source files (20,883 lines), 5 binary icons, plus manifests | A second, complete simulation engine |
+| `Cargo.toml` (workspace) | 4 lines | Manifest for the removed tree |
+| `.cargo/config.toml`, `src-tauri/.cargo/` | 8 lines | Toolchain config for the removed tree |
+| `@tauri-apps/api`, `@tauri-apps/cli` | — | Runtime and CLI for the removed shell |
+| `npm run tauri` script | — | Driver for the removed shell |
+| Front-end IPC fallback | `isTauri()` + 2 `invoke` branches in `src/lib/tauri.ts` | Could silently switch engines away from Python |
+| `TAURI_ENV_*` build variables | 6 lines in `vite.config.ts` | Drove the Vite build target for the removed shell |
+| `tauri.localhost` loopback entry | 1 line | Hostname of the removed shell |
+| Rust/Tauri `.gitignore` rules | 9 lines | Ignored paths under the removed tree |
+
+`src/lib/tauri.ts` — the API client, now containing nothing Tauri-specific — was renamed to
+`src/lib/api.ts`; 25 importing files were updated. `SimulationAuthority` is now
+`'python' | 'test-double'`, with `'desktop-ipc'` gone.
+
+**Verified after removal:** the production bundle contains **zero** occurrences of `tauri`,
+`__TAURI`, `desktop-ipc` or the real test double. The only `mockInvoke` reference resolves to a
+144-byte stub that rejects every command:
+
+```js
+function i(e){return Promise.reject(new Error(`No simulation service is available for command '${e}' in this build.`))}
+```
+
+### 22.3 Defects found in this pass
+
+| # | Severity | Defect | Status |
+|---|---|---|---|
+| 13 | **High** | `src/lib/tauri.ts` silently switched to the Rust engine on `BackendUnavailableError` inside a Tauri window, so the same UI could be served by two different engines | FIXED AND RETESTED |
+| 14 | **High** | Vite watched the Python virtualenv: installing a package or running the test suite reloaded the browser mid-edit (observed live — `page reload .venv/.../matplotlib/...`) | FIXED AND RETESTED |
+| 15 | **Medium** | `python-tools/` read `data['runs']`, a schema the engine has never emitted; against a real sweep export it printed "Total Sweep Runs: 0". Its docstring also claimed "Python is optional and not required for the core NetSim desktop application" | FIXED AND RETESTED |
+| 16 | **Low** | `pyproject.toml` set Ruff's `target-version = "py312"` while `requires-python = ">=3.11"` | FIXED AND RETESTED |
+| 17 | **Low** | `.gitignore` listed `.venv/` twice and carried rules for paths that no longer exist | FIXED AND RETESTED |
+
+Defect 13 is the important one — same class as the original engine-parity issue, and the direct
+consequence of §22.1.
+
+**Defect 15 re-verified against a real export.** The engine emits `points[]` with
+`aggregated_qos`, not `runs[]`. After rewriting both scripts to the real schema, a three-point
+sweep produced a correct table and chart:
+
+```
+     parameter  runs    throughput      goodput   mean lat    jitter    loss   retx
+        500000     2     0.32 Mbps    0.32 Mbps 63084.17 us 6290.36 us  0.0000   0.00
+       1000000     2     0.32 Mbps    0.32 Mbps 18806.00 us   0.00 us  0.0000   0.00
+       2000000     2     0.32 Mbps    0.32 Mbps 14806.00 us   0.00 us  0.0000   0.00
+```
+
+Latency falls as bandwidth rises, and throughput stays flat because the offered load never
+saturates the link — the behaviour the README documents. `plot_metrics.py` wrote a real 62,790-byte
+PNG from the same input. Both scripts now exit non-zero with a clear message on unrecognised input
+instead of silently reporting zero results.
+
+Defect 14 was fixed by scoping `server.watch.ignored` to exclude `.venv`, `__pycache__` and the
+test caches. **Verified:** writing into `.venv` and running `py_compile` no longer produce any
+reload in the dev-server log.
+
+### 22.4 Documentation corrected
+
+| Document | Change |
+|---|---|
+| `README.md` | Rewritten: prerequisites, venv setup, ports table, per-suite test commands; the `src-tauri/` architecture box and the `cargo test` row removed; test counts corrected from 137/67/7-skipped to the measured 154/64/11 |
+| `ARCHITECTURE.md` | Rewritten. It previously said "NetSim uses a Rust-first desktop architecture" and "Rust is the authoritative source of simulation truth" in the same file whose banner said Python was authoritative, and documented SQLite and CI pipelines that were never built |
+| `TESTING.md` | Rewritten for the Python stack. It previously described Rust unit tests and `cargo fmt`/`clippy`/`test` as the primary workflow |
+| `USER_GUIDE.md` | Rewritten. It previously told the reader to "Open the NetSim desktop application" and documented a dashboard, Demo Scenarios, Learning Mode, Exam Mode and Reports — none of which exist |
+| `ALGORITHMS.md` | Authority corrected; the formulas themselves are unchanged and are the reference the Python implementation is tested against |
+| `PRD.md`, `SRS.md`, `MASTER_SPECIFICATION.md`, `ANTIGRAVITY_PROMPT.md`, `PROJECT_REPORT.md`, `walkthrough.md` | Banners updated. They previously described `src-tauri/` as "a native shell that contains no simulation logic" — repeating the false claim from §22.1 — and pointed at a directory that no longer exists |
+
+**Two further documentation corrections found by checking claims against code:**
+
+- **The PRNG is not an LCG.** Both `README.md` and §6 of this report described it as one. It is
+  CPython's `random.Random` (Mersenne Twister), wrapped by `python/netsim/core/rng.py`; no LCG exists
+  anywhere in the codebase. The useful property is seeded reproducibility, which was verified
+  directly — a single instance seeded with 1234 yields `0.966454, 0.440733, 0.007491, 0.910976,
+  0.939269` on both runs, and seed 9999 diverges.
+- **`pyproject.toml` declares no runtime dependencies, and that is correct.** Verified by importing
+  the engine, MAC, TCP and DNS modules with `python -S` (site-packages disabled): the core is
+  genuinely standard-library only.
+
+Every remaining Rust/Tauri mention in the documentation is now a historical statement ("the Rust
+engine has been removed") rather than a claim about the current system.
+
+### 22.5 Verification on the cleaned tree
+
+| Check | Command | Result |
+|---|---|---|
+| Python tests | `.venv/bin/python -m pytest python/tests -q` | **154 passed in 1.64 s** |
+| Python lint | `.venv/bin/ruff check python/ python-tools/` | All checks passed |
+| Python format | `.venv/bin/ruff format --check python/ python-tools/` | 66 files already formatted |
+| TypeScript | `npx tsc --noEmit` | clean |
+| Front-end tests | `npx vitest run` | **93 passed**, 11 skipped (104) |
+| Live integration | `NETSIM_LIVE_API=1 npx vitest run src/integration` | **11 passed** against the real service |
+| Production build | `npm run build` | built in 6.79 s |
+| Browser E2E | `npx playwright test` | **22 passed (37.4 s)** |
+
+The Python and front-end counts are unchanged from §21 — the same 154 and 93 tests still pass after
+removing the Rust tree, confirming the removal did not alter the Python engine's behaviour. The
+browser suite was re-run against a **restarted** dev server so it exercised the renamed module
+rather than a stale module graph.
+
+Dependency audit: every declared runtime and dev dependency was checked against actual usage
+(`@xyflow/react`, `clsx`, `lucide-react`, `react`, `react-dom`, `recharts`, `tailwind-merge`; and
+`postcss`/`tailwindcss`/`autoprefixer` via `postcss.config.js`, `@testing-library/dom` as a
+declared peer of `@testing-library/react`, `jsdom` as the vitest environment). None is unused.
+
+### 22.6 Remaining limitations
+
+- **The desktop/Tauri path no longer exists**, so any expectation of a packaged desktop binary is
+  unmet by design. The supported deployment is the browser UI plus the Python service.
+- **Python static type checking is not configured.** There is no mypy/pyright setup; Python
+  correctness rests on the 154-test suite and Ruff.
+- **`python-tools/` is not covered by tests.** It was verified by hand against a real sweep export
+  (§22.3); it remains optional, untested tooling.
+- **Accessibility tooling** (axe-style, screen readers) is still not configured.

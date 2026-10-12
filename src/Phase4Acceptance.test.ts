@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { api } from './lib/tauri';
+import { api } from './lib/api';
 
 describe('Phase 4A: Routing & Addressing Frontend Integration Tests', () => {
   it('computes authoritative routing table for router nodes', async () => {

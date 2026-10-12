@@ -18,7 +18,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { api } from '../../lib/tauri';
+import { api } from '../../lib/api';
 import { Project } from '../../types/project';
 import {
   SweepConfig,

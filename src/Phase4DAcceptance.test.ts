@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { api } from './lib/tauri';
+import { api } from './lib/api';
 import { TransportConfig } from './types/transport';
 
 describe('Phase 4D: Transport Layer and Congestion Control Acceptance Tests', () => {
