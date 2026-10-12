@@ -48,7 +48,7 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
         <button
           onClick={handleReset}
           title="Reset all filters"
-          className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 transition-colors"
+          className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
         >
           <RotateCcw className="w-3 h-3" />
           <span>Reset</span>
@@ -62,7 +62,7 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
           <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
             Layer
           </label>
-          <select
+          <select aria-label="Layer"
             value={filter.layer}
             onChange={(e) => onChange({ ...filter, layer: e.target.value })}
             className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
@@ -81,7 +81,7 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
           <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
             Protocol
           </label>
-          <select
+          <select aria-label="Protocol"
             value={filter.protocol}
             onChange={(e) => onChange({ ...filter, protocol: e.target.value })}
             className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
@@ -101,23 +101,22 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
           <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
             Event Type
           </label>
-          <select
+          <select aria-label="Event Type"
             value={filter.eventType}
             onChange={(e) => onChange({ ...filter, eventType: e.target.value })}
             className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
           >
             <option value="all">All Events</option>
-            <option value="packet_created">PacketCreated</option>
-            <option value="queue_entered">QueueEntered</option>
-            <option value="transmission_started">TransmissionStarted</option>
-            <option value="transmission_finished">TransmissionFinished</option>
-            <option value="packet_arrived">PacketArrived</option>
-            <option value="packet_dropped">PacketDropped</option>
-            <option value="ack_received">AckReceived</option>
-            <option value="timeout">Timeout</option>
-            <option value="retransmission">Retransmission</option>
-            <option value="route_updated">RouteUpdated</option>
-            <option value="fault_injected">FaultInjected</option>
+            <option value="packet_created">Packet Created</option>
+            <option value="queue_entered">Queue Entered</option>
+            <option value="transmission_started">Transmission Started</option>
+            <option value="transmission_finished">Transmission Finished</option>
+            <option value="packet_arrived">Packet Arrived</option>
+            <option value="packet_dropped">Packet Dropped</option>
+            <option value="route_updated">Route Updated</option>
+            <option value="fault_injected">Fault Injected</option>
+            <option value="timer_expired">Timer Expired</option>
+            <option value="application_event">Application Event</option>
           </select>
         </div>
 
@@ -126,7 +125,7 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
           <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
             Status
           </label>
-          <select
+          <select aria-label="Status"
             value={filter.status}
             onChange={(e) => onChange({ ...filter, status: e.target.value as EventFilter['status'] })}
             className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
@@ -144,7 +143,7 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
           <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
             Node
           </label>
-          <select
+          <select aria-label="Node"
             value={filter.nodeId}
             onChange={(e) => onChange({ ...filter, nodeId: e.target.value })}
             className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
@@ -163,7 +162,7 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
           <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
             Link
           </label>
-          <select
+          <select aria-label="Link"
             value={filter.linkId}
             onChange={(e) => onChange({ ...filter, linkId: e.target.value })}
             className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"

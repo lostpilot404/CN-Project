@@ -7,11 +7,10 @@ import {
   ArrowLeftRight,
   BarChart3,
   FlaskConical,
-  GraduationCap,
-  BookOpenCheck,
   Globe,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import type { BackendStatus } from '../../lib/apiClient';
 
 export type ActiveTab =
   | 'topology'
@@ -22,18 +21,23 @@ export type ActiveTab =
   | 'transport'
   | 'application'
   | 'qos'
-  | 'experiments'
-  | 'learning'
-  | 'exam';
+  | 'experiments';
 
 interface SidebarProps {
   activeTab: ActiveTab;
   onTabChange: (tab: ActiveTab) => void;
+  backendStatus?: BackendStatus;
+  backendVersion?: string | null;
 }
 
 import type { ComponentType } from 'react';
 
-export const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
+export const Sidebar = ({
+  activeTab,
+  onTabChange,
+  backendStatus = 'unknown',
+  backendVersion = null,
+}: SidebarProps) => {
   const navItems: { id: ActiveTab; label: string; icon: ComponentType<{ className?: string }> }[] = [
     { id: 'topology', label: 'Topology Canvas', icon: Network },
     { id: 'routing', label: 'Routing Studio', icon: Route },
@@ -44,9 +48,17 @@ export const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
     { id: 'application', label: 'Application Layer', icon: Globe },
     { id: 'qos', label: 'QoS Performance', icon: BarChart3 },
     { id: 'experiments', label: 'Batch Experiments', icon: FlaskConical },
-    { id: 'learning', label: 'Learning Mode', icon: GraduationCap },
-    { id: 'exam', label: 'Exam Mode', icon: BookOpenCheck },
   ];
+
+  // Engine status is derived from a real health probe of the Python simulation service.
+  const engineStatus =
+    backendStatus === 'online'
+      ? { label: 'ONLINE', className: 'text-emerald-400', dot: 'bg-emerald-400' }
+      : backendStatus === 'connecting'
+        ? { label: 'CHECKING', className: 'text-amber-300', dot: 'bg-amber-300 animate-pulse' }
+        : backendStatus === 'offline'
+          ? { label: 'OFFLINE', className: 'text-rose-400', dot: 'bg-rose-400' }
+          : { label: 'UNKNOWN', className: 'text-slate-400', dot: 'bg-slate-500' };
 
   return (
     <aside className="w-56 bg-slate-900/90 border-r border-slate-800 flex flex-col justify-between select-none py-3">
@@ -78,9 +90,14 @@ export const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
       <div className="px-4 py-2 border-t border-slate-800/60 text-[11px] text-slate-400">
         <div className="flex items-center justify-between">
           <span>Simulation Engine:</span>
-          <span className="font-mono text-emerald-400 font-semibold">ONLINE</span>
+          <span className={cn('font-mono font-semibold flex items-center space-x-1.5', engineStatus.className)}>
+            <span className={cn('w-1.5 h-1.5 rounded-full', engineStatus.dot)} aria-hidden="true" />
+            <span data-testid="engine-status">{engineStatus.label}</span>
+          </span>
         </div>
-        <div className="mt-1 text-[10px] text-slate-400">Tauri 2.x • Python Core</div>
+        <div className="mt-1 text-[10px] text-slate-400">
+          {backendVersion ? `Python core v${backendVersion}` : 'Python core • HTTP JSON-RPC'}
+        </div>
       </div>
     </aside>
   );

@@ -50,6 +50,9 @@ class SimulationEngine:
         self.pending_faults: dict[str, dict[str, Any]] = {}
         self.node_pre_fault_link_states: dict[str, dict[str, LinkStatus]] = {}
         self.failed_nodes: set[str] = set()
+        # Pre-fault link attributes, captured the first time a runtime fault mutates a
+        # link so that a simulation reset restores the configured topology.
+        self.fault_link_snapshots: dict[str, dict[str, Any]] = {}
 
     def schedule_fault(self, fault_id: str, timestamp_us: int, fault_type: Any) -> None:
         target_id = fault_target_id(fault_type)
@@ -72,10 +75,42 @@ class SimulationEngine:
         self.links_cache.clear()
         current_ids = {lnk.id for lnk in links}
         self.link_queues = {k: v for k, v in self.link_queues.items() if k in current_ids}
+        self.fault_link_snapshots = {k: v for k, v in self.fault_link_snapshots.items() if k in current_ids}
         for link in links:
             self.links_cache[link.id] = link
             if link.id not in self.link_queues:
                 self.link_queues[link.id] = LinkQueue(link.id, link.queue_capacity)
+
+    def clear_fault_snapshot(self, link_id: str) -> None:
+        """Drop a captured pre-fault snapshot.
+
+        Called when the operator explicitly reconfigures a link so that a later reset
+        cannot resurrect values that were superseded by deliberate configuration.
+        """
+        self.fault_link_snapshots.pop(link_id, None)
+
+    def _capture_fault_snapshot(self, link: Link) -> None:
+        if link.id not in self.fault_link_snapshots:
+            self.fault_link_snapshots[link.id] = {
+                "status": link.status,
+                "bandwidth_bps": link.bandwidth_bps,
+                "queue_capacity": link.queue_capacity,
+                "bit_error_rate": link.bit_error_rate,
+            }
+
+    def _restore_fault_snapshots(self) -> None:
+        for link_id, snap in self.fault_link_snapshots.items():
+            link = self.links_cache.get(link_id)
+            if not link:
+                continue
+            link.status = snap["status"]
+            link.bandwidth_bps = snap["bandwidth_bps"]
+            link.queue_capacity = snap["queue_capacity"]
+            link.bit_error_rate = snap["bit_error_rate"]
+            queue = self.link_queues.get(link_id)
+            if queue:
+                queue.capacity = max(1, int(link.queue_capacity))
+        self.fault_link_snapshots.clear()
 
     def schedule_event(
         self,
@@ -226,6 +261,7 @@ class SimulationEngine:
                     "packet_id": packet_id,
                     "reason": "No route or link available from node",
                     "location_id": src_node_id,
+                    "packet_state": PacketState.DROPPED_LINK_DOWN.value,
                 },
                 f"Packet {packet_id} dropped: no link found",
             )
@@ -324,6 +360,7 @@ class SimulationEngine:
                             "packet_id": packet_id,
                             "reason": "Link status is down",
                             "location_id": link_id,
+                            "packet_state": PacketState.DROPPED_LINK_DOWN.value,
                         },
                         f"Packet {packet_id} dropped: link {link_id} is down",
                     )
@@ -372,6 +409,7 @@ class SimulationEngine:
                             "packet_id": packet_id,
                             "reason": "Queue capacity exceeded (Drop-Tail)",
                             "location_id": link_id,
+                            "packet_state": PacketState.DROPPED_QUEUE_FULL.value,
                         },
                         f"Packet {packet_id} dropped: queue for link {link_id} is full ({link.queue_capacity}/{link.queue_capacity})",
                     )
@@ -381,9 +419,9 @@ class SimulationEngine:
         elif evt_type == "transmission_finished":
             packet_id = evt_data.get("packet_id", "")
             link_id = evt_data.get("link_id", "")
-            queue = self.link_queues.get(link_id)
-            if queue:
-                queue.is_transmitting = False
+            tx_queue = self.link_queues.get(link_id)
+            if tx_queue:
+                tx_queue.is_transmitting = False
             pkt = self.packets.get(packet_id)
             if pkt:
                 if pkt.state not in (
@@ -409,11 +447,9 @@ class SimulationEngine:
             packet_id = evt_data.get("packet_id", "")
             node_id = evt_data.get("node_id", "")
             pkt = self.packets.get(packet_id)
-            if pkt and pkt.state in (
-                PacketState.DROPPED_BIT_ERROR,
-                PacketState.DROPPED_LINK_DOWN,
-                PacketState.DROPPED_QUEUE_FULL,
-            ):
+            if pkt and (pkt.state.is_terminal_drop() or pkt.state == PacketState.DELIVERED):
+                # A packet that already reached a terminal outcome (delivered or dropped)
+                # must never be re-processed, re-delivered or counted twice.
                 return
 
             size_bytes = pkt.size_bytes if pkt else 0
@@ -484,12 +520,21 @@ class SimulationEngine:
             location_id = evt_data.get("location_id", "")
             pkt = self.packets.get(packet_id)
             if pkt:
-                if pkt.state not in (
-                    PacketState.DROPPED_QUEUE_FULL,
-                    PacketState.DROPPED_LINK_DOWN,
-                    PacketState.DROPPED_BIT_ERROR,
-                ):
-                    pkt.state = PacketState.DROPPED_BIT_ERROR
+                # The drop category is authoritative in the event payload so that the
+                # packet state can never contradict the metrics loss category.
+                raw_state = evt_data.get("packet_state")
+                if isinstance(raw_state, str):
+                    try:
+                        drop_state = PacketState(raw_state)
+                    except ValueError:
+                        drop_state = PacketState.DROPPED_BIT_ERROR
+                else:
+                    drop_state = PacketState.DROPPED_BIT_ERROR
+                if pkt.state.is_terminal_drop():
+                    # The terminal transition was already recorded when the drop was
+                    # detected; never append a duplicate hop record for the same drop.
+                    return
+                pkt.state = drop_state
                 hop_idx = len(pkt.hop_history)
                 pkt.hop_history.append(
                     PacketHopRecord(
@@ -497,7 +542,7 @@ class SimulationEngine:
                         node_id=pkt.current_node_id,
                         link_id=location_id,
                         timestamp_us=self.current_time.as_micros(),
-                        state=pkt.state,
+                        state=drop_state,
                         description=f"Packet {packet_id} dropped: {reason}",
                     )
                 )
@@ -593,6 +638,7 @@ class SimulationEngine:
                     "packet_id": next_pkt_id,
                     "reason": "Stochastic packet loss on link",
                     "location_id": link_id,
+                    "packet_state": PacketState.DROPPED_LINK_LOSS.value,
                 },
                 f"Packet {next_pkt_id} dropped in transit on link {link_id} (loss rate: {link.loss_probability * 100.0:.1f}%)",
             )
@@ -605,6 +651,7 @@ class SimulationEngine:
                     "packet_id": next_pkt_id,
                     "reason": "CRC FCS frame check error (bit corruption)",
                     "location_id": link_id,
+                    "packet_state": PacketState.DROPPED_BIT_ERROR.value,
                 },
                 f"Packet {next_pkt_id} corrupted by bit errors on link {link_id}",
             )
@@ -636,36 +683,41 @@ class SimulationEngine:
         if ft == "link_down":
             link = self.links_cache.get(fault_data.get("link_id", ""))
             if link:
+                self._capture_fault_snapshot(link)
                 link.status = LinkStatus.DOWN
         elif ft == "link_restore":
             link = self.links_cache.get(fault_data.get("link_id", ""))
             if link:
+                self._capture_fault_snapshot(link)
                 link.status = LinkStatus.UP
         elif ft == "bandwidth_degradation":
             link = self.links_cache.get(fault_data.get("link_id", ""))
             if link:
+                self._capture_fault_snapshot(link)
                 link.bandwidth_bps = int(fault_data.get("new_bandwidth_bps", link.bandwidth_bps))
         elif ft == "queue_capacity_change":
             link = self.links_cache.get(fault_data.get("link_id", ""))
             new_cap = int(fault_data.get("new_capacity", 50))
             if link:
+                self._capture_fault_snapshot(link)
                 link.queue_capacity = new_cap
             queue = self.link_queues.get(fault_data.get("link_id", ""))
             if queue:
                 queue.capacity = max(1, new_cap)
         elif ft == "node_failure":
             node_id = fault_data.get("node_id", "")
-            saved = {}
+            snapshot: dict[str, LinkStatus] = {}
             for link in self.links_cache.values():
                 if link.source.node_id == node_id or link.target.node_id == node_id:
-                    saved[link.id] = link.status
+                    self._capture_fault_snapshot(link)
+                    snapshot[link.id] = link.status
                     link.status = LinkStatus.DOWN
-            self.node_pre_fault_link_states[node_id] = saved
+            self.node_pre_fault_link_states[node_id] = snapshot
             self.failed_nodes.add(node_id)
         elif ft == "node_recovery":
             node_id = fault_data.get("node_id", "")
             self.failed_nodes.discard(node_id)
-            saved = self.node_pre_fault_link_states.pop(node_id, None)
+            saved: dict[str, LinkStatus] | None = self.node_pre_fault_link_states.pop(node_id, None)
             if saved:
                 for lid, status in saved.items():
                     link = self.links_cache.get(lid)
@@ -676,6 +728,7 @@ class SimulationEngine:
                     if (
                         link.source.node_id == node_id or link.target.node_id == node_id
                     ) and link.status == LinkStatus.DOWN:
+                        self._capture_fault_snapshot(link)
                         link.status = LinkStatus.UP
         elif ft == "packet_drop":
             pkt_id = fault_data.get("packet_id", "")
@@ -702,6 +755,7 @@ class SimulationEngine:
         elif ft == "bit_error":
             link = self.links_cache.get(fault_data.get("link_id", ""))
             if link:
+                self._capture_fault_snapshot(link)
                 link.bit_error_rate = float(fault_data.get("error_rate", link.bit_error_rate))
 
     def reset(self, seed: int | None = None) -> None:
@@ -713,6 +767,7 @@ class SimulationEngine:
             q.reset()
         self.metrics.reset()
         self.status = SimulationStatus.READY
+        self._restore_fault_snapshots()
         if seed is not None:
             self.rng.reseed(seed)
         self.next_event_id = 1

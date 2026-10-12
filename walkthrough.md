@@ -1,5 +1,13 @@
 # NetSim Phase 7: QoS Metrics, Fault Injection & Experimentation Walkthrough
 
+> **Status update (quality audit, 2026-10).** This document is a historical Phase 7 record and
+> its phase statements are out of date. The project has since been ported to Python: the
+> authoritative simulation core lives in `python/netsim/` and the front-end talks to it over
+> HTTP. Statements below such as "the Python port has NOT started" and references to a Rust
+> simulation authority no longer describe the repository. See `README.md` and
+> `QUALITY_AUDIT_REPORT.md` for the current state.
+
+
 ## 1. Overview & Project Status
 - **Phase Status**: PHASE 7 IS COMPLETE.
 - **Closure Commit**: `922c31e`

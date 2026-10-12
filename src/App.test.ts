@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { formatBps, formatTimeUs } from './lib/utils';
-import { api } from './lib/tauri';
+import { api } from './lib/api';
 
 describe('Utility formatting functions', () => {
   it('formats bits per second correctly', () => {

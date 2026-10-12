@@ -27,8 +27,11 @@ export const EventDetail: React.FC<EventDetailProps> = ({
     );
   }
 
-  // Extract raw payload data if present
-  const rawData = Object.values(event.rawEvent.event_type)[0] as Record<string, unknown> | undefined;
+  // Extract raw payload data if present (`{ type, data }` envelope from the Python core)
+  const envelope = (event.rawEvent.event_type ?? {}) as unknown as Record<string, unknown>;
+  const rawData = (
+    typeof envelope.type === 'string' ? envelope.data : Object.values(envelope)[0]
+  ) as Record<string, unknown> | undefined;
 
   return (
     <div

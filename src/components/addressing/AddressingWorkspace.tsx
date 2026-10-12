@@ -27,7 +27,7 @@ import {
   NatTable,
   NatTranslationResult,
 } from '../../types/addressing';
-import { api } from '../../lib/tauri';
+import { api } from '../../lib/api';
 
 interface AddressingWorkspaceProps {
   project: Project | null;
@@ -288,7 +288,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               <Icon className="w-4 h-4" />
               <span>{tab.label}</span>
               {tab.id === 'conflicts' && duplicateConflicts.length > 0 && (
-                <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500 text-white font-bold">
+                <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-rose-700 text-white font-bold">
                   {duplicateConflicts.length}
                 </span>
               )}
@@ -323,7 +323,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                 />
                 <button
                   onClick={calculateIpv4}
-                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg transition"
+                  className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium rounded-lg transition"
                 >
                   Calculate
                 </button>
@@ -335,6 +335,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                   Prefix Slider: /{subnetInfo.prefix_length}
                 </label>
                 <input
+                  aria-label="Prefix Slider"
                   type="range"
                   min="0"
                   max="32"
@@ -356,12 +357,12 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-xl space-y-1">
                 <span className="text-[11px] text-slate-400 font-semibold uppercase">Network Address</span>
                 <p className="text-base font-bold font-mono text-emerald-400">{subnetInfo.network_address}</p>
-                <span className="text-[10px] text-slate-500 font-mono">/{subnetInfo.prefix_length}</span>
+                <span className="text-[10px] text-slate-400 font-mono">/{subnetInfo.prefix_length}</span>
               </div>
               <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-xl space-y-1">
                 <span className="text-[11px] text-slate-400 font-semibold uppercase">Broadcast Address</span>
                 <p className="text-base font-bold font-mono text-slate-200">{subnetInfo.broadcast_address}</p>
-                <span className="text-[10px] text-slate-500 font-mono">Wildcard: {subnetInfo.wildcard_mask}</span>
+                <span className="text-[10px] text-slate-400 font-mono">Wildcard: {subnetInfo.wildcard_mask}</span>
               </div>
               <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-xl space-y-1">
                 <span className="text-[11px] text-slate-400 font-semibold uppercase">Usable Host Range</span>
@@ -417,6 +418,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               <div className="flex items-center space-x-3">
                 <span className="text-xs text-slate-400">Target Prefix:</span>
                 <select
+                  aria-label="Target Prefix"
                   value={splitPrefix}
                   onChange={(e) => setSplitPrefix(parseInt(e.target.value, 10))}
                   className="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200"
@@ -431,7 +433,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                 </select>
                 <button
                   onClick={handleSplitSubnet}
-                  className="px-3.5 py-1 bg-brand-600 hover:bg-brand-500 text-white text-xs font-medium rounded-lg transition"
+                  className="px-3.5 py-1 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium rounded-lg transition"
                 >
                   Generate Subnets
                 </button>
@@ -491,6 +493,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               <div className="flex items-center space-x-2">
                 <span className="text-xs text-slate-400">Base CIDR:</span>
                 <input
+                  aria-label="Base CIDR"
                   type="text"
                   value={vlsmBaseCidr}
                   onChange={(e) => setVlsmBaseCidr(e.target.value)}
@@ -498,7 +501,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                 />
                 <button
                   onClick={handleCalculateVlsm}
-                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg transition"
+                  className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium rounded-lg transition"
                 >
                   Allocate VLSM
                 </button>
@@ -535,8 +538,9 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                       className="w-32 bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-1 text-xs text-slate-200 font-mono"
                     />
                     <button
+                      aria-label={`Remove requirement ${idx + 1}`}
                       onClick={() => setVlsmReqs(vlsmReqs.filter((_, i) => i !== idx))}
-                      className="p-1.5 text-slate-500 hover:text-rose-400 transition"
+                      className="p-1.5 text-slate-400 hover:text-rose-400 transition"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -642,7 +646,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
             </div>
             <button
               onClick={handleAuditIps}
-              className="flex items-center space-x-2 px-3.5 py-1.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-medium rounded-lg transition"
+              className="flex items-center space-x-2 px-3.5 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium rounded-lg transition"
             >
               <Search className="w-3.5 h-3.5" />
               <span>Rescan Topology</span>
@@ -710,7 +714,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                 />
                 <button
                   onClick={handleValidateIpv6}
-                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg transition"
+                  className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium rounded-lg transition"
                 >
                   Inspect IPv6
                 </button>
@@ -768,7 +772,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
                 NAT Gateway Router
               </label>
-              <select
+              <select aria-label="NAT Gateway Router"
                 value={natRouterId}
                 onChange={(e) => setNatRouterId(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200"
@@ -784,7 +788,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
                 Router Public IPv4 (WAN IP)
               </label>
-              <input
+              <input aria-label="Router Public IPv4 (WAN IP)"
                 type="text"
                 value={natPublicIp}
                 onChange={(e) => setNatPublicIp(e.target.value)}
@@ -794,7 +798,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
             <div className="flex items-end">
               <button
                 onClick={loadNatTable}
-                className="w-full py-1.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-medium rounded-lg transition"
+                className="w-full py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium rounded-lg transition"
               >
                 Sync NAT Table
               </button>
@@ -810,7 +814,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 items-end">
               <div>
                 <label className="block text-[10px] text-slate-400 uppercase">Protocol</label>
-                <select
+                <select aria-label="Protocol"
                   value={natProtocol}
                   onChange={(e) => setNatProtocol(e.target.value as NatProtocol)}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200"
@@ -822,7 +826,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               </div>
               <div>
                 <label className="block text-[10px] text-slate-400 uppercase">Public WAN Port</label>
-                <input
+                <input aria-label="Public WAN Port"
                   type="number"
                   value={dnatPort}
                   onChange={(e) => setDnatPort(parseInt(e.target.value, 10) || 80)}
@@ -831,7 +835,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               </div>
               <div>
                 <label className="block text-[10px] text-slate-400 uppercase">Private LAN IP</label>
-                <input
+                <input aria-label="Private LAN IP"
                   type="text"
                   value={dnatPrivateIp}
                   onChange={(e) => setDnatPrivateIp(e.target.value)}
@@ -840,7 +844,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               </div>
               <div>
                 <label className="block text-[10px] text-slate-400 uppercase">Private Port</label>
-                <input
+                <input aria-label="Private Port"
                   type="number"
                   value={dnatPrivatePort}
                   onChange={(e) => setDnatPrivatePort(parseInt(e.target.value, 10) || 8080)}
@@ -849,7 +853,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               </div>
               <div>
                 <label className="block text-[10px] text-slate-400 uppercase">Description</label>
-                <input
+                <input aria-label="Description"
                   type="text"
                   value={dnatDesc}
                   onChange={(e) => setDnatDesc(e.target.value)}
@@ -859,7 +863,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               <div>
                 <button
                   onClick={handleAddDnatRule}
-                  className="w-full py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg transition"
+                  className="w-full py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium rounded-lg transition"
                 >
                   Add Rule
                 </button>
@@ -879,6 +883,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                 <div>
                   <span className="text-[10px] font-sans text-slate-400">Src IP:Port</span>
                   <input
+                    aria-label="Src IP:Port"
                     type="text"
                     value={testSrcIp}
                     onChange={(e) => setTestSrcIp(e.target.value)}
@@ -888,6 +893,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                 <div>
                   <span className="text-[10px] font-sans text-slate-400">Src Port</span>
                   <input
+                    aria-label="Src Port"
                     type="number"
                     value={testSrcPort}
                     onChange={(e) => setTestSrcPort(parseInt(e.target.value, 10) || 50000)}
@@ -897,6 +903,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                 <div>
                   <span className="text-[10px] font-sans text-slate-400">Dst IP:Port</span>
                   <input
+                    aria-label="Dst IP:Port"
                     type="text"
                     value={testDstIp}
                     onChange={(e) => setTestDstIp(e.target.value)}
@@ -906,6 +913,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                 <div>
                   <span className="text-[10px] font-sans text-slate-400">Dst Port</span>
                   <input
+                    aria-label="Dst Port"
                     type="number"
                     value={testDstPort}
                     onChange={(e) => setTestDstPort(parseInt(e.target.value, 10) || 443)}
@@ -915,7 +923,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               </div>
               <button
                 onClick={handleTestOutbound}
-                className="w-full py-1.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-medium rounded-lg transition"
+                className="w-full py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium rounded-lg transition"
               >
                 Transmit Outbound Packet
               </button>
@@ -942,7 +950,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               </p>
               <button
                 onClick={handleTestInbound}
-                className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg transition mt-8"
+                className="w-full py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium rounded-lg transition mt-8"
               >
                 Transmit Inbound Reply
               </button>

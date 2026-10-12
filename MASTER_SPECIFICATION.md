@@ -1,5 +1,12 @@
 # NetSim --- Master Specification
 
+> **Historical document (superseded).** This was written for an earlier design in which a Rust
+> engine was the simulation authority. That engine and its `src-tauri/` tree have since been
+> removed: **Python (`python/netsim/`) is the sole simulation authority**, reached over HTTP by the
+> React front-end. Parts of this document therefore describe components, layers and test commands
+> that no longer exist, and any statement naming Rust or Tauri as authoritative is obsolete.
+> See `README.md` for the current architecture and `QUALITY_AUDIT_REPORT.md` for audit evidence.
+
 ## 1. Purpose
 
 This is the single source of truth for the NetSim implementation.

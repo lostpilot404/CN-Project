@@ -18,7 +18,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { api } from '../../lib/tauri';
+import { api } from '../../lib/api';
 import { Project } from '../../types/project';
 import {
   SweepConfig,
@@ -318,7 +318,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
                 <div>
                   <label className="block text-slate-300 font-medium mb-1">Experiment Label</label>
-                  <input
+                  <input aria-label="Experiment Label"
                     type="text"
                     value={sweepName}
                     onChange={(e) => setSweepName(e.target.value)}
@@ -328,7 +328,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
 
                 <div>
                   <label className="block text-slate-300 font-medium mb-1">Experiment Target</label>
-                  <select
+                  <select aria-label="Experiment Target"
                     value={sweepTarget}
                     onChange={(e) => setSweepTarget(e.target.value as ExperimentTarget)}
                     className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
@@ -343,7 +343,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
 
                 <div>
                   <label className="block text-slate-300 font-medium mb-1">Variable Parameter</label>
-                  <select
+                  <select aria-label="Variable Parameter"
                     value={sweepParamType}
                     onChange={(e) => handleSweepPreset(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
@@ -363,7 +363,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
 
                 <div>
                   <label className="block text-slate-300 font-medium mb-1">Simulation Time per Run (µs)</label>
-                  <input
+                  <input aria-label="Simulation Time per Run (µs)"
                     type="number"
                     min="1000"
                     step="5000"
@@ -377,7 +377,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   <label className="block text-slate-300 font-medium mb-1">
                     Sweep Values List (comma-separated numbers)
                   </label>
-                  <input
+                  <input aria-label="Sweep Values List (comma-separated numbers)"
                     type="text"
                     value={sweepValuesStr}
                     onChange={(e) => setSweepValuesStr(e.target.value)}
@@ -390,7 +390,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   <label className="block text-slate-300 font-medium mb-1">
                     PRNG Seeds (comma-separated)
                   </label>
-                  <input
+                  <input aria-label="PRNG Seeds (comma-separated)"
                     type="text"
                     value={sweepSeedsStr}
                     onChange={(e) => setSweepSeedsStr(e.target.value)}
@@ -403,7 +403,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   <label className="block text-slate-300 font-medium mb-1">
                     Packets per Run
                   </label>
-                  <input
+                  <input aria-label="Packets per Run"
                     type="number"
                     min="1"
                     value={sweepPacketCount}
@@ -420,7 +420,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                 <button
                   onClick={handleRunSweep}
                   disabled={isRunning}
-                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20 transition flex items-center space-x-2 disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/20 transition flex items-center space-x-2 disabled:bg-slate-700 disabled:text-slate-300"
                 >
                   <Play className={`w-3.5 h-3.5 ${isRunning ? 'animate-spin' : ''}`} />
                   <span>{isRunning ? 'Simulating Sweep Points...' : 'Execute Parameter Sweep'}</span>
@@ -456,7 +456,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     <div className="text-xl font-bold text-emerald-400 mt-0.5">
                       {sweepResult.execution_time_ms} ms
                     </div>
-                    <span className="text-[11px] text-slate-400">Deterministic Rust execution</span>
+                    <span className="text-[11px] text-slate-400">Deterministic Python execution</span>
                   </div>
                 </div>
 
@@ -581,7 +581,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   <label className="block text-slate-300 font-medium text-xs mb-1">
                     Comparative Experiment Label
                   </label>
-                  <input
+                  <input aria-label="Comparative Experiment Label"
                     type="text"
                     value={compName}
                     onChange={(e) => setCompName(e.target.value)}
@@ -592,7 +592,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   <label className="block text-slate-300 font-medium text-xs mb-1">
                     Experiment Target
                   </label>
-                  <select
+                  <select aria-label="Experiment Target"
                     value={compTarget}
                     onChange={(e) => setCompTarget(e.target.value as ExperimentTarget)}
                     className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-emerald-500"
@@ -617,7 +617,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   </div>
                   <div>
                     <label className="block text-slate-400 mb-1">Scenario Label</label>
-                    <input
+                    <input aria-label="Scenario Label"
                       type="text"
                       value={scenarioAName}
                       onChange={(e) => setScenarioAName(e.target.value)}
@@ -626,7 +626,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   </div>
                   <div>
                     <label className="block text-slate-400 mb-1">Link Bandwidth (bps)</label>
-                    <input
+                    <input aria-label="Link Bandwidth (bps)"
                       type="number"
                       step="1000000"
                       value={scenarioABw}
@@ -646,7 +646,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   </div>
                   <div>
                     <label className="block text-slate-400 mb-1">Scenario Label</label>
-                    <input
+                    <input aria-label="Scenario Label"
                       type="text"
                       value={scenarioBName}
                       onChange={(e) => setScenarioBName(e.target.value)}
@@ -655,7 +655,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   </div>
                   <div>
                     <label className="block text-slate-400 mb-1">Link Bandwidth (bps)</label>
-                    <input
+                    <input aria-label="Link Bandwidth (bps)"
                       type="number"
                       step="1000000"
                       value={scenarioBBw}
@@ -669,7 +669,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-1">
                 <div>
                   <label className="block text-slate-300 font-medium mb-1">Seeds (comma-separated)</label>
-                  <input
+                  <input aria-label="Seeds (comma-separated)"
                     type="text"
                     value={compSeedsStr}
                     onChange={(e) => setCompSeedsStr(e.target.value)}
@@ -678,7 +678,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                 </div>
                 <div>
                   <label className="block text-slate-300 font-medium mb-1">Duration per run (µs)</label>
-                  <input
+                  <input aria-label="Duration per run (µs)"
                     type="number"
                     value={compDurationUs}
                     onChange={(e) => setCompDurationUs(Number(e.target.value))}
@@ -691,7 +691,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                 <button
                   onClick={handleRunComparative}
                   disabled={isRunning}
-                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2 disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2 disabled:bg-slate-700 disabled:text-slate-300"
                 >
                   <GitCompare className={`w-3.5 h-3.5 ${isRunning ? 'animate-spin' : ''}`} />
                   <span>{isRunning ? 'Running Comparative Analysis...' : 'Run Comparative A/B Test'}</span>

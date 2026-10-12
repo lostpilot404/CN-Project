@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Play, Mail, CheckCircle2, XCircle, AlertTriangle, UserCheck, UserX } from 'lucide-react';
-import { api } from '../../lib/tauri';
+import { api } from '../../lib/api';
 import { Project } from '../../types/project';
 import {
   SmtpConfig,
@@ -20,7 +20,7 @@ export const SmtpStudio: React.FC<SmtpStudioProps> = ({
   onPacketSelect,
   selectedPacketId,
 }) => {
-  const [clientNode, setClientNode] = useState<string>('host-a');
+  const [clientNode, setClientNode] = useState<string>('');
   const [serverNode, setServerNode] = useState<string>('mail-server');
   const [mailFrom, setMailFrom] = useState<string>('alice@example.com');
   const [rcptTo, setRcptTo] = useState<string>('bob@example.com');
@@ -44,6 +44,10 @@ export const SmtpStudio: React.FC<SmtpStudioProps> = ({
   }, [project]);
 
   const runSimulation = async () => {
+    if (!clientNode || !serverNode) {
+      setErrorMsg('Add at least two devices to the topology before running a simulation.');
+      return;
+    }
     setIsRunning(true);
     setErrorMsg(null);
     try {
@@ -121,7 +125,7 @@ export const SmtpStudio: React.FC<SmtpStudioProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-900/40 p-3.5 rounded-xl border border-slate-800/80">
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Mail Client (MUA)</label>
-          <input
+          <input aria-label="Mail Client (MUA)"
             type="text"
             value={clientNode}
             onChange={(e) => setClientNode(e.target.value)}
@@ -131,7 +135,7 @@ export const SmtpStudio: React.FC<SmtpStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Mail Transfer Agent (MTA)</label>
-          <input
+          <input aria-label="Mail Transfer Agent (MTA)"
             type="text"
             value={serverNode}
             onChange={(e) => setServerNode(e.target.value)}
@@ -141,7 +145,7 @@ export const SmtpStudio: React.FC<SmtpStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Sender (MAIL FROM)</label>
-          <input
+          <input aria-label="Sender (MAIL FROM)"
             type="text"
             value={mailFrom}
             onChange={(e) => setMailFrom(e.target.value)}
@@ -151,7 +155,7 @@ export const SmtpStudio: React.FC<SmtpStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Recipient (RCPT TO)</label>
-          <input
+          <input aria-label="Recipient (RCPT TO)"
             type="text"
             value={rcptTo}
             onChange={(e) => setRcptTo(e.target.value)}
@@ -161,7 +165,7 @@ export const SmtpStudio: React.FC<SmtpStudioProps> = ({
 
         <div className="md:col-span-2">
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Mail Subject</label>
-          <input
+          <input aria-label="Mail Subject"
             type="text"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
@@ -187,7 +191,7 @@ export const SmtpStudio: React.FC<SmtpStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">SMTP Port</label>
-          <input
+          <input aria-label="SMTP Port"
             type="number"
             value={port}
             onChange={(e) => setPort(Number(e.target.value))}
@@ -197,7 +201,7 @@ export const SmtpStudio: React.FC<SmtpStudioProps> = ({
 
         <div className="md:col-span-3">
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Message Content (DATA)</label>
-          <textarea
+          <textarea aria-label="Message Content (DATA)"
             rows={2}
             value={body}
             onChange={(e) => setBody(e.target.value)}
@@ -210,7 +214,7 @@ export const SmtpStudio: React.FC<SmtpStudioProps> = ({
             type="button"
             onClick={runSimulation}
             disabled={isRunning}
-            className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs rounded-lg shadow transition-colors disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs rounded-lg shadow transition-colors disabled:bg-slate-700 disabled:text-slate-300"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
             {isRunning ? 'Submitting Mail...' : 'Deliver SMTP Message'}

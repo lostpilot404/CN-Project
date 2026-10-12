@@ -15,7 +15,7 @@ import { Project } from '../../types/project';
 import { SimulationStateSnapshot } from '../../types/simulation';
 import { SimEvent, TimelineEvent, EventFilter } from '../../types/events';
 import { Packet, PacketHopRecord } from '../../types/packet';
-import { api } from '../../lib/tauri';
+import { api } from '../../lib/api';
 import { formatTimeUs } from '../../lib/utils';
 import { PacketInspector } from '../inspector/PacketInspector';
 import { EncapsulationViewer } from '../visualization/EncapsulationViewer';
@@ -39,6 +39,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
   const [selectedHopIndex, setSelectedHopIndex] = useState<number | undefined>(undefined);
   const [filter, setFilter] = useState<EventFilter>(initialEventFilter);
   const [rightPanelTab, setRightPanelTab] = useState<'encapsulation' | 'inspector'>('encapsulation');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Packet Injection Modal / Form State
   const [showInjectModal, setShowInjectModal] = useState<boolean>(false);
@@ -68,7 +69,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
         setSelectedPacketId((prev) => prev || snap.packets![0].id);
       }
     } catch (err) {
-      console.error('Failed to sync simulation state:', err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   }, []);
 
@@ -94,7 +95,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
       }
       await refreshSimulation();
     } catch (err) {
-      console.error('Step simulation error:', err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -103,7 +104,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
       await api.runSimulationMicros(50_000); // 50ms burst
       await refreshSimulation();
     } catch (err) {
-      console.error('Run burst error:', err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -112,7 +113,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
       await api.runSimulationUntilEmpty();
       await refreshSimulation();
     } catch (err) {
-      console.error('Run all error:', err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -122,7 +123,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
       setSnapshot(snap);
       await refreshSimulation();
     } catch (err) {
-      console.error('Pause simulation error:', err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -136,7 +137,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
       setSelectedEvent(null);
       setSelectedHopIndex(undefined);
     } catch (err) {
-      console.error('Reset simulation error:', err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -154,7 +155,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
       await refreshSimulation();
       setSelectedPacketId(pktId);
     } catch (err) {
-      console.error('Inject packet error:', err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -183,6 +184,22 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
 
   return (
     <div data-testid="simulation-studio" className="flex flex-col h-full bg-slate-950 text-slate-100 overflow-hidden select-none">
+      {errorMsg && (
+        <div
+          role="alert"
+          data-testid="simulation-error"
+          className="flex items-center justify-between px-4 py-2 bg-rose-950/80 border-b border-rose-800 text-rose-200 text-xs font-mono"
+        >
+          <span>Simulation command failed: {errorMsg}</span>
+          <button
+            type="button"
+            onClick={() => setErrorMsg(null)}
+            className="ml-4 px-2 py-0.5 rounded border border-rose-700 hover:bg-rose-900 cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {/* Top Playback & Metrics Toolbar */}
       <div className="h-14 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between px-4 z-10">
         {/* Playback action buttons */}
@@ -198,7 +215,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
           ) : (
             <button
               onClick={handleRunBurst}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-600 hover:bg-cyan-500 text-white transition-colors shadow-sm cursor-pointer"
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-700 hover:bg-cyan-800 text-white transition-colors shadow-sm cursor-pointer"
               title="Advance 50ms virtual simulation time"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
@@ -208,7 +225,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
 
           <button
             onClick={handleStep}
-            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
             title="Step Next Discrete Event"
           >
             <StepForward className="w-3.5 h-3.5" />
@@ -217,7 +234,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
 
           <button
             onClick={handleRunAll}
-            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
             title="Run until event queue is empty"
           >
             <FastForward className="w-3.5 h-3.5" />
@@ -226,7 +243,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
 
           <button
             onClick={handleReset}
-            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
             title="Reset Simulation Engine"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -238,7 +255,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
           {/* Inject Packet Button */}
           <button
             onClick={() => setShowInjectModal(true)}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-sm cursor-pointer"
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white transition-colors shadow-sm cursor-pointer"
           >
             <Send className="w-3.5 h-3.5" />
             <span>Inject Packet</span>
@@ -445,7 +462,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                   <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
                     Source Node
                   </label>
-                  <select
+                  <select aria-label="Source Node"
                     value={injectSrc}
                     onChange={(e) => setInjectSrc(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500"
@@ -462,7 +479,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                   <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
                     Destination Node
                   </label>
-                  <select
+                  <select aria-label="Destination Node"
                     value={injectDst}
                     onChange={(e) => setInjectDst(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500"
@@ -481,7 +498,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                   <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
                     Payload Size
                   </label>
-                  <input
+                  <input aria-label="Payload Size"
                     type="number"
                     min={64}
                     max={65535}
@@ -495,7 +512,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                   <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
                     App Protocol
                   </label>
-                  <select
+                  <select aria-label="App Protocol"
                     value={injectAppProto}
                     onChange={(e) => setInjectAppProto(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500"
@@ -511,7 +528,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                   <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
                     Transport
                   </label>
-                  <select
+                  <select aria-label="Transport"
                     value={injectTransProto}
                     onChange={(e) => setInjectTransProto(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500"
@@ -532,7 +549,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-bold text-white shadow-md cursor-pointer"
+                  className="px-4 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 font-bold text-white shadow-md cursor-pointer"
                 >
                   Inject Packet
                 </button>

@@ -6,8 +6,10 @@ Provides JSON RPC / HTTP interface for the presentation frontend and desktop she
 from __future__ import annotations
 
 import copy
+import ipaddress
 import json
 import logging
+import re
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -32,6 +34,7 @@ from netsim.application.http import HttpConfig, simulate_http
 from netsim.application.smtp import SmtpConfig, simulate_smtp
 from netsim.application.snmp import SnmpConfig, simulate_snmp
 from netsim.core.engine import SimulationEngine
+from netsim.core.schema import require_int, require_non_empty
 from netsim.datalink.checksum import internet_checksum, verify_checksum
 from netsim.datalink.crc import calculate_crc, verify_crc
 from netsim.datalink.flow_control import (
@@ -40,12 +43,12 @@ from netsim.datalink.flow_control import (
     simulate_selective_repeat,
     simulate_sliding_window,
 )
-from netsim.datalink.hamming import hamming_decode, hamming_encode
-from netsim.datalink.mac import MacConfig, simulate_mac
+from netsim.datalink.hamming import ParityMode, hamming_encode, verify_and_correct_hamming
+from netsim.datalink.mac import MacConfig, MacProtocol, simulate_mac
 from netsim.experiments.config import ComparativeExperimentConfig, SweepConfig
 from netsim.experiments.runner import run_comparative_experiment, run_parameter_sweep
-from netsim.faults.model import FaultScheduleEntry
-from netsim.models.interface import Interface
+from netsim.faults.model import FaultScheduleEntry, FaultType
+from netsim.models.interface import Interface, InterfaceStatus
 from netsim.models.link import Link, LinkEndpoint, LinkStatus
 from netsim.models.node import Node, NodeState, NodeType, Position
 from netsim.models.project import Project, ProjectMetadata
@@ -143,6 +146,13 @@ def create_default_project() -> Project:
         queue_capacity=50,
         status=LinkStatus.UP,
     )
+    # Mark the interfaces as attached so the topology editor can show live port bindings.
+    for link in (link1, link2):
+        for endpoint in (link.source, link.target):
+            node = next((n for n in (node1, node2, node3) if n.id == endpoint.node_id), None)
+            if node is not None:
+                node.attach_link(endpoint.interface_id, link.id)
+
     return Project(
         schema_version=1,
         metadata=ProjectMetadata(
@@ -177,6 +187,212 @@ class SessionState:
 
 SESSION = SessionState()
 
+SERVER_VERSION = "0.9.0"
+
+
+class CommandError(ValueError):
+    """Raised for invalid request payloads; reported to clients as HTTP 400."""
+
+
+class UnknownCommandError(CommandError):
+    """Raised when a client requests an API command that does not exist."""
+
+
+def arg(args: dict[str, Any], *keys: str, default: Any = None) -> Any:
+    """Return the first *present* key value, honouring explicit falsy values.
+
+    Using an explicit membership test (rather than ``or``) prevents valid zero values
+    such as ``loss_probability=0.0`` from silently falling through to a default.
+    """
+    for key in keys:
+        if key in args and args[key] is not None:
+            return args[key]
+    return default
+
+
+def find_node(node_id: str) -> Node:
+    node = next((n for n in SESSION.project.nodes if n.id == node_id), None)
+    if node is None:
+        raise CommandError(f"Node '{node_id}' not found")
+    return node
+
+
+def unique_node_id() -> str:
+    existing = {n.id for n in SESSION.project.nodes}
+    i = len(existing) + 1
+    while f"node-{i}" in existing:
+        i += 1
+    return f"node-{i}"
+
+
+def unique_link_id() -> str:
+    existing = {lnk.id for lnk in SESSION.project.links}
+    i = len(existing) + 1
+    while f"link-{i}" in existing:
+        i += 1
+    return f"link-{i}"
+
+
+MAX_INTERFACES_PER_NODE = 24
+
+
+def _interface_mac(node: Node, index: int) -> str:
+    """Deterministic, locally administered MAC address for a generated port."""
+    h = 0
+    for b in node.id.encode("utf-8"):
+        h = ((h * 31) + b) & 0xFFFFFFFF
+    return f"02:00:00:{index:02x}:{(h >> 8) & 0xFF:02x}:{h & 0xFF:02x}"
+
+
+def provision_interface(node: Node) -> Interface:
+    """Create a new, unconnected interface on *node*.
+
+    Nodes are created with a fixed number of ports. Without this a node that already uses all
+    of its ports can never be connected again, which makes the topology editor unusable as soon
+    as the shipped default project is loaded (all three default nodes have every port in use).
+    """
+    if len(node.interfaces) >= MAX_INTERFACES_PER_NODE:
+        raise CommandError(f"Node '{node.id}' already has the maximum of {MAX_INTERFACES_PER_NODE} interfaces")
+    used = set()
+    for iface in node.interfaces:
+        match = re.fullmatch(r"eth(\d+)", iface.name)
+        if match:
+            used.add(int(match.group(1)))
+    index = 0
+    while index in used:
+        index += 1
+    existing_ids = {i.id for i in node.interfaces}
+    iface_id = f"{node.id}-eth{index}"
+    while iface_id in existing_ids:
+        index += 1
+        iface_id = f"{node.id}-eth{index}"
+    iface = Interface(
+        id=iface_id,
+        name=f"eth{index}",
+        node_id=node.id,
+        mac_address=_interface_mac(node, index),
+    )
+    node.interfaces.append(iface)
+    return iface
+
+
+def resolve_link_endpoint(node: Node, interface_id: str | None) -> Interface:
+    """Resolve an endpoint interface, provisioning a fresh port when required.
+
+    An explicitly requested interface must exist and be free; otherwise the first free port is
+    used, and a new port is created when every existing port is taken.
+    """
+    if interface_id:
+        iface = next((i for i in node.interfaces if i.id == interface_id or i.name == interface_id), None)
+        if iface is None:
+            raise CommandError(f"Interface '{interface_id}' not found on node '{node.id}'")
+        if iface.link_id is not None:
+            raise CommandError(
+                f"Interface '{iface.name}' on node '{node.id}' is already connected to link '{iface.link_id}'"
+            )
+        return iface
+    free = node.first_free_interface()
+    if free is not None:
+        return free
+    return provision_interface(node)
+
+
+def parse_enum(enum_cls: Any, value: Any, field: str) -> Any:
+    """Case-sensitive enum lookup with an explicit list of accepted values in the message.
+
+    Callers normalise the casing to the enum's own convention first (for example ``.upper()``
+    for ``NatProtocol``, whose members are upper-case protocol names).
+    """
+    try:
+        return enum_cls(value)
+    except ValueError as exc:
+        allowed = ", ".join(sorted(m.value for m in enum_cls))
+        raise CommandError(f"Invalid {field} '{value}'. Expected one of: {allowed}") from exc
+
+
+def validate_project(project: Project) -> None:
+    """Structural validation shared by load/create paths."""
+    node_ids = [n.id for n in project.nodes]
+    if len(node_ids) != len(set(node_ids)):
+        raise CommandError("Project contains duplicate node identifiers")
+    known = set(node_ids)
+    link_ids = [lnk.id for lnk in project.links]
+    if len(link_ids) != len(set(link_ids)):
+        raise CommandError("Project contains duplicate link identifiers")
+    for link in project.links:
+        if link.source.node_id not in known:
+            raise CommandError(f"Link '{link.id}' references unknown source node '{link.source.node_id}'")
+        if link.target.node_id not in known:
+            raise CommandError(f"Link '{link.id}' references unknown target node '{link.target.node_id}'")
+        try:
+            link.validate()
+        except ValueError as exc:
+            raise CommandError(f"Link '{link.id}' is invalid: {exc}") from exc
+
+
+def config_arg(args: dict[str, Any], key: str = "config") -> dict[str, Any]:
+    """Return the nested configuration object, rejecting non-object payloads.
+
+    Commands consistently take ``{"config": {...}}``. A caller that sends a string, list or
+    ``null`` where an object is expected must get a structured 400 rather than a parser fault.
+    """
+    raw = args.get(key)
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise CommandError(f"'{key}' must be a JSON object (received {type(raw).__name__})")
+    return raw
+
+
+def _transport_config(args: dict[str, Any]) -> TransportConfig:
+    cfg_data = config_arg(args)
+    if not isinstance(cfg_data, dict):
+        raise CommandError("Transport configuration must be an object")
+    cfg_data = dict(cfg_data)
+    if SESSION.project.nodes:
+        cfg_data.setdefault("source_node_id", SESSION.project.nodes[0].id)
+        cfg_data.setdefault("destination_node_id", SESSION.project.nodes[-1].id)
+    try:
+        cfg = TransportConfig.from_dict(cfg_data)
+    except (ValueError, TypeError) as exc:
+        raise CommandError(f"Invalid transport configuration: {exc}") from exc
+    if cfg.source_node_id == cfg.destination_node_id:
+        raise CommandError("Source and destination nodes must differ for a transport session")
+    if cfg.segment_size_bytes < 1:
+        raise CommandError("Segment size must be at least 1 byte")
+    if cfg.payload_bytes < 1:
+        raise CommandError("Payload size must be at least 1 byte")
+    return cfg
+
+
+def _validate_fault_target(fault: FaultType) -> None:
+    """Reject faults that could never take effect.
+
+    A fault pointing at a link or node that does not exist used to be accepted and then silently
+    ignored when the engine executed it, so the UI reported a scheduled fault that did nothing.
+    """
+    if fault.link_id is not None:
+        if not any(link.id == fault.link_id for link in SESSION.project.links):
+            raise CommandError(f"Fault targets unknown link '{fault.link_id}'")
+    if fault.node_id is not None:
+        if not any(node.id == fault.node_id for node in SESSION.project.nodes):
+            raise CommandError(f"Fault targets unknown node '{fault.node_id}'")
+    if fault.type in ("link_down", "link_restore", "bandwidth_degradation", "queue_capacity_change", "bit_error"):
+        if not fault.link_id:
+            raise CommandError(f"Fault type '{fault.type}' requires a 'link_id'")
+    if fault.type in ("node_failure", "node_recovery") and not fault.node_id:
+        raise CommandError(f"Fault type '{fault.type}' requires a 'node_id'")
+    if fault.type == "bandwidth_degradation":
+        if fault.new_bandwidth_bps is None or int(fault.new_bandwidth_bps) < 1:
+            raise CommandError("'bandwidth_degradation' requires 'new_bandwidth_bps' >= 1")
+    if fault.type == "queue_capacity_change":
+        if fault.new_capacity is None or int(fault.new_capacity) < 1:
+            raise CommandError("'queue_capacity_change' requires 'new_capacity' >= 1")
+    if fault.type == "bit_error":
+        rate = fault.error_rate
+        if rate is None or not (0.0 <= float(rate) <= 1.0):
+            raise CommandError("'bit_error' requires 'error_rate' between 0.0 and 1.0")
+
 
 def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
     # 1. Project Management
@@ -188,6 +404,9 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         name = args.get("name", "New NetSim Project")
         SESSION.project = create_default_project()
         SESSION.project.metadata.name = name
+        # NAT tables are per-project configuration: a brand new project must not inherit the
+        # dynamic mappings and static port forwards of the project it replaced.
+        SESSION.nat_tables.clear()
         SESSION.reset_engine()
         return SESSION.project.to_dict()
 
@@ -195,67 +414,116 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         return json.dumps(SESSION.project.to_dict(), indent=2)
 
     elif cmd in ("load_project_json", "loadProjectJson"):
+        raw = arg(args, "jsonContent", "json_string", "jsonString", "content", default=None)
+        if raw is None:
+            raise CommandError("No project JSON supplied")
+        if isinstance(raw, str):
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise CommandError(f"Project JSON is not valid JSON: {exc.msg} (line {exc.lineno})") from exc
+        else:
+            data = raw
+        if not isinstance(data, dict):
+            raise CommandError("Project JSON must decode to an object")
+        try:
+            project = Project.from_dict(data)
+        except (KeyError, TypeError, ValueError) as exc:
+            raise CommandError(f"Project JSON is not a valid NetSim project: {exc}") from exc
+        validate_project(project)
         SESSION.push_undo()
-        raw = args.get("json_string") or args.get("jsonString", "{}")
-        data = json.loads(raw) if isinstance(raw, str) else raw
-        SESSION.project = Project.from_dict(data)
+        SESSION.project = project
+        # Loaded projects carry their own NAT configuration (if any) and never inherit another
+        # project's tables; unknown router ids are recreated on first use.
+        SESSION.nat_tables.clear()
         SESSION.reset_engine()
         return SESSION.project.to_dict()
 
     # 2. Topology Mutation
     elif cmd in ("add_node", "addNode"):
+        label = str(arg(args, "label", default="Node"))
+        raw_nt = arg(args, "node_type", "nodeType", default="pc")
+        nt = parse_enum(NodeType, raw_nt, "node type")
+        pos = arg(args, "position", default=None)
+        if isinstance(pos, dict):
+            x = float(pos.get("x", 200.0))
+            y = float(pos.get("y", 200.0))
+        else:
+            x = float(arg(args, "x", default=200.0))
+            y = float(arg(args, "y", default=200.0))
+        requested_id = arg(args, "id", "node_id", "nodeId", default=None)
+        node_id = str(requested_id) if requested_id else unique_node_id()
+        if any(n.id == node_id for n in SESSION.project.nodes):
+            raise CommandError(f"Node '{node_id}' already exists")
         SESSION.push_undo()
-        label = args.get("label", "Node")
-        raw_nt = args.get("node_type") or args.get("nodeType", "pc")
-        nt = NodeType(raw_nt) if isinstance(raw_nt, str) else NodeType.PC
-        x = float(args.get("x", 200.0))
-        y = float(args.get("y", 200.0))
-        node_id = f"node-{len(SESSION.project.nodes) + 1}"
         new_node = Node.create(node_id, label, nt, x, y)
         SESSION.project.nodes.append(new_node)
         return new_node.to_dict()
 
     elif cmd in ("update_node", "updateNode"):
+        node_id = arg(args, "node_id", "nodeId")
+        node = find_node(str(node_id))
         SESSION.push_undo()
-        node_id = args.get("node_id") or args.get("nodeId")
-        node = next((n for n in SESSION.project.nodes if n.id == node_id), None)
-        if not node:
-            raise ValueError(f"Node '{node_id}' not found")
-        if "label" in args and args["label"]:
-            node.label = args["label"]
-        if "x" in args and "y" in args:
-            node.position = Position(x=float(args["x"]), y=float(args["y"]))
-        if "state" in args and args["state"]:
-            st = args["state"]
-            node.state = NodeState(st) if isinstance(st, str) else NodeState.UP
+        label = arg(args, "label", default=None)
+        if label is not None:
+            node.label = str(label)
+        pos = arg(args, "position", default=None)
+        if isinstance(pos, dict):
+            node.position = Position(x=float(pos.get("x", node.position.x)), y=float(pos.get("y", node.position.y)))
+        elif "x" in args or "y" in args:
+            node.position = Position(
+                x=float(arg(args, "x", default=node.position.x)), y=float(arg(args, "y", default=node.position.y))
+            )
+        state = arg(args, "state", "node_state", "nodeState", default=None)
+        if state is not None:
+            node.state = parse_enum(NodeState, state, "node state")
         return node.to_dict()
 
     elif cmd in ("remove_node", "removeNode"):
+        raw_id = arg(args, "node_id", "nodeId")
+        if raw_id is None or str(raw_id).strip() == "":
+            raise CommandError("A node identifier is required to remove a node")
+        node_id = str(raw_id)
+        find_node(node_id)
+        removed_link_ids = {
+            lnk.id for lnk in SESSION.project.links if lnk.source.node_id == node_id or lnk.target.node_id == node_id
+        }
         SESSION.push_undo()
-        node_id = args.get("node_id") or args.get("nodeId")
         SESSION.project.nodes = [n for n in SESSION.project.nodes if n.id != node_id]
-        SESSION.project.links = [
-            lnk for lnk in SESSION.project.links if lnk.source.node_id != node_id and lnk.target.node_id != node_id
-        ]
+        SESSION.project.links = [lnk for lnk in SESSION.project.links if lnk.id not in removed_link_ids]
+        for node in SESSION.project.nodes:
+            for link_id in removed_link_ids:
+                node.detach_link(link_id)
         SESSION.reset_engine()
         return None
 
     elif cmd in ("add_link", "addLink"):
-        SESSION.push_undo()
-        src_node = args.get("source_node_id") or args.get("sourceNodeId")
-        src_if = args.get("source_interface_id") or args.get("sourceInterfaceId")
-        dst_node = args.get("target_node_id") or args.get("targetNodeId")
-        dst_if = args.get("target_interface_id") or args.get("targetInterfaceId")
-        bw = int(args.get("bandwidth_bps") or args.get("bandwidthBps", 10_000_000))
-        delay = int(args.get("propagation_delay_us") or args.get("propagationDelayUs", 5_000))
-        loss = float(args.get("loss_probability") or args.get("lossProbability", 0.0))
-        ber = float(args.get("bit_error_rate") or args.get("bitErrorRate", 0.0))
-        cap = int(args.get("queue_capacity") or args.get("queueCapacity", 50))
-        link_id = f"link-{len(SESSION.project.links) + 1}"
+        src_node_id = arg(args, "source_node_id", "sourceNodeId")
+        dst_node_id = arg(args, "target_node_id", "targetNodeId")
+        if not src_node_id or not dst_node_id:
+            raise CommandError("Both source and target node identifiers are required to create a link")
+        if src_node_id == dst_node_id:
+            raise CommandError(f"Cannot connect node '{src_node_id}' to itself")
+        src_node = find_node(str(src_node_id))
+        dst_node = find_node(str(dst_node_id))
+
+        src_if = resolve_link_endpoint(src_node, arg(args, "source_interface_id", "sourceInterfaceId"))
+        dst_if = resolve_link_endpoint(dst_node, arg(args, "target_interface_id", "targetInterfaceId"))
+
+        bw = int(arg(args, "bandwidth_bps", "bandwidthBps", default=10_000_000))
+        delay = int(arg(args, "propagation_delay_us", "propagationDelayUs", default=5_000))
+        loss = float(arg(args, "loss_probability", "lossProbability", default=0.0))
+        ber = float(arg(args, "bit_error_rate", "bitErrorRate", default=0.0))
+        cap = int(arg(args, "queue_capacity", "queueCapacity", default=50))
+        requested_id = arg(args, "id", "link_id", "linkId", default=None)
+        link_id = str(requested_id) if requested_id else unique_link_id()
+        if any(lnk.id == link_id for lnk in SESSION.project.links):
+            raise CommandError(f"Link '{link_id}' already exists")
+
         new_link = Link(
             id=link_id,
-            source=LinkEndpoint(node_id=src_node, interface_id=src_if),
-            target=LinkEndpoint(node_id=dst_node, interface_id=dst_if),
+            source=LinkEndpoint(node_id=src_node.id, interface_id=src_if.id),
+            target=LinkEndpoint(node_id=dst_node.id, interface_id=dst_if.id),
             bandwidth_bps=bw,
             propagation_delay_us=delay,
             loss_probability=loss,
@@ -263,57 +531,83 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
             queue_capacity=cap,
             status=LinkStatus.UP,
         )
+        new_link.validate()
+        SESSION.push_undo()
+        src_node.attach_link(src_if.id, link_id)
+        dst_node.attach_link(dst_if.id, link_id)
         SESSION.project.links.append(new_link)
         SESSION.engine.update_links(SESSION.project.links)
         return new_link.to_dict()
 
     elif cmd in ("update_link", "updateLink"):
-        SESSION.push_undo()
-        link_id = args.get("link_id") or args.get("linkId")
+        link_id = str(arg(args, "link_id", "linkId"))
         link = next((lnk for lnk in SESSION.project.links if lnk.id == link_id), None)
         if not link:
             raise ValueError(f"Link '{link_id}' not found")
-        if "bandwidth_bps" in args or "bandwidthBps" in args:
-            link.bandwidth_bps = int(args.get("bandwidth_bps") or args.get("bandwidthBps"))
-        if "propagation_delay_us" in args or "propagationDelayUs" in args:
-            link.propagation_delay_us = int(args.get("propagation_delay_us") or args.get("propagationDelayUs"))
-        if "loss_probability" in args or "lossProbability" in args:
-            link.loss_probability = float(args.get("loss_probability") or args.get("lossProbability"))
-        if "bit_error_rate" in args or "bitErrorRate" in args:
-            link.bit_error_rate = float(args.get("bit_error_rate") or args.get("bitErrorRate"))
-        if "queue_capacity" in args or "queueCapacity" in args:
-            link.queue_capacity = int(args.get("queue_capacity") or args.get("queueCapacity"))
+        if any(k in args for k in ("bandwidth_bps", "bandwidthBps")):
+            link.bandwidth_bps = int(arg(args, "bandwidth_bps", "bandwidthBps"))
+        if any(k in args for k in ("propagation_delay_us", "propagationDelayUs")):
+            link.propagation_delay_us = int(arg(args, "propagation_delay_us", "propagationDelayUs"))
+        if any(k in args for k in ("loss_probability", "lossProbability")):
+            link.loss_probability = float(arg(args, "loss_probability", "lossProbability"))
+        if any(k in args for k in ("bit_error_rate", "bitErrorRate")):
+            link.bit_error_rate = float(arg(args, "bit_error_rate", "bitErrorRate"))
+        if any(k in args for k in ("queue_capacity", "queueCapacity")):
+            link.queue_capacity = int(arg(args, "queue_capacity", "queueCapacity"))
         if "status" in args:
-            st = args["status"]
-            link.status = LinkStatus(st) if isinstance(st, str) else LinkStatus.UP
+            link.status = parse_enum(LinkStatus, args["status"], "link status")
+        link.validate()
+        SESSION.push_undo()
+        # An explicit reconfiguration supersedes any captured pre-fault value.
+        SESSION.engine.clear_fault_snapshot(link.id)
         SESSION.engine.update_links(SESSION.project.links)
         return link.to_dict()
 
     elif cmd in ("remove_link", "removeLink"):
+        link_id = str(arg(args, "link_id", "linkId"))
         SESSION.push_undo()
-        link_id = args.get("link_id") or args.get("linkId")
         SESSION.project.links = [lnk for lnk in SESSION.project.links if lnk.id != link_id]
+        for node in SESSION.project.nodes:
+            node.detach_link(link_id)
         SESSION.engine.update_links(SESSION.project.links)
         return None
 
     elif cmd in ("update_interface", "updateInterface"):
-        SESSION.push_undo()
-        node_id = args.get("node_id") or args.get("nodeId")
-        if_id = args.get("interface_id") or args.get("interfaceId")
-        node = next((n for n in SESSION.project.nodes if n.id == node_id), None)
-        if not node:
-            raise ValueError(f"Node '{node_id}' not found")
+        node_id = arg(args, "node_id", "nodeId")
+        if_id = arg(args, "interface_id", "interfaceId")
+        node = find_node(str(node_id))
         iface = next((i for i in node.interfaces if i.id == if_id), None)
         if not iface:
             raise ValueError(f"Interface '{if_id}' not found on node '{node_id}'")
+        new_ipv4 = arg(args, "ipv4", default=iface.ipv4) if "ipv4" in args else iface.ipv4
+        new_mask = arg(args, "subnet_mask", "subnetMask", default=iface.subnet_mask)
+        new_ipv6 = arg(args, "ipv6", default=iface.ipv6) if "ipv6" in args else iface.ipv6
+        if new_ipv4:
+            try:
+                ipaddress.IPv4Address(str(new_ipv4))
+            except ValueError as exc:
+                raise CommandError(f"Invalid IPv4 address '{new_ipv4}'") from exc
+        if new_mask:
+            try:
+                ipaddress.IPv4Network(f"0.0.0.0/{new_mask}")
+            except ValueError as exc:
+                raise CommandError(f"Invalid IPv4 subnet mask '{new_mask}'") from exc
+        if new_ipv6:
+            try:
+                ipaddress.IPv6Interface(str(new_ipv6))
+            except ValueError as exc:
+                raise CommandError(f"Invalid IPv6 address/prefix '{new_ipv6}'") from exc
+        SESSION.push_undo()
         if "ipv4" in args:
-            iface.ipv4 = args["ipv4"]
-        if "subnet_mask" in args or "subnetMask" in args:
-            iface.subnet_mask = args.get("subnet_mask") or args.get("subnetMask")
+            iface.ipv4 = new_ipv4
+        if any(k in args for k in ("subnet_mask", "subnetMask")):
+            iface.subnet_mask = new_mask
         if "ipv6" in args:
-            iface.ipv6 = args["ipv6"]
-        if "mac_address" in args or "macAddress" in args:
-            iface.mac_address = args.get("mac_address") or args.get("macAddress")
+            iface.ipv6 = new_ipv6
+        if any(k in args for k in ("mac_address", "macAddress")):
+            iface.mac_address = arg(args, "mac_address", "macAddress")
+        if "status" in args:
+            iface.status = parse_enum(InterfaceStatus, args["status"], "interface status")
         return iface.to_dict()
 
     elif cmd in ("undo_topology", "undoTopology"):
@@ -347,7 +641,15 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         return evt.to_dict() if evt else None
 
     elif cmd in ("run_simulation_micros", "runSimulationMicros"):
-        dur = int(args.get("duration_us") or args.get("durationUs", 100_000))
+        raw_dur = arg(args, "duration_us", "durationUs", default=100_000)
+        try:
+            dur = int(raw_dur)
+        except (TypeError, ValueError) as exc:
+            raise CommandError(
+                f"Simulation duration must be an integer number of microseconds (received {raw_dur!r})"
+            ) from exc
+        if dur < 1:
+            raise CommandError(f"Simulation duration must be at least 1 microsecond (received {dur})")
         target = SESSION.engine.current_time.add_micros(dur)
         return SESSION.engine.run_until(target)
 
@@ -363,57 +665,94 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         return SESSION.engine.get_state_snapshot()
 
     elif cmd in ("inject_packet", "injectPacket"):
-        src = args.get("src_node_id") or args.get("srcNodeId")
-        dst = args.get("dst_node_id") or args.get("dstNodeId")
-        size = int(args.get("size_bytes") or args.get("sizeBytes", 1000))
-        app = args.get("app_protocol") or args.get("appProtocol", "HTTP")
-        trans = args.get("transport_protocol") or args.get("transportProtocol", "TCP")
-        pkt_id = SESSION.engine.inject_packet(src, dst, size, app, trans)
+        src = arg(args, "src_node_id", "srcNodeId")
+        dst = arg(args, "dst_node_id", "dstNodeId")
+        if not src or not dst:
+            raise CommandError("Both source and destination node identifiers are required")
+        find_node(str(src))
+        find_node(str(dst))
+        size = int(arg(args, "size_bytes", "sizeBytes", default=1000))
+        if size < 1:
+            raise CommandError("Packet size must be at least 1 byte")
+        if size > 9_000_000:
+            raise CommandError("Packet size must not exceed 9,000,000 bytes")
+        app = str(arg(args, "app_protocol", "appProtocol", default="HTTP"))
+        trans = str(arg(args, "transport_protocol", "transportProtocol", default="TCP"))
+        pkt_id = SESSION.engine.inject_packet(str(src), str(dst), size, app, trans)
         return pkt_id
 
     elif cmd in ("get_packet_details", "getPacketDetails"):
-        pkt_id = args.get("packet_id") or args.get("packetId")
-        pkt = SESSION.engine.packets.get(pkt_id)
-        return pkt.to_dict() if pkt else None
+        pkt_id = arg(args, "packet_id", "packetId")
+        if not pkt_id:
+            raise CommandError("A packet identifier is required")
+        pkt = SESSION.engine.packets.get(str(pkt_id))
+        if pkt is None:
+            raise CommandError(f"Packet '{pkt_id}' does not exist in the current simulation")
+        return pkt.to_dict()
 
     elif cmd in ("schedule_demo_packet", "scheduleDemoPacket"):
-        if len(SESSION.project.nodes) >= 2:
-            src = SESSION.project.nodes[0].id
-            dst = SESSION.project.nodes[-1].id
-            return SESSION.engine.inject_packet(src, dst, 1000, "HTTP", "TCP")
-        return None
+        """Queue a canned demo flow; endpoints default to the first and last node.
+
+        The endpoints are honoured when supplied - the client wrapper exposes them, and ignoring
+        them meant a caller could ask for a specific pair and silently get a different one.
+        """
+        if len(SESSION.project.nodes) < 2:
+            return None
+        src = str(arg(args, "src_node_id", "srcNodeId", default=SESSION.project.nodes[0].id))
+        dst = str(arg(args, "dst_node_id", "dstNodeId", default=SESSION.project.nodes[-1].id))
+        find_node(src)
+        find_node(dst)
+        if src == dst:
+            raise CommandError("A demo packet must have different source and destination nodes")
+        return SESSION.engine.inject_packet(src, dst, 1000, "HTTP", "TCP")
 
     # 4. Algorithms & Addressing
     elif cmd in ("calculate_simple_checksum", "calculateSimpleChecksum"):
-        data = args.get("data", "")
-        return {"checksum": sum(b for b in data.encode("utf-8")) & 0xFFFF}
+        data = arg(args, "data", default=None)
+        if data is None or str(data) == "":
+            raise CommandError("'data' is required to compute a simple checksum")
+        return {"checksum": sum(b for b in str(data).encode("utf-8")) & 0xFFFF}
 
     elif cmd in ("calculate_routing_table", "calculateRoutingTable"):
-        algo_str = args.get("algorithm", "dijkstra").lower()
-        metric_str = args.get("metric_type") or args.get("metricType", "hop_count")
-        node_id = args.get("node_id") or args.get("nodeId") or SESSION.project.nodes[0].id
-        metric = MetricType(metric_str) if metric_str in [m.value for m in MetricType] else MetricType.HOP_COUNT
+        algo_str = str(arg(args, "algorithm", default="dijkstra")).lower()
+        if algo_str not in ("dijkstra", "bellman_ford"):
+            raise CommandError(f"Unsupported routing algorithm '{algo_str}'. Expected 'dijkstra' or 'bellman_ford'")
+        metric_str = str(arg(args, "metric_type", "metricType", default="hop_count"))
+        metric = parse_enum(MetricType, metric_str, "routing metric")
+        node_id = str(arg(args, "node_id", "nodeId", default=SESSION.project.nodes[0].id))
+        find_node(node_id)
         graph = RoutingGraph.from_project(SESSION.project, metric)
         if algo_str == "bellman_ford":
-            return compute_bellman_ford_shortest_paths(graph, node_id).to_dict()
-        return compute_dijkstra_shortest_paths(graph, node_id).to_dict()
+            try:
+                return compute_bellman_ford_shortest_paths(graph, node_id).to_dict()
+            except ValueError as exc:
+                raise CommandError(str(exc)) from exc
+        try:
+            return compute_dijkstra_shortest_paths(graph, node_id).to_dict()
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
 
     elif cmd in ("simulate_routing_convergence", "simulateRoutingConvergence"):
-        src_id = (
-            args.get("source_node_id")
-            or args.get("sourceNodeId")
-            or args.get("node_id")
-            or args.get("nodeId")
-            or SESSION.project.nodes[0].id
+        src_id = str(
+            arg(args, "source_node_id", "sourceNodeId", "node_id", "nodeId", default=SESSION.project.nodes[0].id)
         )
-        metric_str = args.get("metric_type") or args.get("metricType", "hop_count")
-        metric = MetricType(metric_str) if metric_str in [m.value for m in MetricType] else MetricType.HOP_COUNT
+        find_node(src_id)
+        metric_str = str(arg(args, "metric_type", "metricType", default="hop_count"))
+        metric = parse_enum(MetricType, metric_str, "routing metric")
         graph = RoutingGraph.from_project(SESSION.project, metric)
-        return simulate_distance_vector_convergence(graph, src_id).to_dict()
+        try:
+            return simulate_distance_vector_convergence(graph, src_id).to_dict()
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
 
     elif cmd in ("calculate_ipv4_subnet", "calculateIpv4Subnet"):
-        cidr = args.get("input") or args.get("cidr", "192.168.1.0/24")
-        return calculate_subnet(cidr).to_dict()
+        cidr = arg(args, "input", "cidr", default=None)
+        if cidr is None or str(cidr).strip() == "":
+            raise CommandError("An IPv4 address or CIDR block is required (e.g. '192.168.1.0/24')")
+        try:
+            return calculate_subnet(str(cidr)).to_dict()
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
 
     elif cmd in ("split_ipv4_subnet", "splitIpv4Subnet"):
         base = args.get("base_cidr") or args.get("baseCidr", "192.168.1.0/24")
@@ -441,57 +780,59 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         return analyze_ipv6_address(addr).to_dict()
 
     elif cmd in ("get_or_create_nat_table", "getOrCreateNatTable"):
-        nid = args.get("node_id") or args.get("nodeId") or args.get("router_node_id", "router-1")
+        nid = arg(args, "router_node_id", "routerNodeId", "node_id", "nodeId", default="router-1")
         pub = args.get("public_ip") or args.get("publicIp", "203.0.113.1")
         if nid not in SESSION.nat_tables:
             SESSION.nat_tables[nid] = NatTable(nid, pub)
         return SESSION.nat_tables[nid].to_dict()
 
     elif cmd in ("add_static_dnat_rule", "addStaticDnatRule"):
-        nid = args.get("node_id") or args.get("nodeId", "router-1")
-        pub = args.get("public_ip") or args.get("publicIp", "203.0.113.1")
+        nid = arg(args, "router_node_id", "routerNodeId", "node_id", "nodeId", default="router-1")
+        pub = arg(args, "public_ip", "publicIp", default="203.0.113.1")
         if nid not in SESSION.nat_tables:
             SESSION.nat_tables[nid] = NatTable(nid, pub)
         table = SESSION.nat_tables[nid]
-        proto = NatProtocol(args.get("protocol", "tcp").lower())
+        proto = parse_enum(NatProtocol, str(args.get("protocol", "tcp")).upper(), "NAT protocol")
         table.add_static_dnat_rule(
             protocol=proto,
-            public_port=int(args.get("public_port") or args.get("publicPort")),
-            private_ip=args.get("private_ip") or args.get("privateIp"),
-            private_port=int(args.get("private_port") or args.get("privatePort")),
-            description=args.get("description", "Static Port Forwarding"),
+            public_port=require_int(arg(args, "public_port", "publicPort"), "public_port", minimum=0, maximum=65535),
+            private_ip=require_non_empty(arg(args, "private_ip", "privateIp"), "private_ip"),
+            private_port=require_int(
+                arg(args, "private_port", "privatePort"), "private_port", minimum=0, maximum=65535
+            ),
+            description=str(arg(args, "description", default="Static Port Forwarding")),
         )
         return table.to_dict()
 
     elif cmd in ("simulate_nat_outbound", "simulateNatOutbound"):
-        nid = args.get("router_node_id") or args.get("routerNodeId", "router-1")
-        pub = args.get("public_ip") or args.get("publicIp", "203.0.113.1")
+        nid = arg(args, "router_node_id", "routerNodeId", "node_id", "nodeId", default="router-1")
+        pub = arg(args, "public_ip", "publicIp", default="203.0.113.1")
         if nid not in SESSION.nat_tables:
             SESSION.nat_tables[nid] = NatTable(nid, pub)
         table = SESSION.nat_tables[nid]
-        proto = NatProtocol(args.get("protocol", "tcp").lower())
+        proto = parse_enum(NatProtocol, str(args.get("protocol", "tcp")).upper(), "NAT protocol")
         res = table.translate_outbound(
-            src_ip=args.get("src_ip") or args.get("srcIp"),
-            src_port=int(args.get("src_port") or args.get("srcPort")),
-            dst_ip=args.get("dst_ip") or args.get("dstIp"),
-            dst_port=int(args.get("dst_port") or args.get("dstPort")),
+            src_ip=require_non_empty(arg(args, "src_ip", "srcIp"), "src_ip"),
+            src_port=require_int(arg(args, "src_port", "srcPort"), "src_port", minimum=0, maximum=65535),
+            dst_ip=require_non_empty(arg(args, "dst_ip", "dstIp"), "dst_ip"),
+            dst_port=require_int(arg(args, "dst_port", "dstPort"), "dst_port", minimum=0, maximum=65535),
             protocol=proto,
             current_time_us=0,
         )
         return res.to_dict()
 
     elif cmd in ("simulate_nat_inbound", "simulateNatInbound"):
-        nid = args.get("router_node_id") or args.get("routerNodeId", "router-1")
-        pub = args.get("public_ip") or args.get("publicIp", "203.0.113.1")
+        nid = arg(args, "router_node_id", "routerNodeId", "node_id", "nodeId", default="router-1")
+        pub = arg(args, "public_ip", "publicIp", default="203.0.113.1")
         if nid not in SESSION.nat_tables:
             SESSION.nat_tables[nid] = NatTable(nid, pub)
         table = SESSION.nat_tables[nid]
-        proto = NatProtocol(args.get("protocol", "tcp").lower())
+        proto = parse_enum(NatProtocol, str(args.get("protocol", "tcp")).upper(), "NAT protocol")
         res = table.translate_inbound(
-            src_ip=args.get("src_ip") or args.get("srcIp"),
-            src_port=int(args.get("src_port") or args.get("srcPort")),
-            dst_ip=args.get("dst_ip") or args.get("dstIp"),
-            dst_port=int(args.get("dst_port") or args.get("dstPort")),
+            src_ip=require_non_empty(arg(args, "src_ip", "srcIp"), "src_ip"),
+            src_port=require_int(arg(args, "src_port", "srcPort"), "src_port", minimum=0, maximum=65535),
+            dst_ip=require_non_empty(arg(args, "dst_ip", "dstIp"), "dst_ip"),
+            dst_port=require_int(arg(args, "dst_port", "dstPort"), "dst_port", minimum=0, maximum=65535),
             protocol=proto,
             current_time_us=1000,
         )
@@ -499,14 +840,25 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
 
     # 5. Data Link: Error Control & Flow Control
     elif cmd in ("calculate_hamming_encode", "calculateHammingEncode"):
-        data_bits = args.get("data_bits") or args.get("dataBits", "1011")
-        parity_mode = args.get("parity_mode") or args.get("parityMode", "even")
+        data_bits = str(arg(args, "data_bits", "dataBits", default="1011"))
+        parity_mode = str(arg(args, "parity_mode", "parityMode", default="even")).lower()
+        if parity_mode not in ("even", "odd"):
+            raise CommandError(f"Unsupported parity mode '{parity_mode}'. Expected 'even' or 'odd'")
         return hamming_encode(data_bits, even_parity=(parity_mode == "even")).to_dict()
 
     elif cmd in ("verify_and_correct_hamming", "verifyAndCorrectHamming"):
-        codeword = args.get("codeword", "1010101")
-        parity_mode = args.get("parity_mode") or args.get("parityMode", "even")
-        return hamming_decode(codeword, even_parity=(parity_mode == "even")).to_dict()
+        codeword = str(arg(args, "codeword", default="1010101"))
+        parity_mode = str(arg(args, "parity_mode", "parityMode", default="even")).lower()
+        if parity_mode not in ("even", "odd"):
+            raise CommandError(f"Unsupported parity mode '{parity_mode}'. Expected 'even' or 'odd'")
+        try:
+            # Return the full verification result: the client contract (see
+            # `HammingVerifyResult` in src/types/datalink.ts) includes the syndrome, the corrected
+            # codeword and the status message, which `hamming_decode` does not carry.
+            result = verify_and_correct_hamming(codeword, ParityMode.EVEN if parity_mode == "even" else ParityMode.ODD)
+            return result.to_dict()
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
 
     elif cmd in ("calculate_crc", "calculateCrc"):
         data_bits = args.get("data_bits") or args.get("dataBits", "11010011101100")
@@ -525,81 +877,92 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         return internet_checksum(raw_hex).to_dict()
 
     elif cmd in ("verify_internet_checksum", "verifyInternetChecksum"):
-        payload = args.get("payload_hex") or args.get("payloadHex", "4500003c1c4640004006")
-        csum = args.get("checksum_hex") or args.get("checksumHex", "b1e6")
-        return verify_checksum(payload, csum).to_dict()
+        payload = arg(args, "payload_hex", "payloadHex", default=None)
+        csum = arg(args, "checksum_hex", "checksumHex", default=None)
+        if not payload or not csum:
+            raise CommandError("Both 'payloadHex' and 'checksumHex' are required to verify a checksum")
+        try:
+            return verify_checksum(str(payload), str(csum)).to_dict()
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
 
     elif cmd in ("simulate_sliding_window", "simulateSlidingWindow"):
-        cfg_data = args.get("config", {})
+        cfg_data = config_arg(args)
         return simulate_sliding_window(FlowControlConfig.from_dict(cfg_data)).to_dict()
 
     elif cmd in ("simulate_go_back_n", "simulateGoBackN"):
-        cfg_data = args.get("config", {})
+        cfg_data = config_arg(args)
         return simulate_go_back_n(FlowControlConfig.from_dict(cfg_data)).to_dict()
 
     elif cmd in ("simulate_selective_repeat", "simulateSelectiveRepeat"):
-        cfg_data = args.get("config", {})
+        cfg_data = config_arg(args)
         return simulate_selective_repeat(FlowControlConfig.from_dict(cfg_data)).to_dict()
 
     elif cmd in ("simulate_pure_aloha", "simulatePureAloha"):
-        cfg_data = args.get("config", {})
-        cfg = MacConfig.from_dict(cfg_data)
-        cfg.protocol = "pure_aloha"  # type: ignore
-        return simulate_mac(cfg).to_dict()
+        cfg_data = config_arg(args)
+        mac_cfg = MacConfig.from_dict(cfg_data)
+        mac_cfg.protocol = MacProtocol.PURE_ALOHA
+        return simulate_mac(mac_cfg).to_dict()
 
     elif cmd in ("simulate_slotted_aloha", "simulateSlottedAloha"):
-        cfg_data = args.get("config", {})
-        cfg = MacConfig.from_dict(cfg_data)
-        cfg.protocol = "slotted_aloha"  # type: ignore
-        return simulate_mac(cfg).to_dict()
+        cfg_data = config_arg(args)
+        mac_cfg = MacConfig.from_dict(cfg_data)
+        mac_cfg.protocol = MacProtocol.SLOTTED_ALOHA
+        return simulate_mac(mac_cfg).to_dict()
 
     elif cmd in ("simulate_csma", "simulateCsma"):
-        cfg_data = args.get("config", {})
-        cfg = MacConfig.from_dict(cfg_data)
-        cfg.protocol = "csma"  # type: ignore
-        return simulate_mac(cfg).to_dict()
+        cfg_data = config_arg(args)
+        mac_cfg = MacConfig.from_dict(cfg_data)
+        mac_cfg.protocol = MacProtocol.CSMA
+        return simulate_mac(mac_cfg).to_dict()
 
     elif cmd in ("simulate_csma_cd", "simulateCsmaCd"):
-        cfg_data = args.get("config", {})
-        cfg = MacConfig.from_dict(cfg_data)
-        cfg.protocol = "csma_cd"  # type: ignore
-        return simulate_mac(cfg).to_dict()
+        cfg_data = config_arg(args)
+        mac_cfg = MacConfig.from_dict(cfg_data)
+        mac_cfg.protocol = MacProtocol.CSMA_CD
+        return simulate_mac(mac_cfg).to_dict()
 
     # 6. Transport Layer
     elif cmd in ("simulate_tcp", "simulateTcp"):
-        cfg_data = args.get("config", {})
-        cfg = TransportConfig.from_dict(cfg_data)
-        return simulate_tcp(cfg, SESSION.project).to_dict()
+        transport_cfg = _transport_config(args)
+        try:
+            return simulate_tcp(transport_cfg, SESSION.project).to_dict()
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
 
     elif cmd in ("simulate_udp", "simulateUdp"):
-        cfg_data = args.get("config", {})
-        cfg = TransportConfig.from_dict(cfg_data)
-        return simulate_udp(cfg, SESSION.project).to_dict()
+        transport_cfg = _transport_config(args)
+        try:
+            return simulate_udp(transport_cfg, SESSION.project).to_dict()
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
 
     elif cmd in ("simulate_tcp_congestion", "simulateTcpCongestion"):
-        cfg_data = args.get("config", {})
-        cfg = TransportConfig.from_dict(cfg_data)
-        return simulate_tcp(cfg, SESSION.project).to_dict()
+        transport_cfg = _transport_config(args)
+        try:
+            return simulate_tcp(transport_cfg, SESSION.project).to_dict()
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
 
     # 7. Application Protocols
     elif cmd in ("simulate_dns", "simulateDns"):
-        cfg_data = args.get("config", {})
+        cfg_data = config_arg(args)
         return simulate_dns(DnsConfig.from_dict(cfg_data)).to_dict()
 
     elif cmd in ("simulate_http", "simulateHttp"):
-        cfg_data = args.get("config", {})
+        cfg_data = config_arg(args)
         return simulate_http(HttpConfig.from_dict(cfg_data)).to_dict()
 
     elif cmd in ("simulate_ftp", "simulateFtp"):
-        cfg_data = args.get("config", {})
+        cfg_data = config_arg(args)
         return simulate_ftp(FtpConfig.from_dict(cfg_data)).to_dict()
 
     elif cmd in ("simulate_smtp", "simulateSmtp"):
-        cfg_data = args.get("config", {})
+        cfg_data = config_arg(args)
         return simulate_smtp(SmtpConfig.from_dict(cfg_data)).to_dict()
 
     elif cmd in ("simulate_snmp", "simulateSnmp"):
-        cfg_data = args.get("config", {})
+        cfg_data = config_arg(args)
         return simulate_snmp(SnmpConfig.from_dict(cfg_data)).to_dict()
 
     # 8. QoS, Faults & Experiments
@@ -609,28 +972,44 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
             SESSION.engine.metrics,
             list(SESSION.engine.packets.values()),
             SESSION.engine.processed_events,
-            [],
+            [q.get_snapshot() for q in SESSION.engine.link_queues.values()],
             elapsed,
         ).to_dict()
 
     elif cmd in ("schedule_fault_command", "scheduleFaultCommand"):
-        entry_data = args.get("entry") or args.get("fault_entry", {})
-        entry = FaultScheduleEntry.from_dict(entry_data)
-        SESSION.engine.schedule_fault(entry.fault_id, entry.timestamp_us, entry.fault_type)
+        entry_data = args.get("entry") or args.get("fault_entry") or {}
+        if not isinstance(entry_data, dict):
+            raise CommandError("Fault entry must be a JSON object")
+        if not entry_data.get("fault_type"):
+            raise CommandError("Fault entry requires a 'fault_type'")
+        data = dict(entry_data)
+        data.setdefault("fault_id", f"fault-{len(SESSION.engine.pending_faults) + 1}")
+        try:
+            entry = FaultScheduleEntry.from_dict(data)
+        except (KeyError, ValueError, TypeError) as exc:
+            raise CommandError(f"Invalid fault entry: {exc}") from exc
+        _validate_fault_target(entry.fault_type)
+        try:
+            timestamp_us = int(data.get("timestamp_us", 0))
+        except (TypeError, ValueError) as exc:
+            raise CommandError(f"Fault timestamp_us must be an integer: {data.get('timestamp_us')!r}") from exc
+        if timestamp_us < 0:
+            raise CommandError("Fault timestamp_us must not be negative")
+        SESSION.engine.schedule_fault(entry.fault_id, timestamp_us, entry.fault_type)
         return None
 
     elif cmd in ("run_parameter_sweep_command", "runParameterSweepCommand"):
-        cfg_data = args.get("config", {})
-        cfg = SweepConfig.from_dict(cfg_data)
-        return run_parameter_sweep(cfg, SESSION.project).to_dict()
+        cfg_data = config_arg(args)
+        sweep_cfg = SweepConfig.from_dict(cfg_data)
+        return run_parameter_sweep(sweep_cfg, SESSION.project).to_dict()
 
     elif cmd in ("run_comparative_experiment_command", "runComparativeExperimentCommand"):
-        cfg_data = args.get("config", {})
-        cfg = ComparativeExperimentConfig.from_dict(cfg_data)
-        return run_comparative_experiment(cfg, SESSION.project).to_dict()
+        cfg_data = config_arg(args)
+        comparison_cfg = ComparativeExperimentConfig.from_dict(cfg_data)
+        return run_comparative_experiment(comparison_cfg, SESSION.project).to_dict()
 
     else:
-        raise ValueError(f"Unknown API command: '{cmd}'")
+        raise UnknownCommandError(f"Unknown API command: '{cmd}'")
 
 
 class NetSimRequestHandler(BaseHTTPRequestHandler):
@@ -650,37 +1029,83 @@ class NetSimRequestHandler(BaseHTTPRequestHandler):
             self._send_cors_headers()
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"status": "ok", "backend": "python", "version": "0.8.0"}).encode("utf-8"))
+            self.wfile.write(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "backend": "python",
+                        "authority": "python-simulation-core",
+                        "version": SERVER_VERSION,
+                        "status_detail": SESSION.engine.status.value,
+                        "current_time_us": SESSION.engine.current_time.as_micros(),
+                    }
+                ).encode("utf-8")
+            )
         else:
             self.send_response(404)
             self.end_headers()
+
+    def _send_json(self, status: int, payload: dict[str, Any]) -> None:
+        body = json.dumps(payload).encode("utf-8")
+        self.send_response(status)
+        self._send_cors_headers()
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def do_POST(self) -> None:
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length) if content_length > 0 else b"{}"
 
         # URL path: /api/<cmd> or /<cmd>
-        cmd = self.path.lstrip("/").replace("api/", "")
+        cmd = self.path.lstrip("/").split("?")[0]
+        if cmd.startswith("api/"):
+            cmd = cmd[len("api/") :]
 
         try:
             payload = json.loads(body.decode("utf-8")) if body else {}
-            args = payload.get("args", payload)
-            result = dispatch_command(cmd, args)
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            self._send_json(400, {"status": "error", "code": "invalid_json", "message": f"Malformed JSON body: {exc}"})
+            return
 
-            self.send_response(200)
-            self._send_cors_headers()
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            resp_bytes = json.dumps({"status": "ok", "result": result}).encode("utf-8")
-            self.wfile.write(resp_bytes)
-        except Exception as exc:
-            logger.exception("Error executing command '%s'", cmd)
-            self.send_response(500)
-            self._send_cors_headers()
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            err_bytes = json.dumps({"status": "error", "message": str(exc)}).encode("utf-8")
-            self.wfile.write(err_bytes)
+        if not isinstance(payload, dict):
+            self._send_json(
+                400, {"status": "error", "code": "invalid_request", "message": "Request body must be a JSON object"}
+            )
+            return
+
+        wrapped_args = payload.get("args")
+        args = wrapped_args if isinstance(wrapped_args, dict) else payload
+
+        try:
+            result = dispatch_command(cmd, args)
+        except UnknownCommandError as exc:
+            logger.info("Rejected command '%s': %s", cmd, exc)
+            self._send_json(404, {"status": "error", "code": "unknown_command", "message": str(exc)})
+            return
+        except (CommandError, ValueError) as exc:
+            # Expected, user-facing validation failures: return a structured 400 with the
+            # exact reason and never expose a traceback. KeyError/TypeError are deliberately
+            # NOT listed here: they indicate a defect in the core and must surface as 500s
+            # rather than being mislabelled as bad user input.
+            logger.info("Rejected command '%s': %s", cmd, exc)
+            self._send_json(400, {"status": "error", "code": "invalid_request", "message": str(exc)})
+            return
+        except Exception as exc:  # noqa: BLE001 - defensive: never leak internals to the UI
+            logger.exception("Internal error executing command '%s'", cmd)
+            self._send_json(
+                500,
+                {
+                    "status": "error",
+                    "code": "internal_error",
+                    "message": f"The simulation core failed to execute '{cmd}'. See the server log for details.",
+                    "detail": type(exc).__name__,
+                },
+            )
+            return
+
+        self._send_json(200, {"status": "ok", "result": result})
 
     def log_message(self, format: str, *args: Any) -> None:
         # Suppress routine console clutter

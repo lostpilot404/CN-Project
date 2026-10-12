@@ -17,11 +17,11 @@ def compute_dijkstra_shortest_paths(graph: RoutingGraph, source_node_id: str) ->
             "Routing tables are only generated for Routers."
         )
 
-    dist: dict[str, int] = {node_id: float("inf") for node_id in graph.nodes}  # type: ignore
+    dist: dict[str, float] = {node_id: float("inf") for node_id in graph.nodes}
     dist[source_node_id] = 0
     prev: dict[str, str] = {}
 
-    heap = [(0, source_node_id)]
+    heap: list[tuple[float, str]] = [(0.0, source_node_id)]
 
     while heap:
         cost, node_id = heapq.heappop(heap)

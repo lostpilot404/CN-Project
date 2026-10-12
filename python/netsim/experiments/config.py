@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from netsim.faults.model import FaultSchedule, FaultScheduleEntry, FaultType
+from netsim.core.schema import require_dict, require_list
+from netsim.faults.model import FaultSchedule
 from netsim.models.project import Project
 
 
@@ -40,6 +41,7 @@ class SweepParameter:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SweepParameter:
+        data = require_dict(data, "config.parameter")
         p_type_str = data.get("type", "link_bandwidth")
         p_type = SweepParameterType(p_type_str) if isinstance(p_type_str, str) else p_type_str
         return cls(
@@ -80,57 +82,32 @@ class SweepConfig:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SweepConfig:
+        data = require_dict(data, "config")
         target_val = data.get("target")
         target = ExperimentTarget(target_val) if target_val else None
         param = SweepParameter.from_dict(data.get("parameter", {}))
         proj_data = data.get("base_project")
-        base_proj = Project.from_dict(proj_data) if proj_data else None
+        base_proj = Project.from_dict(require_dict(proj_data, "config.base_project")) if proj_data else None
 
         fs_data = data.get("fault_schedule")
-        fs = None
-        if fs_data:
-            entries = []
-            for e in fs_data.get("entries", []):
-                ft_dict = e.get("fault_type", {})
-                ft_type_str = ft_dict.get("type", "packet_drop")
-                # Construct FaultType
-                if ft_type_str == "link_down":
-                    ft = FaultType.link_down(ft_dict.get("link_id", ""))
-                elif ft_type_str == "link_restore":
-                    ft = FaultType.link_restore(ft_dict.get("link_id", ""))
-                elif ft_type_str == "node_failure":
-                    ft = FaultType.node_failure(ft_dict.get("node_id", ""))
-                elif ft_type_str == "node_recovery":
-                    ft = FaultType.node_recovery(ft_dict.get("node_id", ""))
-                elif ft_type_str == "bandwidth_degradation":
-                    ft = FaultType.bandwidth_degradation(
-                        ft_dict.get("link_id", ""), int(ft_dict.get("new_bandwidth_bps", 1000000))
-                    )
-                elif ft_type_str == "queue_capacity_change":
-                    ft = FaultType.queue_capacity_change(
-                        ft_dict.get("link_id", ""), int(ft_dict.get("new_capacity", 50))
-                    )
-                elif ft_type_str == "bit_error":
-                    ft = FaultType.bit_error(ft_dict.get("link_id", ""), float(ft_dict.get("error_rate", 0.0)))
-                else:
-                    ft = FaultType.packet_drop(
-                        ft_dict.get("target_id", ""), float(ft_dict.get("drop_probability", 1.0))
-                    )
-                entries.append(
-                    FaultScheduleEntry(
-                        fault_id=e.get("fault_id", ""),
-                        timestamp_us=int(e.get("timestamp_us", 0)),
-                        fault_type=ft,
-                    )
-                )
-            fs = FaultSchedule(entries=entries)
+        fs = FaultSchedule.from_dict(fs_data) if fs_data else None
+
+        try:
+            parameter_values = [float(v) for v in require_list(data.get("parameter_values", []), "parameter_values")]
+            seeds = [int(s) for s in require_list(data.get("seeds", [42]), "seeds")]
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Invalid sweep configuration: {exc}") from exc
+        if not parameter_values:
+            raise ValueError("Sweep requires at least one parameter value")
+        if not seeds:
+            raise ValueError("Sweep requires at least one seed")
 
         return cls(
             experiment_name=data.get("experiment_name", "sweep_experiment"),
             target=target,
             parameter=param,
-            parameter_values=[float(v) for v in data.get("parameter_values", [])],
-            seeds=[int(s) for s in data.get("seeds", [42])],
+            parameter_values=parameter_values,
+            seeds=seeds,
             simulation_duration_us=int(data.get("simulation_duration_us", 1_000_000)),
             base_project=base_proj,
             traffic_src_id=data.get("traffic_src_id"),
@@ -179,6 +156,44 @@ class ComparativeScenarioConfig:
             "parameter_overrides": overrides,
         }
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ComparativeScenarioConfig:
+        if not isinstance(data, dict):
+            raise ValueError("Comparative scenario must be a JSON object")
+        overrides: list[tuple[SweepParameter, float]] | None = None
+        raw_overrides = data.get("parameter_overrides")
+        if raw_overrides:
+            if not isinstance(raw_overrides, list):
+                raise ValueError("'parameter_overrides' must be a list of [parameter, value] pairs")
+            overrides = []
+            for index, entry in enumerate(raw_overrides):
+                if not isinstance(entry, (list, tuple)) or len(entry) != 2:
+                    raise ValueError(
+                        f"parameter_overrides[{index}] must be a [parameter, value] pair, received {entry!r}"
+                    )
+                param_dict, value = entry
+                if not isinstance(param_dict, dict):
+                    raise ValueError(f"parameter_overrides[{index}][0] must be a parameter object")
+                overrides.append((SweepParameter.from_dict(param_dict), float(value)))
+
+        project_override = None
+        raw_project = data.get("project_override")
+        if raw_project:
+            project_override = Project.from_dict(raw_project)
+
+        fault_schedule = None
+        raw_schedule = data.get("fault_schedule")
+        if raw_schedule:
+            fault_schedule = FaultSchedule.from_dict(raw_schedule)
+
+        return cls(
+            name=data.get("name", "Scenario"),
+            description=data.get("description", ""),
+            project_override=project_override,
+            fault_schedule=fault_schedule,
+            parameter_overrides=overrides,
+        )
+
 
 @dataclass
 class ComparativeExperimentConfig:
@@ -210,3 +225,35 @@ class ComparativeExperimentConfig:
             "traffic_interval_us": self.traffic_interval_us,
             "packet_count": self.packet_count,
         }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ComparativeExperimentConfig:
+        if not isinstance(data, dict):
+            raise ValueError("Comparative experiment configuration must be a JSON object")
+
+        scenario_a_data = data.get("scenario_a")
+        scenario_b_data = data.get("scenario_b")
+        if not scenario_a_data or not scenario_b_data:
+            raise ValueError("Both 'scenario_a' and 'scenario_b' definitions are required")
+        scenario_a_data = require_dict(scenario_a_data, "scenario_a")
+        scenario_b_data = require_dict(scenario_b_data, "scenario_b")
+
+        target_val = data.get("target")
+        target = ExperimentTarget(target_val) if target_val else None
+        proj_data = data.get("base_project")
+        base_proj = Project.from_dict(require_dict(proj_data, "config.base_project")) if proj_data else None
+
+        return cls(
+            experiment_name=data.get("experiment_name", "comparative_experiment"),
+            scenario_a=ComparativeScenarioConfig.from_dict(scenario_a_data),
+            scenario_b=ComparativeScenarioConfig.from_dict(scenario_b_data),
+            seeds=[int(s) for s in data.get("seeds", [42])],
+            simulation_duration_us=int(data.get("simulation_duration_us", 1_000_000)),
+            target=target,
+            base_project=base_proj,
+            traffic_src_id=data.get("traffic_src_id"),
+            traffic_dst_id=data.get("traffic_dst_id"),
+            packet_size_bytes=data.get("packet_size_bytes"),
+            traffic_interval_us=data.get("traffic_interval_us"),
+            packet_count=data.get("packet_count"),
+        )

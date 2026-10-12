@@ -48,16 +48,49 @@ def validate_parameter_for_target(param: SweepParameter, target: ExperimentTarge
             raise ValueError("Sweep parameter 'TimeoutUs' is not supported for MAC target experiments")
 
 
+#: (minimum, maximum) bounds for each sweep parameter, or None for an open bound.
+PARAMETER_BOUNDS: dict[SweepParameterType, tuple[float | None, float | None]] = {
+    SweepParameterType.LINK_BANDWIDTH: (1.0, None),
+    SweepParameterType.PROPAGATION_DELAY: (0.0, None),
+    SweepParameterType.QUEUE_CAPACITY: (1.0, None),
+    SweepParameterType.BIT_ERROR_RATE: (0.0, 1.0),
+    SweepParameterType.PACKET_SIZE_BYTES: (1.0, None),
+    SweepParameterType.TRAFFIC_INTERVAL_US: (1.0, None),
+    SweepParameterType.PACKET_COUNT: (1.0, None),
+    SweepParameterType.WINDOW_SIZE: (1.0, None),
+    SweepParameterType.TIMEOUT_US: (1.0, None),
+    SweepParameterType.MAC_PERSISTENCE: (0.0, 1.0),
+}
+
+
+def validate_parameter_value(param: SweepParameter, value: float) -> None:
+    """Reject parameter values that would produce a physically meaningless run."""
+    bounds = PARAMETER_BOUNDS.get(param.param_type)
+    if bounds is None:
+        return
+    low, high = bounds
+    if low is not None and value < low:
+        raise ValueError(f"Sweep value {value:g} for '{param.param_type.value}' must be >= {low:g}")
+    if high is not None and value > high:
+        raise ValueError(f"Sweep value {value:g} for '{param.param_type.value}' must be <= {high:g}")
+
+
+def validate_parameter_values(param: SweepParameter, values: list[float]) -> None:
+    for value in values:
+        validate_parameter_value(param, value)
+
+
 def validate_sweep_config(config: SweepConfig) -> None:
     if not config.parameter_values:
         raise ValueError("Parameter values list cannot be empty")
     if not config.seeds:
         raise ValueError("Seeds list cannot be empty")
-    if config.simulation_duration_us == 0:
+    if config.simulation_duration_us <= 0:
         raise ValueError("Simulation duration must be greater than 0 µs")
     for val in config.parameter_values:
         if math.isnan(val) or math.isinf(val):
             raise ValueError("Parameter values must be finite numbers")
+    validate_parameter_values(config.parameter, config.parameter_values)
     if config.target is not None:
         validate_parameter_for_target(config.parameter, config.target)
 
@@ -65,8 +98,12 @@ def validate_sweep_config(config: SweepConfig) -> None:
 def validate_comparative_config(config: ComparativeExperimentConfig) -> None:
     if not config.seeds:
         raise ValueError("Seeds list cannot be empty")
-    if config.simulation_duration_us == 0:
+    if config.simulation_duration_us <= 0:
         raise ValueError("Simulation duration must be greater than 0 µs")
+    for scenario in (config.scenario_a, config.scenario_b):
+        if scenario.parameter_overrides:
+            for param, value in scenario.parameter_overrides:
+                validate_parameter_value(param, value)
     if config.target is not None:
         if config.scenario_a.parameter_overrides:
             for p, _ in config.scenario_a.parameter_overrides:

@@ -223,11 +223,30 @@ class _StationQueue:
     collision_count: int
 
 
+def validate_mac_config(config: MacConfig) -> None:
+    """Shared validation for every multiple-access model.
+
+    Rejects degenerate or negative parameters with a clear message instead of silently
+    producing a meaningless run (e.g. zero stations or a negative offered load).
+    """
+    if config.num_stations < 1:
+        raise ValueError(f"num_stations must be >= 1 (received {config.num_stations})")
+    if config.total_frames_to_send < 1:
+        raise ValueError(f"total_frames_to_send must be >= 1 (received {config.total_frames_to_send})")
+    if config.frame_duration_us <= 0:
+        raise ValueError(f"frame_duration_us must be > 0 (received {config.frame_duration_us})")
+    if config.prop_delay_us < 0:
+        raise ValueError(f"prop_delay_us cannot be negative (received {config.prop_delay_us})")
+    if config.frame_size_bits <= 0:
+        raise ValueError(f"frame_size_bits must be > 0 (received {config.frame_size_bits})")
+    if config.max_retries < 0:
+        raise ValueError(f"max_retries cannot be negative (received {config.max_retries})")
+    if config.offered_load_g < 0:
+        raise ValueError(f"offered_load_g cannot be negative (received {config.offered_load_g})")
+
+
 def simulate_pure_aloha(config: MacConfig) -> MacSimResult:
-    if config.num_stations == 0:
-        raise ValueError("num_stations must be >= 1")
-    if config.frame_duration_us == 0:
-        raise ValueError("frame_duration_us must be > 0")
+    validate_mac_config(config)
 
     rng = DeterministicRng(config.seed)
     current_time_us = 0
@@ -387,10 +406,7 @@ def simulate_pure_aloha(config: MacConfig) -> MacSimResult:
 
 
 def simulate_slotted_aloha(config: MacConfig) -> MacSimResult:
-    if config.num_stations == 0:
-        raise ValueError("num_stations must be >= 1")
-    if config.frame_duration_us == 0:
-        raise ValueError("frame_duration_us must be > 0")
+    validate_mac_config(config)
 
     rng = DeterministicRng(config.seed)
     slot_duration = config.frame_duration_us
@@ -559,8 +575,7 @@ def simulate_slotted_aloha(config: MacConfig) -> MacSimResult:
 
 
 def simulate_csma(config: MacConfig) -> MacSimResult:
-    if config.num_stations == 0:
-        raise ValueError("num_stations must be >= 1")
+    validate_mac_config(config)
 
     rng = DeterministicRng(config.seed)
     current_time_us = 0
@@ -772,8 +787,7 @@ def simulate_csma(config: MacConfig) -> MacSimResult:
 
 
 def simulate_csma_cd(config: MacConfig) -> MacSimResult:
-    if config.num_stations == 0:
-        raise ValueError("num_stations must be >= 1")
+    validate_mac_config(config)
 
     rng = DeterministicRng(config.seed)
     current_time_us = 0
@@ -1015,5 +1029,7 @@ def simulate_mac(config: MacConfig) -> MacSimResult:
         return simulate_csma(config)
     elif config.protocol == MacProtocol.CSMA_CD:
         return simulate_csma_cd(config)
-    else:
-        return simulate_csma_cd(config)
+    raise ValueError(
+        f"Unsupported MAC protocol '{config.protocol}'. "
+        f"Expected one of: {', '.join(sorted(m.value for m in MacProtocol))}"
+    )

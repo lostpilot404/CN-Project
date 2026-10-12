@@ -12,6 +12,7 @@ from netsim.application import (
     build_application_packet,
 )
 from netsim.core.events import SimEvent
+from netsim.core.schema import require_dict
 from netsim.models.packet import AppHeader, Packet
 from netsim.models.project import Project
 from netsim.transport import (
@@ -81,7 +82,7 @@ class HttpConfig:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> HttpConfig:
-        req_data = data.get("request", {})
+        req_data = require_dict(data.get("request", {}), "request")
         m_str = req_data.get("method", "GET")
         method = HttpMethod(m_str) if isinstance(m_str, str) else m_str
         request = HttpRequest(

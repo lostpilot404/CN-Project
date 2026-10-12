@@ -11,7 +11,7 @@ import {
   Radio,
   FileCheck,
 } from 'lucide-react';
-import { api } from '../../lib/tauri';
+import { api } from '../../lib/api';
 import {
   FlowControlConfig,
   FlowControlProtocol,
@@ -219,7 +219,7 @@ export const FlowControlStudio: React.FC = () => {
         <button
           onClick={runSimulation}
           disabled={loading || !!validationError}
-          className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2"
+          className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2"
         >
           <Play className="w-4 h-4 fill-white" />
           <span>{loading ? 'Simulating...' : 'Run Simulation'}</span>
@@ -257,7 +257,7 @@ export const FlowControlStudio: React.FC = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           <div className="space-y-1">
             <label className="text-xs text-slate-400">Window Size (N)</label>
-            <input
+            <input aria-label="Window Size (N)"
               type="number"
               min={1}
               max={16}
@@ -269,7 +269,7 @@ export const FlowControlStudio: React.FC = () => {
 
           <div className="space-y-1">
             <label className="text-xs text-slate-400">Seq Space (M)</label>
-            <input
+            <input aria-label="Seq Space (M)"
               type="number"
               min={2}
               max={64}
@@ -281,7 +281,7 @@ export const FlowControlStudio: React.FC = () => {
 
           <div className="space-y-1">
             <label className="text-xs text-slate-400">Total Frames</label>
-            <input
+            <input aria-label="Total Frames"
               type="number"
               min={1}
               max={32}
@@ -293,7 +293,7 @@ export const FlowControlStudio: React.FC = () => {
 
           <div className="space-y-1">
             <label className="text-xs text-slate-400">Frame Tx (µs)</label>
-            <input
+            <input aria-label="Frame Tx (µs)"
               type="number"
               min={100}
               step={500}
@@ -305,7 +305,7 @@ export const FlowControlStudio: React.FC = () => {
 
           <div className="space-y-1">
             <label className="text-xs text-slate-400">Prop Delay (µs)</label>
-            <input
+            <input aria-label="Prop Delay (µs)"
               type="number"
               min={100}
               step={500}
@@ -317,7 +317,7 @@ export const FlowControlStudio: React.FC = () => {
 
           <div className="space-y-1">
             <label className="text-xs text-slate-400">ACK Tx (µs)</label>
-            <input
+            <input aria-label="ACK Tx (µs)"
               type="number"
               min={10}
               step={50}
@@ -329,7 +329,7 @@ export const FlowControlStudio: React.FC = () => {
 
           <div className="space-y-1">
             <label className="text-xs text-slate-400">Timeout (µs)</label>
-            <input
+            <input aria-label="Timeout (µs)"
               type="number"
               min={1000}
               step={1000}
@@ -344,7 +344,7 @@ export const FlowControlStudio: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-slate-800/80">
           <div className="space-y-1">
             <label className="text-xs text-slate-400">Drop Frames (0-based indices, comma-separated)</label>
-            <input
+            <input aria-label="Drop Frames (0-based indices, comma-separated)"
               type="text"
               value={droppedFramesStr}
               placeholder="e.g. 2, 5"
@@ -355,7 +355,7 @@ export const FlowControlStudio: React.FC = () => {
 
           <div className="space-y-1">
             <label className="text-xs text-slate-400">Drop ACKs (seq numbers, comma-separated)</label>
-            <input
+            <input aria-label="Drop ACKs (seq numbers, comma-separated)"
               type="text"
               value={droppedAcksStr}
               placeholder="e.g. 1"
@@ -366,7 +366,7 @@ export const FlowControlStudio: React.FC = () => {
 
           <div className="space-y-1">
             <label className="text-xs text-slate-400">RNG Seed (Authoritative Determinism)</label>
-            <input
+            <input aria-label="RNG Seed (Authoritative Determinism)"
               type="number"
               value={seed}
               onChange={(e) => setSeed(parseInt(e.target.value) || 0)}
@@ -387,7 +387,7 @@ export const FlowControlStudio: React.FC = () => {
               </h3>
             </div>
             <p className="text-xs text-slate-400 mb-6">
-              Both protocols simulated under identical conditions: {totalFrames} frames, window size {windowSize}, sequence space {sequenceSpace}, dropped frames [{droppedFrames.join(', ')}], and seed {seed}. All values are measured from the Rust discrete-event state machines. No winner or ranking is hardcoded.
+              Both protocols simulated under identical conditions: {totalFrames} frames, window size {windowSize}, sequence space {sequenceSpace}, dropped frames [{droppedFrames.join(', ')}], and seed {seed}. All values are measured by the authoritative Python discrete-event state machines. No winner or ranking is hardcoded.
             </p>
 
             <div className="overflow-x-auto">
@@ -487,7 +487,7 @@ export const FlowControlStudio: React.FC = () => {
               <button
                 onClick={() => setIsPlaying(!isPlaying)}
                 className={`px-4 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 ${
-                  isPlaying ? 'bg-amber-600 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                  isPlaying ? 'bg-amber-700 text-white' : 'bg-indigo-600 hover:bg-indigo-700 text-white'
                 }`}
               >
                 <span>{isPlaying ? 'Pause' : 'Auto Play'}</span>
@@ -525,6 +525,7 @@ export const FlowControlStudio: React.FC = () => {
                 Step {currentStep + 1} / {simResult.events.length}
               </span>
               <input
+                aria-label="Event Step Scrubber"
                 type="range"
                 min={0}
                 max={Math.max(0, simResult.events.length - 1)}

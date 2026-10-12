@@ -1,4 +1,4 @@
-// Authoritative Application-Layer Protocol DTOs mirroring Rust domain structures
+// Authoritative Application-Layer Protocol DTOs produced by the Python simulation core
 import { Packet } from './packet';
 import { SimEvent } from './events';
 import { TransportEvent } from './transport';

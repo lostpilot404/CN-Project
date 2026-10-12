@@ -12,6 +12,7 @@ from netsim.application import (
     build_application_packet,
 )
 from netsim.core.events import SimEvent
+from netsim.core.schema import require_dict, require_list
 from netsim.models.packet import AppHeader, Packet
 from netsim.models.project import Project
 from netsim.transport import (
@@ -68,6 +69,14 @@ class DnsConfig:
     custom_records: list[DnsRecord] = field(default_factory=list)
     seed: int = 42
 
+    def __post_init__(self) -> None:
+        # An empty query is a malformed request, not a lookup for the root zone: without this
+        # the simulator would answer NXDOMAIN for a name the caller never supplied.
+        if not str(self.query_name).strip():
+            raise ValueError("DNS query name must not be empty")
+        if self.query_id < 0:
+            raise ValueError("DNS query id must not be negative")
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DnsConfig:
         q_type_str = data.get("query_type", "A")
@@ -76,7 +85,11 @@ class DnsConfig:
         q_mode = DnsQueryMode(q_mode_str) if isinstance(q_mode_str, str) else q_mode_str
 
         records: list[DnsRecord] = []
-        for r in data.get("custom_records", []):
+        raw_records = require_list(data.get("custom_records", []), "custom_records")
+        for index, r in enumerate(raw_records):
+            r = require_dict(r, f"custom_records[{index}]")
+            if "name" not in r or "record_type" not in r or "value" not in r:
+                raise ValueError(f"custom_records[{index}] requires 'name', 'record_type' and 'value'")
             rt = DnsRecordType(r["record_type"]) if isinstance(r["record_type"], str) else r["record_type"]
             records.append(
                 DnsRecord(

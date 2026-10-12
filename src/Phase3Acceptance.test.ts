@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { api } from './lib/tauri';
+import { api } from './lib/api';
 import { NodeType, LinkStatus } from './types/topology';
 
 describe('Phase 3 End-to-End Topology & UI Acceptance Suite', () => {

@@ -18,7 +18,7 @@ import {
   RoutingTable,
   ConvergenceTelemetry,
 } from '../../types/routing';
-import { api } from '../../lib/tauri';
+import { api } from '../../lib/api';
 
 interface RoutingWorkspaceProps {
   project: Project | null;
@@ -101,7 +101,7 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
           <button
             onClick={handleCompute}
             disabled={isLoading || !selectedNodeId}
-            className="flex items-center space-x-2 px-3.5 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-medium transition shadow disabled:opacity-50"
+            className="flex items-center space-x-2 px-3.5 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium transition shadow disabled:bg-slate-700 disabled:text-slate-300 disabled:shadow-none"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             <span>Recalculate Routes</span>
@@ -119,6 +119,7 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
           </label>
           {routers.length > 0 ? (
             <select
+              aria-label="Source Device (Router)"
               value={selectedNodeId}
               onChange={(e) => setSelectedNodeId(e.target.value)}
               className="w-full bg-slate-800/90 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-500"
@@ -173,6 +174,7 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
             Cost Metric
           </label>
           <select
+            aria-label="Cost Metric"
             value={metricType}
             onChange={(e) => setMetricType(e.target.value as MetricType)}
             className="w-full bg-slate-800/90 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-500"
@@ -235,7 +237,7 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
                       >
                         <td className="py-2 px-3 font-semibold text-slate-200 font-sans">
                           {entry.destination_label}{' '}
-                          <span className="text-slate-500 font-mono text-[10px]">({entry.destination})</span>
+                          <span className="text-slate-400 font-mono text-[10px]">({entry.destination})</span>
                         </td>
                         <td className="py-2 px-3 text-slate-300">
                           {entry.next_hop ? (
@@ -243,7 +245,7 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
                               {entry.next_hop}
                             </span>
                           ) : (
-                            <span className="text-slate-500 italic">Direct / Self</span>
+                            <span className="text-slate-400 italic">Direct / Self</span>
                           )}
                         </td>
                         <td className="py-2 px-3 text-slate-400">

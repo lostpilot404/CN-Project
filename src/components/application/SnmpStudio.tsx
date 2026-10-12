@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Play, Gauge, AlertTriangle, Cpu } from 'lucide-react';
-import { api } from '../../lib/tauri';
+import { api } from '../../lib/api';
 import { Project } from '../../types/project';
 import {
   SnmpConfig,
@@ -132,7 +132,7 @@ export const SnmpStudio: React.FC<SnmpStudioProps> = ({
               onClick={() => setRequestedOid(obj.oid)}
               className={`px-2 py-1 text-[11px] font-medium rounded-lg transition-colors ${
                 requestedOid === obj.oid
-                  ? 'bg-teal-600 text-white'
+                  ? 'bg-teal-700 text-white'
                   : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
               }`}
             >
@@ -157,7 +157,7 @@ export const SnmpStudio: React.FC<SnmpStudioProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-900/40 p-3.5 rounded-xl border border-slate-800/80">
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">SNMP Manager (NMS)</label>
-          <input
+          <input aria-label="SNMP Manager (NMS)"
             type="text"
             value={managerNode}
             onChange={(e) => setManagerNode(e.target.value)}
@@ -167,7 +167,7 @@ export const SnmpStudio: React.FC<SnmpStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Managed Agent Node</label>
-          <input
+          <input aria-label="Managed Agent Node"
             type="text"
             value={agentNode}
             onChange={(e) => setAgentNode(e.target.value)}
@@ -177,7 +177,7 @@ export const SnmpStudio: React.FC<SnmpStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Community String</label>
-          <input
+          <input aria-label="Community String"
             type="text"
             value={community}
             onChange={(e) => setCommunity(e.target.value)}
@@ -187,7 +187,7 @@ export const SnmpStudio: React.FC<SnmpStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">UDP Port</label>
-          <input
+          <input aria-label="UDP Port"
             type="number"
             value={port}
             onChange={(e) => setPort(Number(e.target.value))}
@@ -197,7 +197,7 @@ export const SnmpStudio: React.FC<SnmpStudioProps> = ({
 
         <div className="md:col-span-3">
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Target Object Identifier (OID)</label>
-          <input
+          <input aria-label="Target Object Identifier (OID)"
             type="text"
             value={requestedOid}
             onChange={(e) => setRequestedOid(e.target.value)}
@@ -210,7 +210,7 @@ export const SnmpStudio: React.FC<SnmpStudioProps> = ({
             type="button"
             onClick={runSimulation}
             disabled={isRunning}
-            className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 bg-teal-600 hover:bg-teal-500 text-white font-medium text-xs rounded shadow transition-colors disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 bg-teal-700 hover:bg-teal-800 text-white font-medium text-xs rounded shadow transition-colors disabled:bg-slate-700 disabled:text-slate-300"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
             {isRunning ? 'Querying MIB...' : 'Send GetRequest (UDP)'}

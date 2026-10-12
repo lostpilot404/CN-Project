@@ -17,7 +17,11 @@ export const PacketInspector: React.FC<PacketInspectorProps> = ({
 }) => {
   if (!packet) {
     return (
-      <div className="h-full flex flex-col items-center justify-center p-6 text-center text-slate-400 bg-slate-900/40 rounded-2xl border border-slate-800/80">
+      <div
+        data-testid="packet-inspector"
+        data-state="empty"
+        className="h-full flex flex-col items-center justify-center p-6 text-center text-slate-400 bg-slate-900/40 rounded-2xl border border-slate-800/80"
+      >
         <Package className="w-12 h-12 text-slate-600 mb-3 stroke-[1.5]" />
         <h4 className="text-sm font-semibold text-slate-300">No Packet Selected</h4>
         <p className="text-xs text-slate-400 mt-1 max-w-[240px]">
@@ -240,7 +244,11 @@ export const PacketInspector: React.FC<PacketInspectorProps> = ({
   };
 
   return (
-    <div data-testid="packet-inspector" className="flex flex-col h-full bg-slate-950/90 overflow-hidden select-none">
+    <div
+      data-testid="packet-inspector"
+      data-state="populated"
+      className="flex flex-col h-full bg-slate-950/90 overflow-hidden select-none"
+    >
       {/* Overview Top Card */}
       <div className="p-3.5 border-b border-slate-800 bg-slate-900/70 space-y-2.5">
         <div className="flex items-center justify-between">

@@ -201,7 +201,7 @@ export const PropertyEditor: React.FC<PropertyEditorProps> = ({
               <label className="block text-[11px] font-medium text-slate-400 mb-1">
                 Node Label
               </label>
-              <input
+              <input aria-label="Node Label"
                 type="text"
                 value={nodeLabel}
                 onChange={(e) => setNodeLabel(e.target.value)}
@@ -221,7 +221,7 @@ export const PropertyEditor: React.FC<PropertyEditorProps> = ({
               </div>
               <div>
                 <label className="block text-[11px] font-medium text-slate-400 mb-1">State</label>
-                <select
+                <select aria-label="State"
                   value={nodeState}
                   onChange={(e) => setNodeState(e.target.value as NodeState)}
                   className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-brand-500"
@@ -273,7 +273,7 @@ export const PropertyEditor: React.FC<PropertyEditorProps> = ({
                       <div className="space-y-1.5 pt-1.5 border-t border-slate-800/60">
                         <div>
                           <label className="block text-[10px] text-slate-400">IPv4 Address</label>
-                          <input
+                          <input aria-label="IPv4 Address"
                             type="text"
                             value={ifaceIpv4}
                             onChange={(e) => setIfaceIpv4(e.target.value)}
@@ -283,7 +283,7 @@ export const PropertyEditor: React.FC<PropertyEditorProps> = ({
                         </div>
                         <div>
                           <label className="block text-[10px] text-slate-400">Subnet Mask</label>
-                          <input
+                          <input aria-label="Subnet Mask"
                             type="text"
                             value={ifaceMask}
                             onChange={(e) => setIfaceMask(e.target.value)}
@@ -302,7 +302,7 @@ export const PropertyEditor: React.FC<PropertyEditorProps> = ({
                           <button
                             type="button"
                             onClick={() => handleSaveInterface(iface)}
-                            className="px-2 py-0.5 rounded bg-brand-600 hover:bg-brand-500 text-white text-[11px] font-medium"
+                            className="px-2 py-0.5 rounded bg-brand-600 hover:bg-brand-700 text-white text-[11px] font-medium"
                           >
                             Apply
                           </button>
@@ -345,7 +345,7 @@ export const PropertyEditor: React.FC<PropertyEditorProps> = ({
               <button
                 type="button"
                 onClick={handleSaveNode}
-                className="flex items-center space-x-1.5 px-4 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold shadow-lg shadow-brand-500/20 transition-colors"
+                className="flex items-center space-x-1.5 px-4 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold shadow-lg shadow-brand-500/20 transition-colors"
               >
                 {saveSuccess ? (
                   <>
@@ -465,7 +465,7 @@ export const PropertyEditor: React.FC<PropertyEditorProps> = ({
             {/* Link Status */}
             <div>
               <label className="block text-[11px] font-medium text-slate-400 mb-1">Link Status</label>
-              <select
+              <select aria-label="Link Status"
                 value={linkStatus}
                 onChange={(e) => setLinkStatus(e.target.value as LinkStatus)}
                 className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-brand-500"
@@ -490,7 +490,7 @@ export const PropertyEditor: React.FC<PropertyEditorProps> = ({
               <button
                 type="button"
                 onClick={handleSaveLink}
-                className="flex items-center space-x-1.5 px-4 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold shadow-lg shadow-brand-500/20 transition-colors"
+                className="flex items-center space-x-1.5 px-4 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold shadow-lg shadow-brand-500/20 transition-colors"
               >
                 {saveSuccess ? (
                   <>

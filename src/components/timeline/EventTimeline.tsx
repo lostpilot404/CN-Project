@@ -22,8 +22,18 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   const mappedEvents: TimelineEvent[] = useMemo(() => {
     return events.map((ev) => {
       const timeMicros = typeof ev.timestamp === 'number' ? ev.timestamp : ev.timestamp[0];
-      const eventKey = Object.keys(ev.event_type)[0] || 'unknown';
-      const eventData = ev.event_type[eventKey] as Record<string, unknown> | undefined;
+      // The Python core emits `event_type: { type, data }`. Older fixtures may still use the
+      // `{ <event_name>: data }` shape, which is handled by the fallback below.
+      const envelope = (ev.event_type ?? {}) as unknown as Record<string, unknown>;
+      const eventKey =
+        typeof envelope.type === 'string'
+          ? envelope.type
+          : Object.keys(envelope)[0] || 'unknown';
+      const eventData = (
+        typeof envelope.type === 'string'
+          ? envelope.data
+          : envelope[eventKey]
+      ) as Record<string, unknown> | undefined;
 
       const packetId = ev.packet_id || (eventData?.packet_id as string) || null;
       const nodeId = ev.node_id || (eventData?.node_id as string) || null;

@@ -48,7 +48,7 @@ export const ControlBar = ({
         ) : (
           <button
             onClick={onRunBurst}
-            className="flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-semibold bg-brand-500 hover:bg-brand-400 text-white transition-colors shadow-sm cursor-pointer"
+            className="flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white transition-colors shadow-sm cursor-pointer"
             title="Advance 50ms virtual simulation time"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
@@ -58,7 +58,7 @@ export const ControlBar = ({
 
         <button
           onClick={onRunAll}
-          className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+          className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
           title="Run until event queue is empty"
         >
           <FastForward className="w-3.5 h-3.5" />
@@ -67,7 +67,7 @@ export const ControlBar = ({
 
         <button
           onClick={onStep}
-          className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+          className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
           title="Step Next Discrete Event"
         >
           <StepForward className="w-3.5 h-3.5" />
@@ -76,7 +76,7 @@ export const ControlBar = ({
 
         <button
           onClick={onReset}
-          className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+          className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
           title="Reset Simulation Engine"
         >
           <RotateCcw className="w-3.5 h-3.5" />
@@ -87,7 +87,7 @@ export const ControlBar = ({
 
         <button
           onClick={onSendDemoPacket}
-          className="flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-sm cursor-pointer"
+          className="flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white transition-colors shadow-sm cursor-pointer"
           title="Inject packet into topology"
         >
           <Send className="w-3.5 h-3.5" />
