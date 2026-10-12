@@ -83,18 +83,24 @@ export function App() {
     }
   }, [showToast]);
 
-  const refreshSimulation = useCallback(async () => {
-    try {
-      const snap = await api.getSimulationState();
-      setCurrentTimeUs(snap.current_time_us);
-      setSimStatus(snap.status);
-      setEvents(snap.recent_events);
-      setPendingEventsCount(snap.pending_events_count);
-      setMetrics(snap.metrics);
-    } catch (err) {
-      showToast(`Could not read simulation state: ${describeError(err)}`, 'error');
-    }
-  }, [showToast]);
+  const refreshSimulation = useCallback(
+    async (options: { silent?: boolean } = {}) => {
+      try {
+        const snap = await api.getSimulationState();
+        setCurrentTimeUs(snap.current_time_us);
+        setSimStatus(snap.status);
+        setEvents(snap.recent_events);
+        setPendingEventsCount(snap.pending_events_count);
+        setMetrics(snap.metrics);
+      } catch (err) {
+        // Background refreshes must not raise a toast on every tick when the service drops out.
+        if (!options.silent) {
+          showToast(`Could not read simulation state: ${describeError(err)}`, 'error');
+        }
+      }
+    },
+    [showToast]
+  );
 
   // Track the authoritative Python service connection state.
   useEffect(() => {
@@ -110,6 +116,27 @@ export function App() {
     refreshProject();
     refreshSimulation();
   }, [refreshProject, refreshSimulation]);
+
+  // The protocol studios drive the engine directly, so nothing else updates this component
+  // after a step, burst, run or inject. Without a periodic refresh the virtual clock in the
+  // header stays frozen at the value it had when the page loaded.
+  useEffect(() => {
+    if (backendStatus !== 'online') return;
+
+    const tick = () => {
+      void refreshSimulation({ silent: true });
+    };
+    const timer = window.setInterval(tick, 1000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [backendStatus, refreshSimulation]);
 
   const handleNewProject = async () => {
     try {

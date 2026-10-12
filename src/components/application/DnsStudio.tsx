@@ -102,7 +102,7 @@ export const DnsStudio: React.FC<DnsStudioProps> = ({
   return (
     <div className="space-y-4">
       {/* Top Banner / Concept Card */}
-      <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex items-center justify-between">
+      <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex flex-wrap gap-3 items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-brand-500/10 rounded-lg text-brand-400">
             <Globe className="w-5 h-5" />
@@ -115,7 +115,7 @@ export const DnsStudio: React.FC<DnsStudioProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => {

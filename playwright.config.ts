@@ -35,7 +35,18 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        // Point Playwright at a specific Chromium build when the bundled one is unavailable
+        // (for example a container image with no browser download access):
+        //   NETSIM_CHROMIUM_PATH=/path/to/chromium npx playwright test
+        launchOptions: process.env.NETSIM_CHROMIUM_PATH
+          ? {
+              executablePath: process.env.NETSIM_CHROMIUM_PATH,
+              args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+            }
+          : {},
+      },
     },
   ],
   webServer: [

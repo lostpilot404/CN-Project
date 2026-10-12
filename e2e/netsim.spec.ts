@@ -14,6 +14,13 @@ const API = process.env.VITE_NETSIM_API_URL ?? process.env.NETSIM_API_URL ?? 'ht
 
 test.describe.configure({ mode: 'serial' });
 
+/** Mirror of `formatTimeUs` from src/lib/utils.ts, so assertions read the rendered value. */
+function formatUs(us: number): string {
+  if (us >= 1_000_000) return `${(us / 1_000_000).toFixed(3)} s`;
+  if (us >= 1_000) return `${(us / 1_000).toFixed(2)} ms`;
+  return `${us} \u00b5s`;
+}
+
 /** Reset the simulation core to a known default project through the real service. */
 async function resetProject(page: Page, name = 'e2e'): Promise<void> {
   const response = await page.request.post(`${API}/api/create_project`, { data: { name } });
@@ -34,6 +41,14 @@ async function command<T>(page: Page, cmd: string, args: Record<string, unknown>
 
 test.describe('NetSim full-stack end-to-end', () => {
   test.beforeEach(async ({ page }) => {
+    // The app loads Inter/JetBrains Mono from Google Fonts. That CDN is third-party and is
+    // unreachable in offline/CI environments, where Chromium logs a resource error that has
+    // nothing to do with the application. Satisfy it with an empty stylesheet so the console
+    // assertion below stays strict for every first-party request.
+    await page.route('https://fonts.googleapis.com/**', (route) =>
+      route.fulfill({ status: 200, contentType: 'text/css', body: '' }),
+    );
+    await page.route('https://fonts.gstatic.com/**', (route) => route.abort());
     await page.goto('/');
   });
 
@@ -46,7 +61,8 @@ test.describe('NetSim full-stack end-to-end', () => {
     page.on('pageerror', (error) => consoleErrors.push(`pageerror: ${error.message}`));
     page.on('requestfailed', (request) => failedRequests.push(request.url()));
 
-    await page.goto('/');
+    // Start from a known project so the suite never depends on state left by a previous run.
+    await resetProject(page, 'startup');
     await expect(page).toHaveTitle(/NetSim/);
 
     // Real connectivity, not a hard-coded badge: the badge reflects a /health probe.
@@ -69,13 +85,33 @@ test.describe('NetSim full-stack end-to-end', () => {
   });
 
   test('2. Startup: an unreachable service is reported instead of silently mocked', async ({ page }) => {
-    // Block every call to the simulation service and confirm the UI says so.
+    // Block BOTH resolution paths - the direct loopback endpoint and the same-origin
+    // /netsim-api proxy - so the service is genuinely unreachable from the page.
     await page.route(`${API}/**`, (route) => route.abort());
+    await page.route('**/netsim-api/**', (route) => route.abort());
     await page.goto('/');
+
     await expect(page.getByTestId('authority-badge')).toContainText('Backend Offline');
     await expect(page.getByTestId('engine-status')).toHaveText('OFFLINE');
-    // The status panel explains how to start the service (exposed as the badge tooltip).
+    // Both indicators must agree and must not claim authoritative results are available.
+    await expect(page.getByTestId('engine-status')).not.toHaveText('ONLINE');
     await expect(page.getByTestId('authority-badge')).toHaveAttribute('title', /python\/netsim\/server\.py/);
+  });
+
+  test('2b. Startup: the UI fails over to the same-origin proxy when the direct endpoint is blocked', async ({ page }) => {
+    // Establish a known project first: this test renders topology content, so it must not
+    // depend on whatever project happened to be live.
+    await resetProject(page, 'failover');
+    // Block only the direct loopback endpoint. The client must recover through /netsim-api,
+    // which the dev server proxies to the same Python service.
+    await page.route(`${API}/**`, (route) => route.abort());
+    await page.goto('/');
+    await expect(page.getByTestId('engine-status')).toHaveText('ONLINE', { timeout: 15_000 });
+    await expect(page.getByTestId('authority-badge')).toContainText('Python Authoritative');
+    // ...and the recovered endpoint must serve real engine data, not a canned fallback.
+    // The project fetch starts after the health probe succeeds, so allow for it to land.
+    // Target the canvas node itself: the label also appears in the minimap.
+    await expect(page.getByTestId('rf__node-node-1')).toContainText('Workstation PC1', { timeout: 15_000 });
   });
 
   test('3. Topology editor: add a device through the UI and see it persisted by the service', async ({ page }) => {
@@ -91,23 +127,62 @@ test.describe('NetSim full-stack end-to-end', () => {
     const after = await command<{ nodes: { label: string }[] }>(page, 'get_project');
     expect(after.nodes.length).toBe(before.nodes.length + 1);
     await page.reload();
-    await expect(page.locator('text=Workstation PC1')).toBeVisible();
+    await expect(page.getByTestId('rf__node-node-1')).toContainText('Workstation PC1', { timeout: 15_000 });
   });
 
-  test('4. Topology editor: connect two nodes and verify the link is created by the engine', async ({ page }) => {
+  test('4. Topology editor: connect two nodes by dragging on the canvas', async ({ page }) => {
     await resetProject(page, 'links');
+    await page.getByRole('button', { name: 'Topology Canvas' }).click();
 
-    // Adding a link from a fully-wired node used to fail; the service now provisions a new port.
-    const link = await command<{ id: string; source: { interface_id: string } }>(page, 'add_link', {
-      sourceNodeId: 'node-1',
-      targetNodeId: 'node-3',
-      bandwidthBps: 5_000_000,
-    });
-    expect(link.id).toBeTruthy();
-    expect(link.source.interface_id).toBeTruthy();
+    const before = await command<{ links: unknown[] }>(page, 'get_project');
+    expect(before.links.length).toBe(2);
 
-    await page.reload();
-    await expect(page.locator('text=link-3')).toBeVisible();
+    // Real pointer interaction: drag from a source handle on node-1 onto a target handle on
+    // node-3. The default project already wires node-1-node-2 and node-2-node-3, so this is a
+    // new link, and node-1 has no free port left, exercising auto port provisioning.
+    const geometry = await page.evaluate(() =>
+      [...document.querySelectorAll('.react-flow__node')].map((node) => {
+        const box = node.getBoundingClientRect();
+        return {
+          id: node.getAttribute('data-id'),
+          x: box.x,
+          y: box.y,
+          width: box.width,
+          height: box.height,
+          handles: [...node.querySelectorAll('.react-flow__handle')].map((handle) => {
+            const rect = handle.getBoundingClientRect();
+            return {
+              position: handle.getAttribute('data-handlepos'),
+              x: rect.x + rect.width / 2,
+              y: rect.y + rect.height / 2,
+            };
+          }),
+        };
+      }),
+    );
+    const source = geometry.find((node) => node.id === 'node-1');
+    const target = geometry.find((node) => node.id === 'node-3');
+    expect(source, 'node-1 must be on the canvas').toBeTruthy();
+    expect(target, 'node-3 must be on the canvas').toBeTruthy();
+
+    const from = source!.handles.find((handle) => handle.position === 'right')!;
+    const to = target!.handles.find((handle) => handle.position === 'left')!;
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + 40, from.y, { steps: 5 });
+    await page.mouse.move(to.x, to.y, { steps: 20 });
+    await page.mouse.up();
+
+    // The engine must record a third link, provisioned with a fresh interface.
+    await expect
+      .poll(async () => (await command<{ links: unknown[] }>(page, 'get_project')).links.length, { timeout: 10_000 })
+      .toBe(3);
+    const after = await command<{ links: { id: string; source: { interface_id: string } }[] }>(page, 'get_project');
+    expect(after.links.map((link) => link.id)).toContain('link-3');
+    expect(after.links[2].source.interface_id).toBeTruthy();
+
+    // ...and the canvas must show the new edge rather than staying at two.
+    await expect(page.locator('.react-flow__edge')).toHaveCount(3);
   });
 
   test('5. Simulation studio: inject a packet and step the event timeline', async ({ page }) => {
@@ -119,18 +194,60 @@ test.describe('NetSim full-stack end-to-end', () => {
     await page.getByRole('button', { name: 'Inject Packet' }).click();
     await page.getByRole('button', { name: 'Inject Packet', exact: true }).last().click();
 
-    const packetId = await expect
-      .poll(async () => {
-        const state = await command<{ packets: { id: string }[] }>(page, 'get_simulation_state');
-        return state.packets.length;
+    await expect
+      .poll(async () => (await command<{ packets: { id: string }[] }>(page, 'get_simulation_state')).packets.length, {
+        timeout: 10_000,
       })
-      .toBeGreaterThan(0)
-      .then(async () => (await command<{ packets: { id: string }[] }>(page, 'get_simulation_state')).packets[0].id);
+      .toBeGreaterThan(0);
 
-    await page.getByRole('button', { name: 'Step Event' }).click();
+    // Stepping must drive the authoritative engine one event at a time. The first events of an
+    // injected packet legitimately occur at t=0, so step until the queue drains rather than
+    // assuming the first click moves the clock.
+    const before = await command<{ current_time_us: number; pending_events_count: number; recent_events: unknown[] }>(
+      page,
+      'get_simulation_state',
+    );
+    expect(before.current_time_us).toBe(0);
+    expect(before.recent_events.length).toBe(0);
 
-    const detail = await command<{ hop_history: unknown[] }>(page, 'get_packet_details', { packetId });
+    const stepButton = page.getByRole('button', { name: 'Step Event' });
+    let state = before;
+    for (let i = 0; i < 12 && state.pending_events_count > 0; i += 1) {
+      await stepButton.click();
+      await expect
+        .poll(
+          async () =>
+            (await command<{ recent_events: unknown[] }>(page, 'get_simulation_state')).recent_events.length,
+          { timeout: 10_000 },
+        )
+        .toBeGreaterThan(state.recent_events.length);
+      state = await command<{
+        current_time_us: number;
+        pending_events_count: number;
+        recent_events: { event_type: { type: string } }[];
+      }>(page, 'get_simulation_state');
+    }
+
+    // The queue must drain, the clock must advance, and every event must carry a real type.
+    expect(state.pending_events_count).toBe(0);
+    expect(state.current_time_us).toBeGreaterThan(0);
+    expect(state.recent_events.map((event) => event.event_type.type)).toEqual(
+      expect.arrayContaining(['packet_created', 'queue_entered', 'transmission_started']),
+    );
+
+    // Stepping to exhaustion must actually deliver the packet.
+    const packets = await command<{ id: string }[]>(page, 'get_simulation_state').then((snapshot) =>
+      (snapshot as unknown as { packets: { id: string }[] }).packets,
+    );
+    const packetId = packets[0].id;
+    const detail = await command<{ state: string; hop_history: unknown[] }>(page, 'get_packet_details', { packetId });
+    expect(detail.state).toBe('delivered');
     expect(detail.hop_history.length).toBeGreaterThan(1);
+
+    // The header virtual clock must reflect the engine - this is what a user reads while stepping.
+    await expect(page.locator('header').getByText(formatUs(state.current_time_us)).first()).toBeVisible({
+      timeout: 10_000,
+    });
   });
 
   test('6. Simulation studio: run to completion and verify engine-measured delivery', async ({ page }) => {
@@ -158,29 +275,43 @@ test.describe('NetSim full-stack end-to-end', () => {
     expect(packet.hop_history[packet.hop_history.length - 1].timestamp_us).toBe(18006);
   });
 
-  test('7. Packet inspector: 5-layer encapsulation shows real header values', async ({ page }) => {
+  test('7. Application layer: running a DNS query in the UI populates the packet inspector', async ({ page }) => {
     await resetProject(page, 'inspector');
-    const packetId = await command<string>(page, 'inject_packet', {
-      srcNodeId: 'node-1',
-      dstNodeId: 'node-3',
-      sizeBytes: 1200,
-      appProtocol: 'HTTP',
-      transportProtocol: 'TCP',
-    });
-    await command(page, 'run_simulation_until_empty');
-
     await page.getByRole('button', { name: 'Application Layer' }).click();
+
+    // Before any run the inspector must show an explicit empty state, not stale content.
     const inspector = page.getByTestId('packet-inspector');
-    await expect(inspector).toBeVisible();
+    await expect(inspector).toHaveAttribute('data-state', 'empty');
+    await expect(inspector).toContainText('No Packet Selected');
 
-    // Layer headers must come from the packet the engine produced.
-    const detail = await command<{ headers: Record<string, Record<string, unknown>> }>(page, 'get_packet_details', {
-      packetId,
-    });
-    expect(detail.headers.transport.dst_port).toBe(80);
-    await expect(inspector).toContainText(String(detail.headers.network.src_ip));
+    // Drive a real query through the studio: this is the user-visible action.
+    await page.getByRole('button', { name: 'Simulate DNS Query' }).click();
 
-    await page.getByText('Encapsulation', { exact: false }).first().click();
+    // The inspector must switch to the packet the engine produced, with real header values.
+    await expect(inspector).toHaveAttribute('data-state', 'populated', { timeout: 15_000 });
+    await expect(inspector).toContainText('DELIVERED');
+    await expect(inspector).toContainText('DNS');
+    await expect(inspector).toContainText('node-1');
+
+    // The inspector must name a concrete engine-produced packet and show its route.
+    // (DNS results are self-contained in the studio, so they are not in the main packet store.)
+    const packetId = (await inspector.textContent())?.match(/pkt-[\w-]+/)?.[0];
+    expect(packetId, 'the inspector must name the engine packet').toBeTruthy();
+    await expect(inspector).toContainText(/route path/i);
+    await expect(inspector).toContainText('node-2');
+
+    // Every layer must carry engine-derived values, not placeholders.
+    // L5 DNS query, L4 UDP to port 53, L3 IPv4 with a real TTL, L2 Ethernet, L1 link timing.
+    await expect(inspector).toContainText('www.example.com');
+    await expect(inspector).toContainText('53120');
+    await expect(inspector).toContainText('53');
+    await expect(inspector).toContainText(/10\.0\.0\.\d+/);
+    await expect(inspector).toContainText('02:00:00:00:00:01');
+    await expect(inspector).toContainText('0x0800');
+    await expect(inspector).toContainText(/link-\w+/);
+
+    // Switching views must keep using the same packet.
+    await page.getByRole('button', { name: 'Encapsulation' }).click();
     await expect(page.getByTestId('encapsulation-viewer')).toBeVisible();
   });
 
@@ -220,52 +351,90 @@ test.describe('NetSim full-stack end-to-end', () => {
     await expect(page.locator(`text=Round ${telemetry.total_rounds}`).first()).toBeVisible({ timeout: 15_000 });
   });
 
-  test('10. Addressing studio: subnet maths and VLSM allocations come from the service', async ({ page }) => {
+  test('10. Addressing studio: typed CIDR and VLSM allocation render engine results', async ({ page }) => {
     await resetProject(page, 'addressing');
     await page.getByRole('button', { name: 'Addressing & NAT' }).click();
 
-    const subnet = await command<{ network_address: string; usable_hosts: number }>(page, 'calculate_ipv4_subnet', {
-      input: '192.168.1.130/26',
-    });
-    expect(subnet.network_address).toBe('192.168.1.128');
-    expect(subnet.usable_hosts).toBe(62);
-    await expect(page.locator('text=192.168.1.128').first()).toBeVisible();
+    // IPv4 / CIDR subnetting: type a CIDR and calculate through the UI.
+    const cidrInput = page.getByPlaceholder(/192.168.1.100\/24/);
+    await cidrInput.fill('192.168.1.130/26');
+    await page.getByRole('button', { name: 'Calculate', exact: true }).click();
 
-    const vlsm = await command<{ subnets: { name: string }[] }>(page, 'allocate_vlsm_subnets', {
-      baseCidr: '192.168.20.0/24',
-      requirements: [
-        { name: 'Sales', needed_hosts: 100 },
-        { name: 'Eng', needed_hosts: 50 },
-        { name: 'WAN', needed_hosts: 2 },
-      ],
+    // Values below are the hand-verified .130/26 result, rendered by the UI.
+    await expect(page.getByText('192.168.1.128', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('192.168.1.191', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(/62 usable \(64 total\)/)).toBeVisible();
+    await expect(page.getByText(/192\.168\.1\.129 - 192\.168\.1\.190/)).toBeVisible();
+
+    // VLSM: the allocator must place the largest requirement first.
+    await page.getByRole('button', { name: 'True VLSM Allocator' }).click();
+    await page.getByRole('button', { name: 'Allocate VLSM' }).click();
+    await expect(page.getByText(/192\.168\.1\.0\/25/).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/192\.168\.1\.128\/26/).first()).toBeVisible();
+    await expect(page.getByText(/85\.94%/)).toBeVisible();
+
+    // The allocation the UI displayed must match the API result for the same base.
+    await page.getByRole('button', { name: 'IPv4 & CIDR Subnetting' }).click();
+    const subnet = await command<{ network_address: string; usable_hosts: number }>(page, 'calculate_ipv4_subnet', {
+      input: '192.168.20.0/26',
     });
-    expect(vlsm.subnets.length).toBe(3);
+    await cidrInput.fill('192.168.20.0/26');
+    await page.getByRole('button', { name: 'Calculate', exact: true }).click();
+    await expect(page.getByText(subnet.network_address, { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(new RegExp(`${subnet.usable_hosts} usable`))).toBeVisible();
   });
 
-  test('11. Algorithm studio: Hamming encode/correct and CRC verify', async ({ page }) => {
+  test('11. Algorithm studio: Hamming, CRC and checksum computed through the UI', async ({ page }) => {
     await resetProject(page, 'datalink');
     await page.getByRole('button', { name: 'Algorithm Studio' }).click();
     await expect(page.locator('h1', { hasText: 'Data Link Layer Protocol & Algorithm Studio' })).toBeVisible();
 
+    // --- Hamming: encode 1011 through the UI and read the rendered codeword -------------
+    await page.getByRole('button', { name: 'Encode into Hamming Codeword' }).click();
+    await expect(page.getByText('0110011', { exact: true }).first()).toBeVisible();
+    // Hamming(7,4) + SECDED overall parity bit
+    await expect(page.getByText('00110011', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(/Position Breakdown/)).toBeVisible();
+
+    // --- CRC: modulo-2 division through the UI ------------------------------------------
+    await page.getByRole('button', { name: 'CRC Polynomial' }).click();
+    const binaryInputs = page.locator('input[type="text"]');
+    await binaryInputs.nth(0).fill('1101011011');
+    await binaryInputs.nth(1).fill('10011');
+    await page.getByRole('button', { name: /Execute Modulo-2/ }).click();
+    // Hand calculation: 1101011011 / 10011 leaves remainder 1110, transmitted 11010110111110.
+    await expect(page.getByText('1110', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('11010110111110', { exact: true }).first()).toBeVisible();
+
+    // --- Internet checksum: RFC 1071 sample through the UI ------------------------------
+    await page.getByRole('button', { name: 'Internet Checksum' }).click();
+    await page.getByRole('button', { name: 'RFC 1071 Example' }).click();
+    await page.getByRole('button', { name: /Calculate 16-Bit Internet Checksum/ }).click();
+    // Hand calculation for 0001 F203 F4F5 F6F7: carry-folded sum 0xDDF2, one's complement 0x220D.
+    await expect(page.getByText('0xDDF2', { exact: true }).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('0x220D', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('0010001000001101', { exact: true }).first()).toBeVisible();
+
+    // The engine's own answers must agree with what the UI displayed.
     const encoded = await command<{ encoded_bits: string }>(page, 'calculate_hamming_encode', {
       dataBits: '1011',
       parityMode: 'even',
     });
     expect(encoded.encoded_bits).toBe('0110011');
-    await expect(page.locator('text=0110011').first()).toBeVisible();
-
-    const corrected = await command<{ corrected_bits: string; error_position: number }>(
-      page,
-      'verify_and_correct_hamming',
-      { codeword: '1110011', parityMode: 'even' },
-    );
-    expect(corrected.error_position).toBeGreaterThan(0);
-
     const crc = await command<{ remainder: string }>(page, 'calculate_crc', {
       dataBits: '1101011011',
       polynomial: '10011',
     });
     expect(crc.remainder).toBe('1110');
+    const checksum = await command<{ checksum: number; checksum_hex: string }>(
+      page,
+      'calculate_internet_checksum',
+      { inputHex: '0001F203F4F5F6F7' },
+    );
+    // The command returns the checksum as a decimal integer (0x220D === 8717) and also in hex;
+    // the UI renders the hex form, so this ties the rendered value to the engine's answer.
+    expect(Number(checksum.checksum).toString(16).toUpperCase()).toBe('220D');
+    expect(checksum.checksum_hex.toUpperCase()).toBe('220D');
   });
 
   test('12. Datalink: flow control loss recovery matches the protocol definition', async ({ page }) => {
@@ -332,7 +501,12 @@ test.describe('NetSim full-stack end-to-end', () => {
     await expect(page.getByTestId('rtt-telemetry-panel')).toBeVisible();
 
     await page.getByTestId('tab-udp-studio').click();
-    await expect(page.getByTestId('udp-studio-container')).toBeVisible();
+    // The studio shows an explicit "ready" state until a run produces a result.
+    await expect(page.getByTestId('udp-studio-container')).toHaveAttribute('data-state', 'empty');
+    await page.getByTestId('btn-simulate-udp').click();
+    await expect(page.getByTestId('udp-studio-container')).toHaveAttribute('data-state', 'populated', {
+      timeout: 15_000,
+    });
     const udp = await command<{ metrics: Record<string, number> }>(page, 'simulate_udp', {
       config: {
         source_node_id: 'node-1',
@@ -473,7 +647,11 @@ test.describe('NetSim full-stack end-to-end', () => {
     await resetProject(page, 'ab');
     await page.getByRole('button', { name: 'Batch Experiments' }).click();
     await page.locator('button:has-text("Comparative A/B")').click();
-    await expect(page.getByTestId('comparison-studio-container')).toBeVisible();
+    await expect(page.locator('h3:has-text("Comparative A/B Experiment Setup")')).toBeVisible();
+
+    // Run the study through the UI: scenario A is the high-bandwidth baseline.
+    await page.locator('button:has-text("Run Comparative A/B Test")').click();
+    await expect(page.getByText(/Comparative Metric Deltas/i).first()).toBeVisible({ timeout: 60_000 });
 
     const result = await command<{ runs_count_per_scenario: number; deltas: { metric_name: string; val_a: number; val_b: number }[] }>(
       page,

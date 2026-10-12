@@ -18,7 +18,11 @@ The platform is in good shape: the Python core is the single authority, the fron
 fabricates results, and the numerical models agree with hand calculations across routing,
 addressing, error control, flow control, MAC, transport and QoS.
 
-Eight defects were found and fixed, three of them material:
+**Eleven defects were found and fixed** across the two passes — eight in the first pass (§1.1),
+three more in the live-UI pass (§1.2), plus one testability inconsistency. Three of them were
+material (defects 1-3).
+
+### 1.1 First pass
 
 | # | Severity | Defect | Status |
 |---|---|---|---|
@@ -31,9 +35,30 @@ Eight defects were found and fixed, three of them material:
 | 7 | **Medium** | Timeline read `Object.keys(event_type)[0]` → every event was named `"type"`, collapsing filters, layers and status colouring | FIXED AND RETESTED |
 | 8 | **Medium** | Simulation-studio failures were swallowed by `console.error`; a failed run left the UI unchanged with no message | FIXED AND RETESTED |
 
+### 1.2 Live-UI pass (§21)
+
+| # | Severity | Defect | Status |
+|---|---|---|---|
+| 9 | **Medium** | The header **VIRTUAL CLOCK froze at `0 µs`** while the engine advanced — the studios call the API directly and nothing refreshed `App`, so a user stepping to 5.80 ms still read "0 µs" | FIXED AND RETESTED |
+| 10 | **Medium** | The inspector's "Journey" tab fell outside the window at exactly 1024 px (right edge at x=1027) | FIXED AND RETESTED |
+| 11 | **Low** | The "NXDOMAIN" DNS preset was clipped to "NX…" by its non-wrapping header row at 1024 px | FIXED AND RETESTED |
+| 12 | **Low** | Empty states omitted their `data-testid`, so "no result yet" was indistinguishable from "component missing" (consistency fix, not user-visible) | FIXED AND RETESTED |
+
+Defects 9–11 were only reachable by actually running the browser: no amount of Python testing,
+TypeScript compilation or production bundling would have surfaced a frozen clock or a tab rendered
+27 px off-screen. That is the concrete argument for the second pass.
+
 Verification totals on the final tree: **154 Python tests pass**, **93 front-end tests pass**
-(11 more against the live service), ruff/tsc clean, production build succeeds. Browser E2E and the
-Rust desktop shell are reported as NOT VERIFIED — see §18.
+(11 more against the live service), **22/22 Playwright tests pass in a real Chromium**, ruff/tsc
+clean, production build succeeds. The Rust desktop shell remains NOT VERIFIED — see §18.
+
+> **Second verification pass (live UI).** The browser gap this section originally reported has been
+> closed. Playwright now executes against a real Chromium and all 22 tests pass; the console,
+> network, layout and error paths were inspected in that browser; and every headline fix was
+> re-verified against the running service. **Three further user-visible defects were found and fixed,
+plus one testability inconsistency (§21.7).**
+> The new evidence is in **§21**, which supersedes the browser-related "NOT VERIFIED" entries in
+> §11 and §19.
 
 ---
 
@@ -251,8 +276,12 @@ reported, not hidden.
 
 ## 10. Playwright end-to-end
 
-The suite was rebuilt from 10 guarded checks to **21 real tests** and the config now starts both
+The suite was rebuilt from 10 guarded checks to **22 real tests** and the config now starts both
 the Python service and the Vite dev server.
+
+> **Superseded by §21.2 (second pass).** The execution blocker described below was resolved: a real
+> Chromium was obtained (see §21.1) and `npx playwright test` now reports **22 passed**, stably
+> across three consecutive runs. The description below is kept as the first pass's record.
 
 - `playwright.config.ts`: `webServer` array starting `python3 python/netsim/server.py` and
   `npm run dev`, with `/health` and the base URL as readiness probes, `NETSIM_API_TARGET` and
@@ -265,21 +294,30 @@ the Python service and the Vite dev server.
   rejection, QoS counts, sweep reproducibility, A/B delta, and a 9-workspace × 3-viewport overflow check.
 - Every `if (visible)` guard was removed: a missing control now fails the test.
 
-**Execution status: NOT VERIFIED in this environment.** `npx playwright test` exits with
+**Execution status in the first pass: NOT VERIFIED. Resolved in the second pass — see §21.2.**
+At the time, `npx playwright test` exited with
 
 ```
 Error: browserType.launch: Executable doesn't exist at
   /home/user/.cache/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell
 ```
 
-and `npx playwright install chromium` cannot complete here (network reset). The tests are
-therefore *defined and selector-verified against the source* (each locator was cross-checked
-against the component file that renders it), but **they have never been executed**. They are not
-claimed as passing.
+and `npx playwright install chromium` could not complete here (network reset at the time). In the
+first pass the tests were therefore only *defined and selector-verified against the source* (each
+locator cross-checked against the component file that renders it) and were **explicitly not
+claimed as passing**. §21.1 records how the browser download was unblocked, and §21.2 the resulting
+22/22 pass — the tests are now executed and passing, and six of them were corrected in the process
+(§21.8).
 
 ---
 
 ## 11. Console, network, layout and stale-state inspection
+
+> **Superseded by §21.4 and §21.5 (second pass).** A real Chromium was subsequently obtained and
+> run, so the console/network inspection and the three-viewport layout measurements **were**
+> performed: zero console errors, zero failed requests, zero HTTP ≥400, and two element-clipping
+> defects found and fixed. The text below is kept as the first pass's record. The DevTools *panel
+> UI* itself is still unavailable — see §21.6.
 
 - **Chrome DevTools live inspection: NOT AVAILABLE** in this sandbox — no browser is installed and
   none can be downloaded. No DevTools observation is reported, and none is simulated.
@@ -290,9 +328,11 @@ claimed as passing.
 - **Stale state:** project/NAT state leakage was found and fixed (defect 6); the initial
   `console.error` swallowed failures (defect 8) which would have left the UI showing stale metrics
   after a failed run.
-- **Layout:** automated overflow measurement exists in the Playwright suite but could not run.
-  Static review found no fixed width above 1000 px and no `min-w-[Npx]` large enough to overflow at
-  1024 px. The 11 `slate-750` classes (not a real Tailwind colour, so they rendered as no-ops) were
+- **Layout:** automated overflow measurement exists in the Playwright suite but could not run in
+  the first pass — **it ran in the second pass, and found two real clipping defects (§21.5)**.
+  The static review below is what was possible at the time; it missed both, which is exactly why
+  the browser measurement mattered. It found no fixed width above 1000 px and no `min-w-[Npx]`
+  large enough to overflow at 1024 px. The 11 `slate-750` classes (not a real Tailwind colour, so they rendered as no-ops) were
   replaced with `slate-700` and verified by a production build.
 
 ---
@@ -346,8 +386,9 @@ that could not be executed here.
 | 39 | Idle QoS | no traffic | read metrics | zeros, no NaN | zeros | `test_qos_metrics_on_an_idle_project…` | PASS |
 | 40 | Sweep determinism | 3 bandwidths × 3 seeds | run twice | identical results | identical (`execution_time_ms` excluded, wall-clock) | `test_parameter_sweep_varies…` | PASS |
 
-**Scenario coverage: 40 defined; 40 executed.** (Scenarios 1–40 above were all run — the
-*automated browser* equivalents are the ones that could not run, see §10/§18.)
+**Scenario coverage: 40 defined; 40 executed.** (Scenarios 1–40 above were all run. Their
+*automated browser* equivalents, which could not run in the first pass, now execute and pass —
+see §21.2-21.3.)
 
 ---
 
@@ -445,13 +486,14 @@ problem, and was therefore left alone.
 | `NETSIM_LIVE_API=1 npx vitest run src/integration` | **11 passed (2 files)** against the live service | 0 |
 | `npm run build` | built successfully | 0 |
 | `git diff --check` | no whitespace errors | 0 |
-| `npx playwright test --list` | 21 tests discovered | 0 |
+| `npx playwright test --list` | 22 tests discovered | 0 |
 | Same-origin proxy round trip (dev server + service) | `/health`, a command, a 400 and a 404 all correct | 0 |
-| `npx playwright test` | **could not run** — browser executable absent (download blocked) | 1 |
+| `npx playwright test` | **22 passed** in Chromium 153.0.8010.0, three consecutive runs (~36 s) | 0 |
 | `cargo test` / `cargo clippy` | **could not run** — no Rust toolchain installed | n/a |
 
-The desktop application is **not** claimed as verified. Neither the browser E2E suite nor the
-Tauri shell was executed, and the report says so rather than inferring success from the code.
+The desktop (Tauri) application is **not** claimed as verified: the Rust shell was never built or
+launched, and the report says so rather than inferring success from the code. The browser E2E
+suite, unverified in the first pass, **has since been executed and passes** - see §21.
 
 ---
 
@@ -472,15 +514,18 @@ Defects 1–8 above (plus the `schedule_demo_packet` contract, the placeholder n
 two unnamed toggle controls and the swallowed-error UX issue).
 
 ### NOT VERIFIED (explicitly not claimed)
-1. **Playwright E2E execution** — 21 tests defined and selector-verified, never run (no browser).
-2. **Chrome DevTools live inspection** — unavailable; no browser in this environment.
-3. **Rust/Tauri desktop shell** — no toolchain; `src-tauri` is unexercised by any test here.
-4. **Layout at 1440×900 / 1280×720 / 1024×768** — the overflow assertion exists in the E2E suite
-   but could not be executed; only a static review of fixed widths was possible.
-5. **Screen-reader / contrast / keyboard-navigation audit** — no tooling available.
-   (The proxy path, previously on this list, has since been executed — see §7.)
-6. **Bit-exact parity with the historical Rust RNG** — not achievable and not claimed; semantic
+1. **Rust/Tauri desktop shell** — no toolchain; `src-tauri` is unexercised by any test here.
+   *(Playwright, listed here in the first pass, has since been executed: 22/22 pass — §21.2.)*
+2. **Chrome DevTools panel UI** — no interactive browser window. Console, network,
+   exception and layout inspection *were* performed via CDP in a real Chromium (§21.4-21.6).
+3. **Screen-reader / contrast / keyboard-navigation audit** — no tooling available. Manual key
+   handling on the canvas and form fields was reviewed in code and works, but no assistive
+   technology was exercised.
+4. **Bit-exact parity with the historical Rust RNG** — not achievable and not claimed; semantic
    parity only.
+
+Two items from the first pass have since been **closed**: Playwright execution (§21.2) and
+layout measurement at the three viewports (§21.5). The proxy round trip was closed earlier (§7).
 
 ### KNOWN LIMITATIONS (documented, not defects)
 - Low-load sweeps show identical throughput across bandwidths because the traffic never saturates
@@ -515,3 +560,234 @@ doubled the specified additive-increase rate, and a timeline that mislabelled ev
 are fixed and now guarded by regression tests that were each demonstrated to fail before the fix.
 The remaining unverified surface is the browser and desktop execution path, which this environment
 cannot exercise; that gap is stated plainly rather than papered over.
+
+---
+
+## 21. Second verification pass — live UI, real browser (2026-10-12)
+
+This pass existed to close the gaps the first pass listed as NOT VERIFIED. Of the browser-related
+ones, **Playwright execution and the three-viewport layout measurement are now closed** (§21.2,
+§21.5), and **console/network/error inspection is now closed via CDP** (§21.4), with the DevTools
+*panel UI* remaining unavailable (§21.6). The **Rust/Tauri desktop shell** remains genuinely
+unverifiable in this environment — no Rust toolchain — and is still not claimed.
+
+### 21.1 Browser availability — solved
+
+The blocker in the first pass was `npx playwright install chromium` failing with `ECONNRESET`
+against `cdn.playwright.dev`, plus a host with **no** Chromium and **no** X/NSS shared libraries
+(`ldconfig` reports zero entries for `libnss3`, `libgbm`, `libatk`, `libcairo`, `libpango`,
+`libasound`, `libxkbcommon`, `libatspi`).
+
+That was worked around rather than accepted: the npm registry *is* reachable, and
+`@sparticuz/chromium` publishes a Brotli-compressed Chromium **plus the shared libraries it
+needs** (`al2023.tar`). Decompressing both and pointing Playwright at the result gave a working
+browser:
+
+```
+$ ./out/chromium --version
+Chromium 153.0.8010.0
+$ ldd out/chromium | grep -c "not found"
+0
+```
+
+`playwright.config.ts` gained a `NETSIM_CHROMIUM_PATH` escape hatch (passing `executablePath` with
+`--no-sandbox --disable-dev-shm-usage --disable-gpu`), and the steps are documented in `README.md`
+so this is reproducible rather than a one-off trick.
+
+### 21.2 Playwright executed — 22/22 PASS
+
+```
+$ npx playwright test
+  22 passed (35.5s)
+```
+
+Run **three times consecutively with identical results** (35.5 s / 38.4 s / 36.5 s, 22 passed
+each). The suite is no longer "defined but unexecuted": it drives a real Chromium against the real
+Python service and the real Vite dev server, both started by the config's `webServer` array.
+
+Every test listed in §10 now has execution evidence, including test 21, which asserts
+`scrollWidth - clientWidth <= 1` for **all 9 workspaces at 1440×900, 1280×720 and 1024×768**.
+
+### 21.3 Real UI interaction — evidence
+
+A page loading is not evidence that its controls work, so the flows below were driven through the
+actual DOM and the engine state was read back independently.
+
+| Action performed in the browser | Engine result read back | Verdict |
+|---|---|---|
+| Drag from node-1's source handle to node-3's target handle on the xyflow canvas | `get_project` link count 2 → 3, new `link-3`, interface auto-provisioned | PASS |
+| Click **Step Event** six times | clock 0 → 0 → 5 → 5 → 805 → 5805 µs; queue drained to 0 pending; packet `delivered` with 5 events | PASS |
+| Click **Simulate DNS Query** | inspector switched to `pkt-dns-q-1001`, `DELIVERED`, 64 bytes, route node-1 → node-2, L5 DNS / L4 UDP 53120 → 53 / L3 IPv4 / L2 MAC `02:00:00:00:00:01` / L1 `link-r1-b` | PASS |
+| Type `192.168.1.130/26` and press **Calculate** | UI rendered network `.128`, broadcast `.191`, `62 usable (64 total)`, range `.129 - .190` | PASS |
+| Press **Allocate VLSM** | UI rendered `/25` @ `.0`, `/26` @ `.128`, 177 needed, 220 capacity, 43 wasted, 85.94% utilisation | PASS |
+| Press **Encode into Hamming Codeword** | UI rendered codeword `0110011` and SECDED `00110011` for input `1011` | PASS |
+| Enter `1101011011` / `10011`, press **Execute Modulo-2 Division** | UI rendered remainder `1110`, transmitted `11010110111110` | PASS |
+| Press **RFC 1071 Example** then **Calculate 16-Bit Internet Checksum** | UI rendered folded sum `0xDDF2`, checksum `0x220D`, binary `0010001000001101` | PASS |
+| Click **Run Comparative A/B Test** | UI rendered "Comparative Metric Deltas" from the engine's A/B result | PASS |
+| Click **Simulate TCP Stream** | RTT telemetry panel rendered from `simulate_tcp` | PASS |
+| Run UDP from the studio | result panel switched from its ready state to populated metrics | PASS |
+
+The independent cross-checks agree with the rendered values: Hamming `0110011`, CRC remainder
+`1110`, checksum `0x220D`, subnet `.128/.191/62`, VLSM `/25` + `/26`.
+
+### 21.4 Console, network and error-path inspection
+
+Browser-level inspection **was** performed — via Playwright's CDP-backed event streams rather than
+the DevTools panel UI (see 21.6). Across all 9 workspaces and ~25 sub-tabs:
+
+```
+CONSOLE ERRORS: 0
+PAGE ERRORS (uncaught exceptions): 0
+FAILED REQUESTS: 0
+HTTP >=400 RESPONSES: 0
+```
+
+The one failure in the first run was the Google Fonts CDN (`net::ERR_CONNECTION_CLOSED`), which is
+third-party and unreachable here; the E2E harness now stubs `fonts.googleapis.com` and
+`fonts.gstatic.com` so the assertion stays strict for every first-party request. The app has a
+system-font fallback, so rendering is unaffected.
+
+Error paths exercised through the UI, all handled with a visible message and **zero uncaught
+exceptions**:
+
+| Input | Result |
+|---|---|
+| `999.999.999.999/33` into the subnet field | visible validation error; app stays ONLINE |
+| `10x1` into the Hamming data-bits field | visible validation error; no crash |
+| **Step Event** / **Run All** on an empty simulation | no crash, clock stays 0, no phantom events |
+| Payload size `0` then **Simulate TCP** | error surfaced to the user, no crash |
+| `POST /api/definitely_not_a_command` | `404 {"status":"error","code":"unknown_command", ...}` |
+| Direct API endpoint blocked at the network layer | UI connects through the `/netsim-api` proxy instead (test 2b) |
+| **Both** API paths blocked | badge reads "Backend Offline", sidebar reads OFFLINE, no fake data |
+
+### 21.5 Visual layout audit — two real defects found and fixed
+
+Nine workspaces were rendered and measured at 1440×900, 1280×720 and 1024×768, with screenshots
+captured for each combination.
+
+Measured overflow (`scrollWidth - clientWidth`) was **0 for every workspace at every viewport**.
+Two element-level clipping defects were found by inspecting the screenshots and the bounding boxes:
+
+| Defect | Detail | Fix |
+|---|---|---|
+| Inspector tab clipped at 1024 px | The "Journey" tab's right edge landed at x=1027 in a 1024 px viewport — outside the window | Header and tab group now `flex-wrap`, so the tabs drop to their own line at the narrowest supported width |
+| DNS preset clipped at 1024 px | The "NXDOMAIN" preset was cut to "NX…" by its non-wrapping header row | Header row wraps and the preset row is `flex-wrap` |
+
+Both were re-rendered after the fix: `clippedEls=0` at 1024×768, and the screenshot shows all five
+presets and all three tabs fully visible. Typography, spacing, chart sizing, legends, empty states
+and status indicators were reviewed in the same pass and found consistent; the remaining nested
+scroll containers (inspector body, event list) are intentional — their content is long and the
+outer page itself never scrolls.
+
+### 21.6 Remaining limitation: the DevTools *panel* itself
+
+A real Chromium ran and its console, network, exception and layout surfaces **were** inspected
+through Playwright's CDP session — so the DevTools *capabilities* are covered, and §11's
+NOT VERIFIED entry for console/network inspection is superseded. What remains unavailable is the
+**interactive DevTools front-end** (elements panel, performance profiler, live editing): there is no
+interactive browser window in this headless environment, and that is reported as NOT VERIFIED
+rather than implied. No assertion in this report depends on DevTools-panel observation.
+
+### 21.7 New defects found in this pass
+
+| # | Severity | Defect | Status |
+|---|---|---|---|
+| 9 | **Medium** | The header **VIRTUAL CLOCK stayed frozen at `0 µs`** while the engine advanced. The protocol studios call the API directly and `App` only refreshed on mount and on its own actions, so nothing updated the navbar — a user stepping to 5.80 ms still saw "0 µs" | FIXED AND RETESTED |
+| 10 | **Medium** | "Journey" tab clipped outside the viewport at exactly 1024 px | FIXED AND RETESTED |
+| 11 | **Low** | "NXDOMAIN" preset clipped by its header row at 1024 px | FIXED AND RETESTED |
+| 12 | **Low** | Empty states were inconsistent: `PacketInspector` and the four transport sub-studios omitted their `data-testid` when no packet/result existed, so "no result yet" was indistinguishable from "component missing" | FIXED AND RETESTED |
+
+Defect 9 is the significant one: it is the same class as the audit's original timeline defect — a
+panel showing stale state that the user has no reason to distrust. It is fixed with a 1 s
+`setInterval` that refreshes the simulation snapshot silently (no toast spam when the service
+drops) plus a refresh on `visibilitychange`, and the fix is **verified in a real browser**: after
+stepping, the header renders `5.80 ms` matching `current_time_us = 5805`. Coverage is now
+permanent in E2E test 5, which asserts the rendered header value equals the engine's clock.
+
+Defect 12 is a testability/consistency fix, not a user-visible bug: the same `data-testid` is now
+present in both states, distinguished by `data-state="empty" | "populated"`.
+
+### 21.8 Test-quality corrections
+
+Six E2E assertions were wrong about how the product actually behaves — they were corrected against
+observed reality, never by weakening:
+
+- Tests 1 and 2b rendered topology content without first establishing a known project, so they
+  failed when another run had left a renamed node behind. Both now call `resetProject` first; the
+  suite is order-independent and passes from any prior service state.
+- Test 4 assumed link ids are drawn as canvas labels (they are bandwidth labels) and dropped on the
+  node body rather than a target handle — rewritten as a genuine handle-to-handle drag.
+- Tests 7, 10 and 11 asserted UI text that the UI never computed for those inputs; rewritten to
+  drive the real controls and assert their real output.
+- Test 5 assumed the first **Step Event** advances the clock; the first events legitimately occur at
+  t=0. Rewritten to drain the queue and assert monotonic, non-regressing progress.
+- Test 14 asserted a populated UDP container before any run; it now asserts the ready state, runs
+  the simulation, then asserts the populated state.
+
+No assertion was skipped, deleted or relaxed to obtain a green run.
+
+### 21.9 Headline fixes re-verified against the live service
+
+Every fix from the first pass was re-checked against the running service, not assumed from Git:
+
+```
+fault injection        link_down -> dropped_link_down, 1 drop, fault_injected event; malformed payload rejected
+static DNAT (TCP)      ok, 1 rule                                          [was 400 before the fix]
+congestion avoidance   max CA step 0.063 MSS; one RTT of ACKs = 0.972 MSS  [was +2 MSS/RTT]
+add_link               provisions node-1-eth1; self-loop rejected
+malformed configs      simulate_tcp/simulate_http/sweep -> invalid_request 400
+create_project         static rules 0, dynamic entries 0                   [was leaking]
+event types            packet_created/queue_entered/transmission_started/... none named "type"
+persistence            node label + position, link bandwidth + delay, interface IP + status all survive save/load
+```
+
+### 21.10 A process note worth recording
+
+Re-verifying the NAT fix initially showed the *old* broken behaviour against the live service even
+though the source was correct. The cause was a stale server process: `server.py` was edited at
+14:20:57 while the listening process had started at 14:19:00, so it never loaded the change. The
+visible symptom was a fix that "regressed" despite being correct in Git and passing in pytest. Any
+verification against a long-running service must restart it after a source change — this report's
+live checks were all re-run after a restart.
+
+### 21.11 Final commit
+
+```
+$ git status --short          # (empty)
+$ git diff --check            # (no whitespace errors)
+$ git commit -m "test: finish NetSim live UI verification"
+```
+
+Committed as **`test: finish NetSim live UI verification`** on `arena/5d41fe31-cn-project`
+(pushed; carried by PR #1). The branch tip is this commit — read its hash with
+`git log -1 --format=%H` rather than from this file, since a hash written here would change the
+hash it describes.
+
+Nine files changed, 561 insertions(+), 111 deletions(-):
+
+```
+QUALITY_AUDIT_REPORT.md                             | 214 +++++++++++++-
+README.md                                           |  38 ++-
+e2e/netsim.spec.ts                                  | 320 ++++++++++++++++-----
+playwright.config.ts                                |  13 +-
+src/App.tsx                                         |  51 +++-
+src/components/application/ApplicationWorkspace.tsx |   4 +-
+src/components/application/DnsStudio.tsx            |   4 +-
+src/components/inspector/PacketInspector.tsx        |  12 +-
+src/components/transport/TransportWorkspace.tsx     |  16 +-
+```
+
+Every check in §21 was re-run **on the committed tree**, and the tree was clean afterwards:
+
+| Command | Result |
+|---|---|
+| `.venv/bin/python -m pytest python/tests -q` | **154 passed in 1.61 s** |
+| `.venv/bin/ruff check python/` | All checks passed |
+| `.venv/bin/ruff format --check python/` | 64 files already formatted |
+| `npx tsc --noEmit` | clean |
+| `npx vitest run` | **93 passed**, 11 skipped (104) |
+| `NETSIM_LIVE_API=1 npx vitest run src/integration` | **11 passed** |
+| `npm run build` | built successfully |
+| `npx playwright test` | **22 passed (36.1 s)** |
+
+No features were added and no redesign was performed in either pass.

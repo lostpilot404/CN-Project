@@ -124,7 +124,7 @@ export const ApplicationWorkspace: React.FC<ApplicationWorkspaceProps> = ({ proj
         {/* Right: Integrated Phase 5 Packet Inspector & Journey */}
         <div className="hidden lg:flex lg:w-2/5 flex-col bg-slate-900/30 overflow-hidden">
           {/* Header & View Mode Switcher */}
-          <div className="p-3 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/60">
+          <div className="p-3 border-b border-slate-800/80 flex flex-wrap gap-2 items-center justify-between shrink-0 bg-slate-900/60">
             <div className="flex items-center gap-2">
               <Package className="w-4 h-4 text-brand-400" />
               <span className="text-xs font-bold text-slate-200">
@@ -132,7 +132,7 @@ export const ApplicationWorkspace: React.FC<ApplicationWorkspaceProps> = ({ proj
               </span>
             </div>
 
-            <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+            <div className="flex flex-wrap items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800">
               <button
                 type="button"
                 onClick={() => setInspectorView('inspector')}

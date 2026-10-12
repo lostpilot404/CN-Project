@@ -74,7 +74,7 @@ audit environment is listed as *not verified* rather than assumed to pass.
 | Front-end unit/component tests | `npx vitest run` | **93 passed, 7 skipped** (live suite opt-in) |
 | Front-end ↔ service integration | `NETSIM_LIVE_API=1 npx vitest run src/integration` | **11 passed** (real service) |
 | Production build | `npm run build` | succeeds |
-| Browser end-to-end | `npx playwright test` | 21 tests defined — **not executed in the audit sandbox** (no browser available) |
+| Browser end-to-end | `npx playwright test` | **22 passed** in a real Chromium (9 workspaces, 3 viewports) |
 | Rust shell | `cargo test` | **not verified** (no Rust toolchain; the shell holds no simulation logic) |
 
 Optional live/end-to-end runs require the Python service to be up:
@@ -84,6 +84,42 @@ Optional live/end-to-end runs require the Python service to be up:
 NETSIM_LIVE_API=1 npx vitest run src/integration       # integration against the real service
 npx playwright install chromium && npx playwright test # browser E2E (starts both servers)
 ```
+
+### Running the browser suite where downloads are blocked
+
+Some sandboxes (including CI containers with restricted egress) cannot reach
+`cdn.playwright.dev`, so `npx playwright install` fails with `ECONNRESET`. Two workarounds:
+
+**1. Use a browser that is already on the machine**
+
+```bash
+NETSIM_CHROMIUM_PATH=/path/to/chromium npx playwright test
+```
+
+**2. Use the self-contained Chromium published to npm**
+
+`@sparticuz/chromium` ships a Chromium build *and* the shared libraries it needs, compressed with
+Brotli, so it works on a host with no browser and no browser-CDN access:
+
+```bash
+mkdir -p /tmp/browser && cd /tmp/browser && npm init -y && npm install @sparticuz/chromium
+node -e "
+const z = require('zlib'), fs = require('fs');
+fs.mkdirSync('out', { recursive: true });
+for (const name of ['chromium', 'al2023.tar']) {
+  const buf = z.brotliDecompressSync(fs.readFileSync('node_modules/@sparticuz/chromium/bin/' + name + '.br'));
+  fs.writeFileSync('out/' + name, buf);
+}"
+chmod +x out/chromium && mkdir -p libs && tar -xf out/al2023.tar -C libs
+
+cd -    # back to the repository
+LD_LIBRARY_PATH=/tmp/browser/libs/lib NETSIM_CHROMIUM_PATH=/tmp/browser/out/chromium npx playwright test
+```
+
+`playwright.config.ts` reads `NETSIM_CHROMIUM_PATH` and passes it to Chromium as `executablePath`
+with `--no-sandbox --disable-dev-shm-usage --disable-gpu`. The E2E harness also stubs
+`fonts.googleapis.com` (the only third-party request the app makes) so an offline run does not
+report a resource error that has nothing to do with the application.
 
 ## Command surface
 

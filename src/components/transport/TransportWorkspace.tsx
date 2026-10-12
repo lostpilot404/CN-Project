@@ -532,7 +532,7 @@ const TcpStudioView: React.FC<{
 }> = ({ result, visibleEvents, onRun }) => {
   if (!result) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-xl p-12 text-center text-slate-500">
+      <div data-testid="tcp-studio-container" data-state="empty" className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-xl p-12 text-center text-slate-500">
         <Activity className="w-12 h-12 text-slate-700 mb-3" />
         <h3 className="text-sm font-semibold text-slate-300">TCP Studio Ready</h3>
         <p className="text-xs text-slate-500 max-w-sm mt-1 mb-4">
@@ -551,7 +551,7 @@ const TcpStudioView: React.FC<{
   const { metrics, derived_route } = result;
 
   return (
-    <div className="space-y-6" data-testid="tcp-studio-container">
+    <div className="space-y-6" data-testid="tcp-studio-container" data-state="populated">
       {/* Route & Status Banner */}
       <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
         <div>
@@ -714,7 +714,7 @@ const UdpStudioView: React.FC<{
 }> = ({ result, onRun }) => {
   if (!result) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-xl p-12 text-center text-slate-500">
+      <div data-testid="udp-studio-container" data-state="empty" className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-xl p-12 text-center text-slate-500">
         <Zap className="w-12 h-12 text-slate-700 mb-3" />
         <h3 className="text-sm font-semibold text-slate-300">UDP Studio Ready</h3>
         <p className="text-xs text-slate-500 max-w-sm mt-1 mb-4">
@@ -733,7 +733,7 @@ const UdpStudioView: React.FC<{
   const { metrics, events } = result;
 
   return (
-    <div className="space-y-6" data-testid="udp-studio-container">
+    <div className="space-y-6" data-testid="udp-studio-container" data-state="populated">
       {/* Educational Notice Banner */}
       <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
         <div className="flex items-center space-x-3">
@@ -827,7 +827,7 @@ const CongestionStudioView: React.FC<{
 }> = ({ result, onRun }) => {
   if (!result || result.cwnd_timeline.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-xl p-12 text-center text-slate-500">
+      <div data-testid="congestion-studio-container" data-state="empty" className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-xl p-12 text-center text-slate-500">
         <Gauge className="w-12 h-12 text-slate-700 mb-3" />
         <h3 className="text-sm font-semibold text-slate-300">Congestion Timeline</h3>
         <p className="text-xs text-slate-500 max-w-sm mt-1 mb-4">
@@ -848,7 +848,7 @@ const CongestionStudioView: React.FC<{
   const maxTime = Math.max(...cwnd_timeline.map((p) => p.timestamp_us), 1);
 
   return (
-    <div className="space-y-6" data-testid="congestion-studio-container">
+    <div className="space-y-6" data-testid="congestion-studio-container" data-state="populated">
       {/* SVG Chart of cwnd vs Virtual SimTime */}
       <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
         <div className="flex items-center justify-between">
@@ -983,7 +983,7 @@ const ComparisonStudioView: React.FC<{
 }> = ({ tcpResult, udpResult, onRunBoth }) => {
   if (!tcpResult || !udpResult) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-xl p-12 text-center text-slate-500">
+      <div data-testid="comparison-studio-container" data-state="empty" className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-xl p-12 text-center text-slate-500">
         <BarChart3 className="w-12 h-12 text-slate-700 mb-3" />
         <h3 className="text-sm font-semibold text-slate-300">Measured Comparison</h3>
         <p className="text-xs text-slate-500 max-w-sm mt-1 mb-4">
@@ -1003,7 +1003,7 @@ const ComparisonStudioView: React.FC<{
   const udp = udpResult.metrics;
 
   return (
-    <div className="space-y-6" data-testid="comparison-studio-container">
+    <div className="space-y-6" data-testid="comparison-studio-container" data-state="populated">
       {/* Side-by-Side Comparison Table */}
       <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-4">
         <div className="flex items-center justify-between border-b border-slate-800 pb-2">
