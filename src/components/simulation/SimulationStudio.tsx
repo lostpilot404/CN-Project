@@ -215,7 +215,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
           ) : (
             <button
               onClick={handleRunBurst}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-600 hover:bg-cyan-500 text-white transition-colors shadow-sm cursor-pointer"
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-700 hover:bg-cyan-800 text-white transition-colors shadow-sm cursor-pointer"
               title="Advance 50ms virtual simulation time"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
@@ -255,7 +255,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
           {/* Inject Packet Button */}
           <button
             onClick={() => setShowInjectModal(true)}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-sm cursor-pointer"
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white transition-colors shadow-sm cursor-pointer"
           >
             <Send className="w-3.5 h-3.5" />
             <span>Inject Packet</span>
@@ -462,7 +462,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                   <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
                     Source Node
                   </label>
-                  <select
+                  <select aria-label="Source Node"
                     value={injectSrc}
                     onChange={(e) => setInjectSrc(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500"
@@ -479,7 +479,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                   <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
                     Destination Node
                   </label>
-                  <select
+                  <select aria-label="Destination Node"
                     value={injectDst}
                     onChange={(e) => setInjectDst(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500"
@@ -498,7 +498,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                   <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
                     Payload Size
                   </label>
-                  <input
+                  <input aria-label="Payload Size"
                     type="number"
                     min={64}
                     max={65535}
@@ -512,7 +512,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                   <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
                     App Protocol
                   </label>
-                  <select
+                  <select aria-label="App Protocol"
                     value={injectAppProto}
                     onChange={(e) => setInjectAppProto(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500"
@@ -528,7 +528,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                   <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
                     Transport
                   </label>
-                  <select
+                  <select aria-label="Transport"
                     value={injectTransProto}
                     onChange={(e) => setInjectTransProto(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500"
@@ -549,7 +549,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-bold text-white shadow-md cursor-pointer"
+                  className="px-4 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 font-bold text-white shadow-md cursor-pointer"
                 >
                   Inject Packet
                 </button>

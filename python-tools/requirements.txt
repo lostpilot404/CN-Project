@@ -1,3 +1,9 @@
-pandas>=2.0.0
-numpy>=1.24.0
+# Dependencies for the python-tools utilities.
+#
+# plot_metrics.py renders charts with matplotlib (imported lazily, so the tool still runs
+# without it and prints install guidance instead of a traceback).
+# analyze_results.py needs the standard library only.
+#
+# pandas and numpy were previously listed here but are not imported anywhere in this
+# directory or in the simulation engine -- the engine is standard-library only.
 matplotlib>=3.7.0

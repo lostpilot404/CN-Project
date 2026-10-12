@@ -255,10 +255,23 @@ def build_application_packet(
 
 
 def app_event_to_sim_event(event_id: int, ev: AppProtocolEvent) -> SimEvent:
+    # `SimEvent.event_type` is the engine's event envelope (`{"type": ..., "data": ...}`, see
+    # `SimEvent.create` and the `SimEventEnvelope` TypeScript contract). Passing a bare enum here
+    # serialised application events as a plain string while engine timeline events carried an
+    # envelope, so consumers saw two different shapes for the same field.
+    # Key names mirror the frontend test double (`testDouble.ts`: `{type: 'application_event',
+    # data: {protocol, event_name}}`) so the payload shape is identical in real and double mode.
+    event_data: dict[str, Any] = {
+        "protocol": ev.protocol,
+        "event_name": ev.event_type,
+        "step_index": ev.step_index,
+        "session_id": ev.session_id,
+        "details": ev.details,
+    }
     return SimEvent(
         id=event_id,
         timestamp=SimTime.from_micros(ev.timestamp_us),
-        event_type=SimEventType.APPLICATION_EVENT,
+        event_type={"type": SimEventType.APPLICATION_EVENT.value, "data": event_data},
         description=ev.description,
         packet_id=ev.packet_id,
         node_id=ev.node_id,

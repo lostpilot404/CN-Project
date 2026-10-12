@@ -163,7 +163,7 @@ class RoutingGraph:
         if source_node_id == target_node_id:
             return ([source_node_id], [])
 
-        dist: dict[str, int] = {n: float("inf") for n in self.nodes}  # type: ignore
+        dist: dict[str, float] = {n: float("inf") for n in self.nodes}
         dist[source_node_id] = 0
         prev: dict[str, tuple[str, GraphEdge]] = {}
 

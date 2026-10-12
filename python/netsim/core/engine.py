@@ -419,9 +419,9 @@ class SimulationEngine:
         elif evt_type == "transmission_finished":
             packet_id = evt_data.get("packet_id", "")
             link_id = evt_data.get("link_id", "")
-            queue = self.link_queues.get(link_id)
-            if queue:
-                queue.is_transmitting = False
+            tx_queue = self.link_queues.get(link_id)
+            if tx_queue:
+                tx_queue.is_transmitting = False
             pkt = self.packets.get(packet_id)
             if pkt:
                 if pkt.state not in (
@@ -706,18 +706,18 @@ class SimulationEngine:
                 queue.capacity = max(1, new_cap)
         elif ft == "node_failure":
             node_id = fault_data.get("node_id", "")
-            saved = {}
+            snapshot: dict[str, LinkStatus] = {}
             for link in self.links_cache.values():
                 if link.source.node_id == node_id or link.target.node_id == node_id:
                     self._capture_fault_snapshot(link)
-                    saved[link.id] = link.status
+                    snapshot[link.id] = link.status
                     link.status = LinkStatus.DOWN
-            self.node_pre_fault_link_states[node_id] = saved
+            self.node_pre_fault_link_states[node_id] = snapshot
             self.failed_nodes.add(node_id)
         elif ft == "node_recovery":
             node_id = fault_data.get("node_id", "")
             self.failed_nodes.discard(node_id)
-            saved = self.node_pre_fault_link_states.pop(node_id, None)
+            saved: dict[str, LinkStatus] | None = self.node_pre_fault_link_states.pop(node_id, None)
             if saved:
                 for lid, status in saved.items():
                     link = self.links_cache.get(lid)

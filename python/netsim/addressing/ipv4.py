@@ -167,10 +167,10 @@ def parse_cidr_or_ip_mask(s: str) -> tuple[int, int]:
         ip_part, mask_part = s.split(" ", 1)
         ip = parse_ipv4(ip_part)
         mask = parse_ipv4(mask_part)
-        prefix = mask_to_prefix(mask)
-        if prefix is None:
+        mask_prefix = mask_to_prefix(mask)
+        if mask_prefix is None:
             raise ValueError(f"Non-contiguous subnet mask: '{mask_part}'")
-        return (ip, prefix)
+        return (ip, mask_prefix)
     else:
         ip = parse_ipv4(s)
         return (ip, 32)

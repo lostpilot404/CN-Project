@@ -60,8 +60,8 @@ def format_rfc5952_canonical(segs: list[int]) -> str:
             best_start = curr_start
             best_len = curr_len
 
-    if best_len >= 2:
-        start = best_start  # type: ignore
+    if best_start is not None and best_len >= 2:
+        start = best_start
         end = start + best_len
         left = ":".join(f"{s:x}" for s in segs[:start])
         right = ":".join(f"{s:x}" for s in segs[end:])

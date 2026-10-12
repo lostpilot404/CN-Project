@@ -44,7 +44,7 @@ export const Navbar = ({
         <div className="text-xs">
           <span className="text-slate-400">Project: </span>
           <span className="font-medium text-slate-200">{project?.metadata.name || 'Untitled'}</span>
-          <span className="ml-2 text-[11px] text-slate-500 font-mono">
+          <span className="ml-2 text-[11px] text-slate-400 font-mono">
             (Seed: {project?.simulation_config.seed || 42891})
           </span>
         </div>

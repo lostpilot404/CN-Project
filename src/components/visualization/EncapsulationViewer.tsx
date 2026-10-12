@@ -165,7 +165,7 @@ export const EncapsulationViewer: React.FC<EncapsulationViewerProps> = ({
           <div className="flex-1 bg-amber-400 flex items-center justify-center truncate px-1" title="Application Data">
             Payload ({packet.size_bytes}B)
           </div>
-          <div className="w-[12%] bg-emerald-500 flex items-center justify-center truncate px-1 text-white" title="Ethernet FCS (4B)">
+          <div className="w-[12%] bg-emerald-400 flex items-center justify-center truncate px-1" title="Ethernet FCS (4B)">
             FCS
           </div>
         </div>

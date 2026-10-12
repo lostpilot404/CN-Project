@@ -62,7 +62,7 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
           <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
             Layer
           </label>
-          <select
+          <select aria-label="Layer"
             value={filter.layer}
             onChange={(e) => onChange({ ...filter, layer: e.target.value })}
             className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
@@ -81,7 +81,7 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
           <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
             Protocol
           </label>
-          <select
+          <select aria-label="Protocol"
             value={filter.protocol}
             onChange={(e) => onChange({ ...filter, protocol: e.target.value })}
             className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
@@ -101,7 +101,7 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
           <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
             Event Type
           </label>
-          <select
+          <select aria-label="Event Type"
             value={filter.eventType}
             onChange={(e) => onChange({ ...filter, eventType: e.target.value })}
             className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
@@ -125,7 +125,7 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
           <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
             Status
           </label>
-          <select
+          <select aria-label="Status"
             value={filter.status}
             onChange={(e) => onChange({ ...filter, status: e.target.value as EventFilter['status'] })}
             className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
@@ -143,7 +143,7 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
           <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
             Node
           </label>
-          <select
+          <select aria-label="Node"
             value={filter.nodeId}
             onChange={(e) => onChange({ ...filter, nodeId: e.target.value })}
             className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
@@ -162,7 +162,7 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
           <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
             Link
           </label>
-          <select
+          <select aria-label="Link"
             value={filter.linkId}
             onChange={(e) => onChange({ ...filter, linkId: e.target.value })}
             className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"

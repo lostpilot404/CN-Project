@@ -471,8 +471,8 @@ def simulate_flow_control(config: FlowControlConfig) -> FlowControlSimResult:
 
         # A. Frame Arrival at Receiver
         frame_arriving_idx = None
-        for i, f in enumerate(in_flight_frames):
-            if f.arrival_time_us <= current_time_us:
+        for i, in_flight_frame in enumerate(in_flight_frames):
+            if in_flight_frame.arrival_time_us <= current_time_us:
                 frame_arriving_idx = i
                 break
 

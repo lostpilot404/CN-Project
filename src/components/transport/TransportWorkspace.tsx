@@ -241,7 +241,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
             <span className="text-xs font-bold uppercase text-slate-300 tracking-wider">
               Simulation Parameters
             </span>
-            <span className="text-[10px] text-slate-500 font-mono">L4 Endpoints</span>
+            <span className="text-[10px] text-slate-400 font-mono">L4 Endpoints</span>
           </div>
 
           {/* Endpoints */}
@@ -250,7 +250,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
               <label className="text-[11px] font-medium text-slate-400 block mb-1">
                 Source Endpoint (Host A)
               </label>
-              <input
+              <input aria-label="Source Endpoint (Host A)"
                 data-testid="input-src-node"
                 type="text"
                 value={srcNode}
@@ -263,7 +263,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
               <label className="text-[11px] font-medium text-slate-400 block mb-1">
                 Destination Endpoint (Host B)
               </label>
-              <input
+              <input aria-label="Destination Endpoint (Host B)"
                 data-testid="input-dst-node"
                 type="text"
                 value={dstNode}
@@ -277,7 +277,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
                 <label className="text-[11px] font-medium text-slate-400 block mb-1">
                   Src Port
                 </label>
-                <input
+                <input aria-label="Src Port"
                   type="number"
                   value={srcPort}
                   onChange={(e) => setSrcPort(Number(e.target.value))}
@@ -288,7 +288,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
                 <label className="text-[11px] font-medium text-slate-400 block mb-1">
                   Dst Port
                 </label>
-                <input
+                <input aria-label="Dst Port"
                   type="number"
                   value={dstPort}
                   onChange={(e) => setDstPort(Number(e.target.value))}
@@ -304,7 +304,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
               <label className="text-[11px] font-medium text-slate-400 block mb-1">
                 Payload Size (Bytes)
               </label>
-              <input
+              <input aria-label="Payload Size (Bytes)"
                 data-testid="input-payload-bytes"
                 type="number"
                 value={payloadBytes}
@@ -318,7 +318,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
                 <label className="text-[11px] font-medium text-slate-400 block mb-1">
                   MSS (Bytes)
                 </label>
-                <input
+                <input aria-label="MSS (Bytes)"
                   type="number"
                   value={mssBytes}
                   onChange={(e) => setMssBytes(Number(e.target.value))}
@@ -329,7 +329,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
                 <label className="text-[11px] font-medium text-slate-400 block mb-1">
                   Initial Seq
                 </label>
-                <input
+                <input aria-label="Initial Seq"
                   type="number"
                   value={initialSeq}
                   onChange={(e) => setInitialSeq(Number(e.target.value))}
@@ -345,7 +345,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
                     <label className="text-[11px] font-medium text-slate-400 block mb-1">
                       Initial cwnd (MSS)
                     </label>
-                    <input
+                    <input aria-label="Initial cwnd (MSS)"
                       type="number"
                       step="0.5"
                       value={initialCwnd}
@@ -357,7 +357,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
                     <label className="text-[11px] font-medium text-slate-400 block mb-1">
                       ssthresh (MSS)
                     </label>
-                    <input
+                    <input aria-label="ssthresh (MSS)"
                       type="number"
                       step="1"
                       value={initialSsthresh}
@@ -371,7 +371,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
                   <label className="text-[11px] font-medium text-slate-400 block mb-1">
                     Receive Window (rwnd Bytes)
                   </label>
-                  <input
+                  <input aria-label="Receive Window (rwnd Bytes)"
                     type="number"
                     value={rwndBytes}
                     onChange={(e) => setRwndBytes(Number(e.target.value))}
@@ -384,7 +384,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
                     <label className="text-[11px] font-medium text-slate-400 block mb-1">
                       Initial RTO (µs)
                     </label>
-                    <input
+                    <input aria-label="Initial RTO (µs)"
                       type="number"
                       step="10000"
                       value={initialRtoUs}
@@ -396,7 +396,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
                     <label className="text-[11px] font-medium text-slate-400 block mb-1">
                       Seed
                     </label>
-                    <input
+                    <input aria-label="Seed"
                       type="number"
                       value={seed}
                       onChange={(e) => setSeed(Number(e.target.value))}
@@ -411,7 +411,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
               <label className="text-[11px] font-medium text-slate-400 block mb-1">
                 Controlled Drops (0-indexed)
               </label>
-              <input
+              <input aria-label="Controlled Drops (0-indexed)"
                 data-testid="input-dropped-segments"
                 type="text"
                 placeholder="e.g. 0, 2 (or empty)"
@@ -419,7 +419,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
                 onChange={(e) => setDroppedSegsInput(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200"
               />
-              <span className="text-[10px] text-slate-500">Injects loss to trigger timeout/fast-retransmit</span>
+              <span className="text-[10px] text-slate-400">Injects loss to trigger timeout/fast-retransmit</span>
             </div>
           </div>
 
@@ -430,7 +430,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
                 data-testid="btn-simulate-tcp"
                 onClick={runTcpSimulation}
                 disabled={isRunning}
-                className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs flex items-center justify-center space-x-2 transition-all shadow-md disabled:opacity-50"
+                className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs flex items-center justify-center space-x-2 transition-all shadow-md disabled:bg-slate-700 disabled:text-slate-300"
               >
                 <Play className="w-3.5 h-3.5 fill-white" />
                 <span>{isRunning ? 'Simulating...' : 'Simulate TCP Transfer'}</span>
@@ -440,7 +440,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
                 data-testid="btn-simulate-udp"
                 onClick={runUdpSimulation}
                 disabled={isRunning}
-                className="w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs flex items-center justify-center space-x-2 transition-all shadow-md disabled:opacity-50"
+                className="w-full py-2 px-3 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-xs flex items-center justify-center space-x-2 transition-all shadow-md disabled:bg-slate-700 disabled:text-slate-300"
               >
                 <Play className="w-3.5 h-3.5 fill-white" />
                 <span>{isRunning ? 'Transmitting...' : 'Simulate UDP Datagrams'}</span>
@@ -450,7 +450,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
                 data-testid="btn-simulate-both"
                 onClick={runBothSimulations}
                 disabled={isRunning}
-                className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs flex items-center justify-center space-x-2 transition-all shadow-md disabled:opacity-50"
+                className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs flex items-center justify-center space-x-2 transition-all shadow-md disabled:bg-slate-700 disabled:text-slate-300"
               >
                 <Play className="w-3.5 h-3.5 fill-white" />
                 <span>Run TCP vs UDP Comparison</span>
@@ -535,12 +535,12 @@ const TcpStudioView: React.FC<{
       <div data-testid="tcp-studio-container" data-state="empty" className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-xl p-12 text-center text-slate-500">
         <Activity className="w-12 h-12 text-slate-700 mb-3" />
         <h3 className="text-sm font-semibold text-slate-300">TCP Studio Ready</h3>
-        <p className="text-xs text-slate-500 max-w-sm mt-1 mb-4">
+        <p className="text-xs text-slate-400 max-w-sm mt-1 mb-4">
           Configure initial window sizes and click "Simulate TCP Transfer" to inspect the byte-oriented state machine.
         </p>
         <button
           onClick={onRun}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg"
+          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg"
         >
           Run Default TCP Simulation
         </button>
@@ -620,7 +620,7 @@ const TcpStudioView: React.FC<{
             <Clock className="w-3.5 h-3.5 text-indigo-400" />
             Authoritative Event Trace ({visibleEvents.length}/{result.events.length} Steps)
           </h3>
-          <span className="text-[10px] text-slate-500 font-mono">Virtual SimTime</span>
+          <span className="text-[10px] text-slate-400 font-mono">Virtual SimTime</span>
         </div>
 
         <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
@@ -656,7 +656,7 @@ const TcpStudioView: React.FC<{
                 <span className="text-[10px] text-indigo-400">
                   cwnd: {evt.cwnd_mss.toFixed(1)} MSS
                 </span>
-                <span className="text-[10px] text-slate-500">
+                <span className="text-[10px] text-slate-400">
                   State: {evt.connection_state}
                 </span>
               </div>
@@ -717,12 +717,12 @@ const UdpStudioView: React.FC<{
       <div data-testid="udp-studio-container" data-state="empty" className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-xl p-12 text-center text-slate-500">
         <Zap className="w-12 h-12 text-slate-700 mb-3" />
         <h3 className="text-sm font-semibold text-slate-300">UDP Studio Ready</h3>
-        <p className="text-xs text-slate-500 max-w-sm mt-1 mb-4">
+        <p className="text-xs text-slate-400 max-w-sm mt-1 mb-4">
           Experience connectionless transmission. Lost datagrams are never retransmitted and generate no ACKs.
         </p>
         <button
           onClick={onRun}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg"
+          className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium rounded-lg"
         >
           Run UDP Simulation
         </button>
@@ -830,12 +830,12 @@ const CongestionStudioView: React.FC<{
       <div data-testid="congestion-studio-container" data-state="empty" className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-xl p-12 text-center text-slate-500">
         <Gauge className="w-12 h-12 text-slate-700 mb-3" />
         <h3 className="text-sm font-semibold text-slate-300">Congestion Timeline</h3>
-        <p className="text-xs text-slate-500 max-w-sm mt-1 mb-4">
+        <p className="text-xs text-slate-400 max-w-sm mt-1 mb-4">
           Simulate TCP transfer to observe Slow Start exponential increase, Congestion Avoidance additive increase, and loss response.
         </p>
         <button
           onClick={onRun}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg"
+          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg"
         >
           Run Simulation
         </button>
@@ -986,12 +986,12 @@ const ComparisonStudioView: React.FC<{
       <div data-testid="comparison-studio-container" data-state="empty" className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-xl p-12 text-center text-slate-500">
         <BarChart3 className="w-12 h-12 text-slate-700 mb-3" />
         <h3 className="text-sm font-semibold text-slate-300">Measured Comparison</h3>
-        <p className="text-xs text-slate-500 max-w-sm mt-1 mb-4">
+        <p className="text-xs text-slate-400 max-w-sm mt-1 mb-4">
           Runs both TCP and UDP across the authoritative topology to measure real throughput, goodput, and overhead.
         </p>
         <button
           onClick={onRunBoth}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg"
+          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg"
         >
           Execute Dual Benchmark
         </button>
@@ -1010,7 +1010,7 @@ const ComparisonStudioView: React.FC<{
           <h3 className="text-xs font-bold uppercase text-slate-300 tracking-wider">
             Authoritative Measured Metrics
           </h3>
-          <span className="text-[10px] text-slate-500 font-mono">Real Measured Values Only</span>
+          <span className="text-[10px] text-slate-400 font-mono">Real Measured Values Only</span>
         </div>
 
         <div className="overflow-x-auto">

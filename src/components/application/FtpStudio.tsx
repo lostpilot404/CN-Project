@@ -139,7 +139,7 @@ export const FtpStudio: React.FC<FtpStudioProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-900/40 p-3.5 rounded-xl border border-slate-800/80">
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">FTP Client Node</label>
-          <input
+          <input aria-label="FTP Client Node"
             type="text"
             value={clientNode}
             onChange={(e) => setClientNode(e.target.value)}
@@ -149,7 +149,7 @@ export const FtpStudio: React.FC<FtpStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">FTP Server Node</label>
-          <input
+          <input aria-label="FTP Server Node"
             type="text"
             value={serverNode}
             onChange={(e) => setServerNode(e.target.value)}
@@ -159,7 +159,7 @@ export const FtpStudio: React.FC<FtpStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Username (USER)</label>
-          <input
+          <input aria-label="Username (USER)"
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -169,7 +169,7 @@ export const FtpStudio: React.FC<FtpStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Password (PASS)</label>
-          <input
+          <input aria-label="Password (PASS)"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -179,7 +179,7 @@ export const FtpStudio: React.FC<FtpStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Transfer Command</label>
-          <select
+          <select aria-label="Transfer Command"
             value={command}
             onChange={(e) => setCommand(e.target.value as FtpCommand)}
             className="w-full px-2.5 py-1.5 bg-slate-950 rounded border border-slate-800 text-xs text-slate-200 font-medium"
@@ -192,7 +192,7 @@ export const FtpStudio: React.FC<FtpStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Target Filename</label>
-          <input
+          <input aria-label="Target Filename"
             type="text"
             value={filename}
             onChange={(e) => setFilename(e.target.value)}
@@ -202,7 +202,7 @@ export const FtpStudio: React.FC<FtpStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Payload Size (Bytes)</label>
-          <input
+          <input aria-label="Payload Size (Bytes)"
             type="number"
             value={fileSizeBytes}
             onChange={(e) => setFileSizeBytes(Number(e.target.value))}
@@ -215,7 +215,7 @@ export const FtpStudio: React.FC<FtpStudioProps> = ({
             type="button"
             onClick={runSimulation}
             disabled={isRunning}
-            className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 bg-amber-600 hover:bg-amber-500 text-white font-medium text-xs rounded shadow transition-colors disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 bg-amber-700 hover:bg-amber-800 text-white font-medium text-xs rounded shadow transition-colors disabled:bg-slate-700 disabled:text-slate-300"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
             {isRunning ? 'Running FTP Flow...' : 'Simulate Dual-Channel FTP'}

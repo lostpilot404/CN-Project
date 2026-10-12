@@ -22,6 +22,9 @@ addressing, error control, flow control, MAC, transport and QoS.
 three more in the live-UI pass (§1.2), plus one testability inconsistency. Three of them were
 material (defects 1-3).
 
+A third pass (§23) closed the gaps §22.6 left open and found **two more real defects** (18 and 19)
+plus the accessibility findings. Defect 18 was another 100%-broken command — see §23.2.
+
 ### 1.1 First pass
 
 | # | Severity | Defect | Status |
@@ -485,10 +488,11 @@ problem, and was therefore left alone.
 |---|---|
 | Two interactive chevron controls had no accessible name | **FIXED** — `aria-label` + `aria-expanded` added (`TimelineDrawer`, `LayerCard`) |
 | Buttons with no handler | only the two above (inside clickable headers) and form-submit buttons; verified by static scan | PASS |
-| Inputs outside a `<label>` | 126 label/aria-label associations for 106 inputs | PASS |
+| Inputs outside a `<label>` | ~~126 label/aria-label associations for 106 inputs~~ **SUPERSEDED — see §23.3.** That count was taken statically and overstated coverage: axe-core found **45 controls with no accessible name** (inputs and selects whose caption was a sibling element or an inline icon+text pair) | INCORRECT, CORRECTED IN §23 |
+| Form validation feedback |
 | Form validation feedback | GBN window/sequence-space validation errors are rendered inline; TCP/UDP/DNS/FTP/HTTP/SMTP now guard a topology with fewer than two devices with a plain-language message instead of sending `host-a` and surfacing "Node 'host-a' not found" | **FIXED** |
 | Failure visibility | simulation command failures now render a dismissible `role="alert"` banner instead of a silent console message | **FIXED** |
-| Colour contrast / keyboard traps / focus order | not systematically assessed — no automated axe-style tooling available here | NOT VERIFIED |
+| Colour contrast / keyboard traps / focus order | ~~not systematically assessed — no automated axe-style tooling available here~~ **SUPERSEDED — see §23.3.** axe-core is now wired into Playwright and the audit ran over 9 workspaces + 23 sub-views. It found failing colour contrast (3.46:1–4.16:1 against a 4.5:1 requirement), 45 controls with no accessible name, and one scrollable region with no keyboard access — all fixed | WAS NOT VERIFIED, NOW VERIFIED IN §23 |
 
 ---
 
@@ -962,8 +966,204 @@ declared peer of `@testing-library/react`, `jsdom` as the vitest environment). N
 
 - **The desktop/Tauri path no longer exists**, so any expectation of a packaged desktop binary is
   unmet by design. The supported deployment is the browser UI plus the Python service.
-- **Python static type checking is not configured.** There is no mypy/pyright setup; Python
-  correctness rests on the 154-test suite and Ruff.
-- **`python-tools/` is not covered by tests.** It was verified by hand against a real sweep export
-  (§22.3); it remains optional, untested tooling.
-- **Accessibility tooling** (axe-style, screen readers) is still not configured.
+- ~~**Python static type checking is not configured.**~~ **CLOSED IN §23.2** — `[tool.mypy]` is now
+  in `pyproject.toml`; the engine and tools type-check clean (0 errors in 63 files, 35 fixed).
+- ~~**`python-tools/` is not covered by tests.**~~ **CLOSED IN §23.1** — 80 tests in
+  `python-tools/tests/`, 99% statement coverage of both scripts.
+- ~~**Accessibility tooling** (axe-style, screen readers) is still not configured.~~ **PARTLY CLOSED
+  IN §23.3** — axe-core runs inside the browser suite over every workspace and sub-view. Manual
+  screen-reader testing remains impossible in this environment.
+
+---
+
+## 23. Third pass — utilities, static typing and accessibility (2026-10-12)
+
+Closes the three gaps §22.6 left open: `python-tools/` had no tests, Python had no static type
+checking, and accessibility had never been measured. Same rules as the rest of this report —
+reproduce first, change, re-run, and state what still could not be checked.
+
+### 23.1 `python-tools/` — hardened and covered
+
+**Test suite:** `python-tools/tests/` (new, 5 files, **80 tests**). The scripts live in a
+hyphenated directory, so `conftest.py` loads them by path with `importlib.util.spec_from_file_location`
+and puts `python/` on `sys.path` so the fixtures can drive the real engine.
+
+```bash
+.venv/bin/pytest python-tools/tests -q
+# 80 passed in 4.94 s
+```
+
+**Coverage** (`.venv/bin/pytest python-tools/tests --cov=python-tools`):
+
+| File | Statements | Missed | Coverage |
+|---|---|---|---|
+| `analyze_results.py` | 121 | 1 | **99%** |
+| `plot_metrics.py` | 121 | 1 | **99%** |
+| `conftest.py` | 48 | 1 | 98% |
+| `test_analyze_results.py` | 171 | 0 | 100% |
+| `test_cli.py` | 70 | 0 | 100% |
+| `test_engine_schema.py` | 63 | 0 | 100% |
+| `test_plot_metrics.py` | 142 | 0 | 100% |
+| **TOTAL** | **736** | **3** | **99%** |
+
+The two remaining uncovered lines are the `if __name__ == "__main__":` guards of each script; they
+are exercised by the subprocess tests in `test_cli.py`, which coverage cannot attribute back to the
+imported module.
+
+**Defects found by probing with malformed input** (not by reading):
+
+| Input | Before | After |
+|---|---|---|
+| `"points": "notalist"` | printed "8 points", then `AttributeError` | exit 1, `'points' must be a JSON array (received str)` |
+| `"aggregated_qos": "nope"` | `AttributeError` | exit 1, names `points[0].aggregated_qos` |
+| malformed JSON | traceback | exit 1, `not valid JSON (...)` |
+| missing required keys | bare message | exit 1, lists each missing key |
+| top-level array | `AttributeError` | exit 1, `Expected a JSON object at the top level.` |
+| plot: non-numeric `parameter_value` | `ValueError` traceback | exit 1, names `points[0].parameter_value` |
+| plot: unwritable output path | `FileNotFoundError` traceback | exit 1, `Cannot write the plot to ...` |
+| metric that is not a number | silently coerced | prints `n/a` |
+
+The contract is documented in both docstrings: **structural** problems are a clear message plus a
+non-zero exit code (1 = data/file, 2 = usage); **value** problems make the analyser print `n/a`,
+while the plotter stays strict (absent or null → `0.0`, present but unparseable → error).
+
+**Schema drift guard.** `test_engine_schema.py` runs a real parameter sweep through the engine and
+feeds the output straight into both tools, so a change to the engine's serialisation fails here
+rather than silently breaking the utilities. Verified values for
+`{kind: link_bandwidth_bps, link_id: link-1, values: [500000, 1000000], seeds: [7]}` →
+`mean_latency_us` **46500.625 / 13005.0**. The plotter wrote a real 1200×1050 PNG whose chunks
+(`IHDR, tEXt, pHYs, IDAT, IDAT, IEND`) tile the file exactly.
+
+**Dependencies.** `requirements.txt` listed `pandas` and `numpy`, neither of which is imported
+anywhere in the repository. Both were removed; only `matplotlib` remains, imported lazily inside
+`plot_metrics.py`. Proven directly: both scripts run under `python -S` (site-packages disabled) —
+the analyser completes normally, and the plotter prints
+`Matplotlib not installed. Please run: pip install -r requirements.txt` and exits 1 instead of
+raising.
+
+### 23.2 Static typing — mypy configured, 35 errors fixed
+
+```bash
+.venv/bin/mypy
+# Success: no issues found in 63 source files
+```
+
+`[tool.mypy]` was added to `pyproject.toml` with `check_untyped_defs`, `disallow_any_generics`,
+`disallow_untyped_defs`, `no_implicit_optional`, `strict_equality`, `warn_redundant_casts` and
+`warn_unused_ignores`. Every function in `python/netsim/` is fully annotated, which is why
+`disallow_untyped_defs` could be enabled for the engine; the pytest modules are exempted by an
+explicit per-module override (their fixture parameters are conventionally unannotated).
+
+The first run reported **35 errors across 6 files**. All were fixed rather than suppressed, and the
+**8 existing `# type: ignore` comments in the repository were removed — none were added**:
+
+| Cluster | Fix |
+|---|---|
+| `server.py`, 22 errors | NAT handlers now validate with the existing `core/schema.py` helpers; the dispatch chain reused one `cfg` name for four unrelated config classes, which is what confused the inference — each branch now has its own typed local and the MAC branches use `MacProtocol.*` instead of four string literals |
+| `datalink/flow_control.py`, 8 errors | the in-flight scan reused the loop variable `f`, so mypy typed it `_InFlightFrame` for the rest of the function and rejected the later `SlidingFrame` loops; renamed |
+| `addressing/ipv6.py`, 2 errors | the guard now narrows `best_start` (`is not None`) instead of asserting it |
+| `addressing/ipv4.py` | `mask_to_prefix` returns `int \| None`; the narrowed value is bound to its own name |
+| `core/engine.py`, 2 errors | distinct locals for the transmission queue and the fault snapshot; the `pop(..., None)` result is annotated |
+| `routing/{dijkstra,graph}.py` | the distance maps hold `float("inf")`, so they are `dict[str, float]`; the Dijkstra heap follows |
+| `routing/bellman_ford.py` | the optional next-hop is bound to a local so it narrows on `is None` |
+| `application/__init__.py` | see defect 19 below |
+
+**Two real defects surfaced from the type errors** — the reason the errors were fixed rather than
+suppressed:
+
+| # | Severity | Defect | Status |
+|---|---|---|---|
+| 18 | **Critical** | `verify_and_correct_hamming` was **100% broken**: the server called `hamming_decode()`, which returns a `HammingDecodeResult` that has no `to_dict()`, so every call raised `AttributeError` and the API answered HTTP 500. The UI's `HammingVerifyResult` contract needs the 12 fields that `verify_and_correct_hamming()` produces | FIXED AND RETESTED |
+| 19 | **High** | Application-layer events violated the declared event contract: `SimEvent.event_type` is the envelope `{"type": ..., "data": ...}` (and `src/types/events.ts` declares `SimEventEnvelope`), but `app_event_to_sim_event` passed a bare `SimEventType`, so every DNS/HTTP/FTP/SMTP/SNMP event serialised `event_type` as a plain string while engine events carried an object | FIXED AND RETESTED |
+
+Defect 18 was reproduced in-process before the fix and verified after it:
+
+```
+{"codeword":"0110011","parity_mode":"even"} → has_error False, syndrome "000",
+                                             "Codeword is valid. No bit errors detected."
+{"codeword":"0100011"}                      → error_position 3, corrected_bits "0110011"
+                                             (the original codeword), all 12 declared fields present
+```
+
+Defect 19 is confirmed by the front-end's own test double, which builds
+`{type: 'application_event', data: {protocol, event_name}}` — the real engine was the deviant side.
+The engine now emits the same envelope and key names.
+
+### 23.3 Accessibility — axe-core in the browser suite
+
+`@axe-core/playwright` (axe-core 4.13.0) drives a new suite, `e2e/a11y.spec.ts`, over the real UI
+and the real service, tagged `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`. It audits **all nine
+workspaces plus 23 sub-views** and fails on a violation of **any** impact level, collecting every
+view's findings before asserting so one broken workspace cannot hide the rest.
+
+```bash
+npx playwright test e2e/a11y.spec.ts
+# 2 passed
+```
+
+**Before:** 8 of 9 workspaces failed, and the sub-view sweep added 5 more findings.
+
+| Finding | Measured | Fix |
+|---|---|---|
+| White label on `bg-brand-500` (`Run 50ms`) | 3.46:1 | `bg-brand-600` → 5.07:1 |
+| White label on `bg-emerald-600` (`Inject Packet`, `Calculate`, …) | 3.77:1 | `bg-emerald-700` → 5.48:1 |
+| White label on `bg-cyan-600` | 3.68:1 | `bg-cyan-700` → 5.36:1 |
+| White label on `bg-teal-600` / `bg-amber-600` / `bg-rose-500` / `bg-emerald-500` | 3.74 / 3.19 / 3.67 / **2.54**:1 | one to two shades deeper, same hue |
+| `text-slate-500` captions on the dark panels (seed badge, `(node-1)`, `/24`, `L4 Endpoints`, descriptions, empty states) | 3.75–4.16:1 | `text-slate-400` → 6.96–7.73:1 |
+| Controls with **no accessible name** — captions were sibling `<span>`s, unassociated `<label>`s, or inline icon+text pairs | axe flagged **45** across the two scans (35 in the nine workspaces, 10 more in sub-views) | 108 controls associated mechanically, 12 by hand; two icon-only buttons and one dynamic caption were given explicit names |
+| Icon-only button (`Trash2` in the VLSM allocator) | `button-name` critical, 4 nodes | `aria-label="Remove requirement N"` |
+| Scrollable event log with no keyboard access | `scrollable-region-focusable` serious | `tabIndex={0}` + `role="log"` + `aria-label` |
+| Disabled controls faded with `opacity`, which blends text **and** background towards the page | 2.9:1 (Routing button), 3.5:1 (QoS input) | coloured buttons now use neutral disabled colours (`disabled:bg-slate-700 disabled:text-slate-300`); the input fades at 60% instead of 40% |
+
+Every replacement was checked against the WCAG contrast formula before being applied, and hover
+shades were stepped in the same direction as their base (`hover:bg-<family>-500` → `-700`) so the
+hover state does not regress either — axe itself only audits the rendered state, so those were
+verified arithmetically. All 23 retargeted button classes and 4 hover shades now measure ≥ 4.5:1 in
+both states.
+
+The hover-state work is worth noting because it is **not** something axe could have caught: it was
+found by computing the ratio for every white-on-colour token in `src/`, which surfaced
+`bg-emerald-500` (2.54:1) and `bg-rose-500` (3.67:1) in default states too.
+
+### 23.4 Verification on the round-5 tree
+
+| Check | Command | Result |
+|---|---|---|
+| Engine tests | `.venv/bin/pytest python/tests -q` | **154 passed in 1.64 s** |
+| Utility tests | `.venv/bin/pytest python-tools/tests -q` | **80 passed in 4.94 s** |
+| Coverage (utilities) | `pytest python-tools/tests --cov=python-tools` | 99% (736 statements, 3 missed) |
+| Python lint | `.venv/bin/ruff check .` | All checks passed |
+| Python format | `.venv/bin/ruff format --check python/ python-tools/` | 71 files already formatted |
+| Python types | `.venv/bin/mypy` | **Success: no issues found in 63 source files** |
+| TypeScript | `npx tsc --noEmit` | clean |
+| Front-end tests | `npx vitest run` | **93 passed**, 11 skipped (104) |
+| Live integration | `npm run test:live` | **11 passed** against the real service |
+| Production build | `npm run build` | built in 6.54 s |
+| Browser E2E | `npx playwright test` | **24 passed (54.3 s)** — 22 functional + 2 accessibility |
+
+**One intermediate E2E run failed, and it is worth recording why.** An earlier full-suite run
+reported `1 failed, 4 passed, 19 did not run`: test 2b (failover to the same-origin proxy) left the
+status badge on `UNKNOWN` for its whole 15 s window, which is the *pre-probe* value — the app never
+reached its first health check. The failover itself was then instrumented in the browser, and it
+works: the blocked request (`http://127.0.0.1:8765/health` → `net::ERR_FAILED`) is followed by
+`GET http://127.0.0.1:1420/netsim-api/health`, and the badge reads `ONLINE` at every checkpoint from
++1 s to +12 s. The cause was the dev server, not the app: it had been running across the whole
+session, so its module graph had absorbed dozens of HMR updates *and* a dependency install
+(`@axe-core/playwright`) performed after it started. Restarting the dev server and re-running the
+full suite gives `24 passed` with no other change. This matches the note in `TESTING.md` that a
+reused dev server must be restarted before the browser suite.
+
+The rest of the suite is unchanged by the engine edits: the 154 engine tests, the 93 front-end
+tests and the 11 live tests all still pass, and the sweep values the utility tests assert
+(46500.625 / 13005.0 µs) are identical to the values measured before the typing pass — so the
+annotation fixes and the two defect fixes did not alter simulation behaviour.
+
+### 23.5 What is still not verified
+
+- **Manual assistive-technology testing** (screen reader, keyboard-only walkthrough) was not
+  performed; no screen reader exists in this environment. axe-core's automated rules are necessary
+  but not sufficient for WCAG conformance, and this report does not claim conformance.
+- **axe audits the rendered state only.** Hover, focus and active styling were not audited by a
+  tool; they were verified arithmetically (see §23.3). Dialogs and modals were not opened by the
+  audit, so controls that only exist inside them are covered only by the static naming pass.
+- **The desktop/Tauri path still does not exist** by design (§22.1).

@@ -336,7 +336,7 @@ export const DataLinkWorkspace: React.FC = () => {
                   <label className="text-xs font-medium text-slate-300">
                     Input Data Bits (Raw Binary)
                   </label>
-                  <input
+                  <input aria-label="Input Data Bits (Raw Binary)"
                     type="text"
                     value={hammingData}
                     onChange={(e) => setHammingData(e.target.value.replace(/[^01]/g, ''))}
@@ -372,7 +372,7 @@ export const DataLinkWorkspace: React.FC = () => {
                 <button
                   onClick={handleHammingEncode}
                   disabled={hammingLoading || !hammingData}
-                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white shadow-lg shadow-indigo-600/20 transition flex items-center space-x-2"
+                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-indigo-600/20 transition flex items-center space-x-2"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Encode into Hamming Codeword</span>
@@ -537,7 +537,7 @@ export const DataLinkWorkspace: React.FC = () => {
                   <button
                     onClick={() => handleHammingVerify()}
                     disabled={hammingLoading || !hammingTestCodeword}
-                    className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2"
+                    className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     <span>Run Syndrome Calculation & Correction</span>
@@ -646,7 +646,7 @@ export const DataLinkWorkspace: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-slate-300">Data Bitstring</label>
-                  <input
+                  <input aria-label="Data Bitstring"
                     type="text"
                     value={crcData}
                     onChange={(e) => setCrcData(e.target.value.replace(/[^01]/g, ''))}
@@ -659,7 +659,7 @@ export const DataLinkWorkspace: React.FC = () => {
                   <label className="text-xs font-medium text-slate-300">
                     Generator Polynomial $G(x)$ (Binary Bitstring)
                   </label>
-                  <input
+                  <input aria-label="Generator Polynomial $G(x)$ (Binary Bitstring)"
                     type="text"
                     value={crcPoly}
                     onChange={(e) => {
@@ -679,7 +679,7 @@ export const DataLinkWorkspace: React.FC = () => {
                 <button
                   onClick={handleCrcCalculate}
                   disabled={crcLoading || !crcData || !crcPoly}
-                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white shadow-lg shadow-indigo-600/20 transition flex items-center space-x-2"
+                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-indigo-600/20 transition flex items-center space-x-2"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Execute Modulo-2 Polynomial Division</span>
@@ -819,7 +819,7 @@ export const DataLinkWorkspace: React.FC = () => {
                     <button
                       onClick={() => handleCrcVerify()}
                       disabled={crcLoading || !crcTestFrame}
-                      className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2"
+                      className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Verify Received Frame via Modulo-2 Division</span>
@@ -898,7 +898,7 @@ export const DataLinkWorkspace: React.FC = () => {
                 <label className="text-xs font-medium text-slate-300">
                   Payload Hexadecimal Words (16-bit words separated by space, commas, or prefixes)
                 </label>
-                <input
+                <input aria-label="Payload Hexadecimal Words (16-bit words separated by space, commas, or prefixes)"
                   type="text"
                   value={checksumHexInput}
                   onChange={(e) => setChecksumHexInput(e.target.value)}
@@ -914,7 +914,7 @@ export const DataLinkWorkspace: React.FC = () => {
                 <button
                   onClick={handleChecksumCalculate}
                   disabled={checksumLoading || !checksumHexInput}
-                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white shadow-lg shadow-indigo-600/20 transition flex items-center space-x-2"
+                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-indigo-600/20 transition flex items-center space-x-2"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Calculate 16-Bit Internet Checksum</span>
@@ -1026,7 +1026,7 @@ export const DataLinkWorkspace: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-slate-300">Payload Words to Verify</label>
-                      <input
+                      <input aria-label="Payload Words to Verify"
                         type="text"
                         value={checksumTestHex}
                         onChange={(e) => setChecksumTestHex(e.target.value)}
@@ -1035,7 +1035,7 @@ export const DataLinkWorkspace: React.FC = () => {
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-slate-300">Checksum Word (Hex)</label>
-                      <input
+                      <input aria-label="Checksum Word (Hex)"
                         type="text"
                         value={checksumTestWord}
                         onChange={(e) => setChecksumTestWord(e.target.value)}
@@ -1054,7 +1054,7 @@ export const DataLinkWorkspace: React.FC = () => {
                     <button
                       onClick={() => handleChecksumVerify(false)}
                       disabled={checksumLoading || !checksumTestHex || !checksumTestWord}
-                      className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2"
+                      className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Verify Checksum on Receiver</span>

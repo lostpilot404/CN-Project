@@ -157,7 +157,7 @@ export const HttpStudio: React.FC<HttpStudioProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-900/40 p-3.5 rounded-xl border border-slate-800/80">
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Client Host</label>
-          <input
+          <input aria-label="Client Host"
             type="text"
             value={clientNode}
             onChange={(e) => setClientNode(e.target.value)}
@@ -167,7 +167,7 @@ export const HttpStudio: React.FC<HttpStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Web Server Node</label>
-          <input
+          <input aria-label="Web Server Node"
             type="text"
             value={serverNode}
             onChange={(e) => setServerNode(e.target.value)}
@@ -205,7 +205,7 @@ export const HttpStudio: React.FC<HttpStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Resource Path</label>
-          <input
+          <input aria-label="Resource Path"
             type="text"
             value={path}
             onChange={(e) => setPath(e.target.value)}
@@ -215,7 +215,7 @@ export const HttpStudio: React.FC<HttpStudioProps> = ({
 
         <div className="md:col-span-2">
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Request Headers (Key: Value)</label>
-          <textarea
+          <textarea aria-label="Request Headers (Key: Value)"
             rows={2}
             value={headersText}
             onChange={(e) => setHeadersText(e.target.value)}
@@ -226,7 +226,7 @@ export const HttpStudio: React.FC<HttpStudioProps> = ({
         {method === 'POST' ? (
           <div className="md:col-span-2">
             <label className="text-[11px] font-semibold text-slate-400 block mb-1">POST Request Body</label>
-            <textarea
+            <textarea aria-label="POST Request Body"
               rows={2}
               value={bodyText}
               onChange={(e) => setBodyText(e.target.value)}
@@ -244,7 +244,7 @@ export const HttpStudio: React.FC<HttpStudioProps> = ({
             type="button"
             onClick={runSimulation}
             disabled={isRunning}
-            className="flex items-center gap-1.5 py-2 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs rounded-lg shadow transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 py-2 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-xs rounded-lg shadow transition-colors disabled:bg-slate-700 disabled:text-slate-300"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
             {isRunning ? 'Executing HTTP Transaction...' : 'Send HTTP Request (Over TCP)'}

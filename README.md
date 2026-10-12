@@ -51,7 +51,8 @@ produce a simulation result on its own: an unreachable backend raises an error t
 ```bash
 # 1. Python service (authoritative simulation core) — terminal 1
 python3 -m venv .venv
-.venv/bin/pip install pytest ruff
+.venv/bin/pip install pytest ruff mypy   # pytest-cov is optional, for coverage reports
+.venv/bin/pip install -r python-tools/requirements.txt   # optional: only matplotlib, for charts
 .venv/bin/python python/netsim/server.py 8765      # http://127.0.0.1:8765/health
 
 # 2. Front-end — terminal 2
@@ -89,19 +90,23 @@ checks that could not be executed in the audit environment.
 | Suite | Command | Result |
 |---|---|---|
 | Python tests | `.venv/bin/python -m pytest python/tests -q` | **154 passed** |
-| Python lint + format | `.venv/bin/ruff check python/ && .venv/bin/ruff format --check python/` | clean (64 files) |
+| Utility tests (`python-tools/`) | `.venv/bin/pytest python-tools/tests -q` | **80 passed**, 99% statement coverage of both scripts |
+| Python lint + format | `.venv/bin/ruff check . && .venv/bin/ruff format --check python/ python-tools/` | clean (71 files) |
+| Python static types | `.venv/bin/mypy` | **clean** (63 files, no `# type: ignore`) |
 | Front-end typecheck | `npx tsc --noEmit` | clean |
 | Front-end unit/component tests | `npx vitest run` | **93 passed, 11 skipped** (live suite opt-in) |
 | Front-end ↔ service integration | `NETSIM_LIVE_API=1 npx vitest run src/integration` | **11 passed** (real service) |
 | Production build | `npm run build` | succeeds |
-| Browser end-to-end | `npx playwright test` | **22 passed** in a real Chromium (9 workspaces, 3 viewports) |
+| Browser end-to-end | `npx playwright test` | **24 passed** in a real Chromium (22 functional + 2 axe-core accessibility) |
 
 ### Running the tests
 
 ```bash
 # Python — no service required
 .venv/bin/python -m pytest python/tests -q
-.venv/bin/ruff check python/ && .venv/bin/ruff format --check python/
+.venv/bin/pytest python-tools/tests -q
+.venv/bin/ruff check . && .venv/bin/ruff format --check python/ python-tools/
+.venv/bin/mypy
 
 # Front-end — no service required
 npx tsc --noEmit
@@ -212,8 +217,8 @@ command never returns a substitute result.
 | `src/lib/apiClient.ts` | Service endpoint resolution, health probing, retries |
 | `src/lib/api.ts` | Typed command surface consumed by the UI |
 | `src/lib/testDouble.ts` | In-memory double used **only** by the vitest runner |
-| `e2e/` | Playwright browser suite |
-| `python-tools/` | Optional standalone scripts for analysing exported experiment JSON |
+| `e2e/` | Playwright browser suite (`netsim.spec.ts` functional, `a11y.spec.ts` axe-core audit) |
+| `python-tools/` | Optional standalone scripts for analysing exported experiment JSON, with their own test suite; only `matplotlib` is needed (`requirements.txt`) |
 
 ## Further documentation
 

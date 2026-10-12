@@ -96,8 +96,11 @@ def simulate_distance_vector_convergence(graph: RoutingGraph, source_node_id: st
 
         for edge in graph.adjacency.get(u, []):
             curr_metric = u_dist[edge.target]
+            # Bind the optional next-hop to a local so it narrows on the `is None` test; mypy
+            # does not narrow a repeated subscript expression.
+            current_next_hop = u_next[edge.target]
             if edge.metric < curr_metric or (
-                edge.metric == curr_metric and (u_next[edge.target] is None or edge.target < u_next[edge.target])  # type: ignore
+                edge.metric == curr_metric and (current_next_hop is None or edge.target < current_next_hop)
             ):
                 u_dist[edge.target] = edge.metric
                 u_next[edge.target] = edge.target

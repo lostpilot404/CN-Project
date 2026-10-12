@@ -20,11 +20,17 @@ Python unit tests            algorithm and model correctness          python/tes
         ↓
 Python API contract tests    hostile input, error mapping, regressions  python/tests/
         ↓
+Utility tests                engine→script schema drift, bad input     python-tools/tests/
+        ↓
+      static typing          mypy over the engine and the utilities    pyproject.toml
+        ↓
 Front-end unit/component     rendering, state, error and empty states  src/*.test.ts
         ↓
 Front-end ↔ service          real HTTP against a running service       src/integration/
         ↓
-Browser end-to-end           real Chromium, real service, real UI     e2e/
+Browser end-to-end           real Chromium, real service, real UI     e2e/netsim.spec.ts
+        ↓
+Accessibility audit          axe-core over every workspace + sub-view e2e/a11y.spec.ts
 ```
 
 Each layer is independent of the one above it. A lower layer failing is never masked by a higher
@@ -56,7 +62,43 @@ them — not by calling `dispatch_command` directly.
 - Determinism is asserted by running an experiment twice with the same seed and comparing results,
   excluding wall-clock fields such as `execution_time_ms`.
 
-## 4. Front-end tests
+## 4. Utility tests (`python-tools/`)
+
+```bash
+.venv/bin/pytest python-tools/tests -q
+```
+
+| File | Focus |
+|---|---|
+| `test_analyze_results.py` | sweep-document parsing, missing/extra keys, `n/a` for unmeasurable values, exit codes |
+| `test_plot_metrics.py` | strict value handling, PNG output (chunks walked, not offset-guessed), missing-matplotlib path |
+| `test_engine_schema.py` | **drift guard** — runs a real sweep through the engine and feeds the result to both tools |
+| `test_cli.py` | both scripts as subprocesses: malformed JSON, wrong types, bad paths, exit codes |
+
+The scripts live in a hyphenated directory, so `conftest.py` loads them by path with
+`importlib.util.spec_from_file_location` and puts `python/` on `sys.path` to reach the engine.
+
+Two conventions, both documented in the script docstrings and asserted here: **structural**
+problems (bad JSON, wrong shape, unreadable path) exit non-zero with a message naming the offending
+field; **value** problems make the analyser print `n/a`, while the plotter is strict — an absent or
+null metric is `0.0`, a present but unparseable one is an error.
+
+## 5. Static typing
+
+```bash
+.venv/bin/mypy
+```
+
+`[tool.mypy]` in `pyproject.toml` enables `check_untyped_defs`, `disallow_any_generics`,
+`disallow_untyped_defs`, `no_implicit_optional`, `strict_equality`, `warn_redundant_casts` and
+`warn_unused_ignores` over `python/netsim/` and `python-tools/`. `disallow_untyped_defs` is on
+because every def in the engine is annotated; the pytest modules are exempted by an explicit
+per-module override, since unannotated fixture parameters are conventional in tests.
+
+`warn_unused_ignores` is deliberate: the repository contains **zero** `# type: ignore` comments, so
+a new one either has to be justified or it fails the check.
+
+## 6. Front-end tests
 
 ```bash
 npx tsc --noEmit        # types
@@ -72,9 +114,9 @@ npm run build           # production bundle
 
 Component tests drive real user interactions (clicks, typing) through the component tree and assert
 on rendered output. They run against an in-memory test double, which is aliased away in every
-non-test build — see §6.
+non-test build — see §8.
 
-## 5. Integration against the real service
+## 7. Integration against the real service
 
 ```bash
 # terminal 1
@@ -92,7 +134,7 @@ including that the reported authority is `python`.
 This distinction matters: a page rendering successfully does not prove its controls work. These
 tests confirm request → Python execution → response → rendered result.
 
-## 6. The test double, and why it cannot leak
+## 8. The test double, and why it cannot leak
 
 `src/lib/testDouble.ts` is an in-memory double used only by the vitest runner so components can be
 tested without a service.
@@ -106,7 +148,7 @@ It cannot silently replace real results in a shipped build:
    `BackendUnavailableError` rather than returning a substitute result.
 3. The production bundle was inspected and contains no simulation double — only the rejecting stub.
 
-## 7. Browser end-to-end
+## 9. Browser end-to-end
 
 ```bash
 npx playwright install chromium
@@ -130,6 +172,33 @@ Tests that assert rendered topology call `resetProject()` first so runs are orde
 Selectors are scoped by `data-testid`; where a label also appears in the minimap, the scope is the
 canvas node to avoid strict-mode ambiguity.
 
+**Restart the dev server before a full run.** `playwright.config.ts` uses
+`reuseExistingServer: !CI`, so a Vite process left over from earlier work is reused silently. A dev
+server that has been running for a long time accumulates HMR updates — and a dependency install
+after it started leaves its optimizer state stale — which makes page loads unreliable and can fail
+the startup tests for reasons that have nothing to do with the application. Stop the old server,
+start a fresh one, then run the suite. (The same applies to the Python service: the browser tests
+talk to whatever process is already listening on 8765.)
+
+### Accessibility audit
+
+```bash
+npx playwright test e2e/a11y.spec.ts
+```
+
+`e2e/a11y.spec.ts` runs axe-core (via `@axe-core/playwright`) over the real UI and the real
+service, tagged `wcag2a`, `wcag2aa`, `wcag21a` and `wcag21aa`. It audits all nine workspaces and 23
+sub-views, and **fails on a violation of any impact level** — the assertion collects every view's
+findings first, so one broken workspace does not hide the others.
+
+What it does *not* establish, and what is therefore still unverified in the report:
+
+- axe analyses the **rendered state**. Hover, focus and active styling is not audited by a tool;
+  those colours were checked against the WCAG contrast formula instead.
+- Dialogs and transient states are not opened by the audit.
+- Automated rules are necessary but not sufficient for WCAG conformance: this suite passing is not
+  a claim of conformance, and no manual screen-reader testing is possible in this environment.
+
 ### Environments that cannot download a browser
 
 If `npx playwright install` fails (`ECONNRESET` against `cdn.playwright.dev`), point Playwright at a
@@ -143,15 +212,16 @@ NETSIM_CHROMIUM_PATH=/path/to/chromium npx playwright test
 When no browser can be obtained, the suite is **not run** and must be reported as not verified —
 selector inspection and TypeScript compilation are not browser tests.
 
-## 8. What is not covered
+## 10. What is not covered
 
-- **Static type checking of the Python core.** There is no mypy/pyright configuration in this
-  repository; Python correctness rests on the test suite and Ruff.
-- **Assistive-technology behaviour.** No screen-reader or automated accessibility (axe-style) tooling
-  is configured.
+- **Manual assistive-technology behaviour.** axe-core runs in the browser suite (§9), but no
+  screen reader or keyboard-only walkthrough is possible here, and automated rules cannot certify
+  WCAG conformance.
+- **Hover/focus/active styling under a tool.** axe audits the rendered state only; those colours
+  are verified arithmetically, not automatically.
 - **Rust/Tauri.** That runtime has been removed; there is nothing to test.
 
-## 9. Adding a test
+## 11. Adding a test
 
 1. Put Python tests in `python/tests/` named `test_*.py`; they are collected automatically.
 2. Prefer asserting exact values; if behaviour changed, confirm the new expectation against the
@@ -161,3 +231,5 @@ selector inspection and TypeScript compilation are not browser tests.
    `NETSIM_LIVE_API=1`.
 5. To assert browser behaviour, add to `e2e/netsim.spec.ts` and verify against the API rather than
    trusting the rendered label alone.
+6. To extend accessibility coverage, add the view to `WORKSPACES` or `SUB_VIEWS` in
+   `e2e/a11y.spec.ts`; sub-views nested inside another sub-view need a `via` entry.

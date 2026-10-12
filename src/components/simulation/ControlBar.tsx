@@ -48,7 +48,7 @@ export const ControlBar = ({
         ) : (
           <button
             onClick={onRunBurst}
-            className="flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-semibold bg-brand-500 hover:bg-brand-400 text-white transition-colors shadow-sm cursor-pointer"
+            className="flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white transition-colors shadow-sm cursor-pointer"
             title="Advance 50ms virtual simulation time"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
@@ -87,7 +87,7 @@ export const ControlBar = ({
 
         <button
           onClick={onSendDemoPacket}
-          className="flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-sm cursor-pointer"
+          className="flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white transition-colors shadow-sm cursor-pointer"
           title="Inject packet into topology"
         >
           <Send className="w-3.5 h-3.5" />

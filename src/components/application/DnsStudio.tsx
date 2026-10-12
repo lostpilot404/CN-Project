@@ -177,7 +177,7 @@ export const DnsStudio: React.FC<DnsStudioProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-900/40 p-3.5 rounded-xl border border-slate-800/80">
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Client Node</label>
-          <input
+          <input aria-label="Client Node"
             type="text"
             value={clientNode}
             onChange={(e) => setClientNode(e.target.value)}
@@ -187,7 +187,7 @@ export const DnsStudio: React.FC<DnsStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Local DNS Resolver</label>
-          <input
+          <input aria-label="Local DNS Resolver"
             type="text"
             value={serverNode}
             onChange={(e) => setServerNode(e.target.value)}
@@ -197,7 +197,7 @@ export const DnsStudio: React.FC<DnsStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Query Domain Name</label>
-          <input
+          <input aria-label="Query Domain Name"
             type="text"
             value={queryName}
             onChange={(e) => setQueryName(e.target.value)}
@@ -208,7 +208,7 @@ export const DnsStudio: React.FC<DnsStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Record Type</label>
-          <select
+          <select aria-label="Record Type"
             value={queryType}
             onChange={(e) => setQueryType(e.target.value as DnsRecordType)}
             className="w-full px-2.5 py-1.5 bg-slate-950 rounded border border-slate-800 text-xs text-slate-200 font-medium"
@@ -251,7 +251,7 @@ export const DnsStudio: React.FC<DnsStudioProps> = ({
         {queryMode === 'iterative' && (
           <div>
             <label className="text-[11px] font-semibold text-slate-400 block mb-1">Authoritative DNS Node</label>
-            <input
+            <input aria-label="Authoritative DNS Node"
               type="text"
               value={authServerNode}
               onChange={(e) => setAuthServerNode(e.target.value)}
@@ -262,7 +262,7 @@ export const DnsStudio: React.FC<DnsStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Transaction ID (query_id)</label>
-          <input
+          <input aria-label="Transaction ID (query_id)"
             type="number"
             value={queryId}
             onChange={(e) => setQueryId(Number(e.target.value))}
@@ -275,7 +275,7 @@ export const DnsStudio: React.FC<DnsStudioProps> = ({
             type="button"
             onClick={runSimulation}
             disabled={isRunning}
-            className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 bg-brand-600 hover:bg-brand-500 text-white font-medium text-xs rounded shadow transition-colors disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 bg-brand-600 hover:bg-brand-700 text-white font-medium text-xs rounded shadow transition-colors disabled:bg-slate-700 disabled:text-slate-300"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
             {isRunning ? 'Resolving...' : 'Simulate DNS Query'}

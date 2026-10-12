@@ -187,7 +187,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Card 1: Throughput & Goodput */}
           <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 hover:border-slate-700/80 transition relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl group-hover:bg-indigo-500/10 transition" />
+            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl group-hover:bg-indigo-700/10 transition" />
             <div className="flex items-center justify-between text-slate-400 text-xs font-medium mb-1">
               <span>Throughput</span>
               <Zap className="w-4 h-4 text-indigo-400" />
@@ -436,7 +436,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
               </table>
             </div>
           ) : (
-            <div className="py-8 text-center text-slate-500 text-xs">
+            <div className="py-8 text-center text-slate-400 text-xs">
               No link utilization recorded yet. Run traffic packets to monitor physical bus occupancy.
             </div>
           )}
@@ -458,7 +458,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
             {/* Fault Type */}
             <div>
               <label className="block text-[11px] font-medium text-slate-300 mb-1">Fault Action</label>
-              <select
+              <select aria-label="Fault Action"
                 value={faultType}
                 onChange={(e) => setFaultType(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
@@ -476,7 +476,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
             {/* Target Selection */}
             <div>
               <label className="block text-[11px] font-medium text-slate-300 mb-1">Target Resource</label>
-              <select
+              <select aria-label="Target Resource"
                 value={targetId}
                 onChange={(e) => setTargetId(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
@@ -502,7 +502,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
               <label className="block text-[11px] font-medium text-slate-300 mb-1">
                 Execution SimTime (µs)
               </label>
-              <input
+              <input aria-label="Execution SimTime (µs)"
                 type="number"
                 min="0"
                 step="1000"
@@ -514,7 +514,10 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
 
             {/* Dynamic Parameter value */}
             <div>
-              <label className="block text-[11px] font-medium text-slate-300 mb-1">
+              <label
+                htmlFor="qos-fault-param-value"
+                className="block text-[11px] font-medium text-slate-300 mb-1"
+              >
                 {faultType === 'bandwidth_degradation'
                   ? 'New Bandwidth (bps)'
                   : faultType === 'queue_capacity_change'
@@ -524,6 +527,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
                   : 'Parameter (N/A)'}
               </label>
               <input
+                id="qos-fault-param-value"
                 type="number"
                 disabled={
                   faultType !== 'bandwidth_degradation' &&
@@ -532,7 +536,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
                 }
                 value={faultParamValue}
                 onChange={(e) => setFaultParamValue(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-indigo-500 disabled:opacity-40"
+                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-indigo-500 disabled:opacity-60"
               />
             </div>
           </div>
@@ -540,7 +544,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
           <div className="flex justify-end pt-2">
             <button
               onClick={handleScheduleFault}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20 transition flex items-center space-x-2"
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/20 transition flex items-center space-x-2"
             >
               <Sliders className="w-3.5 h-3.5" />
               <span>Schedule Fault Event</span>

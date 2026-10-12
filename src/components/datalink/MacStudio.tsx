@@ -179,7 +179,7 @@ export const MacStudio: React.FC = () => {
           <button
             onClick={runSimulation}
             disabled={loading}
-            className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2"
+            className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2"
           >
             <Play className="w-4 h-4 fill-white" />
             <span>{loading ? 'Simulating...' : 'Run Simulation'}</span>
@@ -204,7 +204,7 @@ export const MacStudio: React.FC = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           <div className="space-y-1">
             <label className="text-xs text-slate-400">Stations</label>
-            <input
+            <input aria-label="Stations"
               type="number"
               min={1}
               max={16}
@@ -216,7 +216,7 @@ export const MacStudio: React.FC = () => {
 
           <div className="space-y-1">
             <label className="text-xs text-slate-400">Total Frames</label>
-            <input
+            <input aria-label="Total Frames"
               type="number"
               min={1}
               max={50}
@@ -228,7 +228,7 @@ export const MacStudio: React.FC = () => {
 
           <div className="space-y-1">
             <label className="text-xs text-slate-400">Frame Tx (µs)</label>
-            <input
+            <input aria-label="Frame Tx (µs)"
               type="number"
               min={100}
               step={1000}
@@ -240,7 +240,7 @@ export const MacStudio: React.FC = () => {
 
           <div className="space-y-1">
             <label className="text-xs text-slate-400">Prop Delay τ (µs)</label>
-            <input
+            <input aria-label="Prop Delay τ (µs)"
               type="number"
               min={1}
               step={10}
@@ -252,7 +252,7 @@ export const MacStudio: React.FC = () => {
 
           <div className="space-y-1">
             <label className="text-xs text-slate-400">Offered Load (G)</label>
-            <input
+            <input aria-label="Offered Load (G)"
               type="number"
               min={0.1}
               max={5.0}
@@ -265,7 +265,7 @@ export const MacStudio: React.FC = () => {
 
           <div className="space-y-1">
             <label className="text-xs text-slate-400">Frame Bits</label>
-            <input
+            <input aria-label="Frame Bits"
               type="number"
               min={64}
               step={1000}
@@ -277,7 +277,7 @@ export const MacStudio: React.FC = () => {
 
           <div className="space-y-1">
             <label className="text-xs text-slate-400">Max Retries</label>
-            <input
+            <input aria-label="Max Retries"
               type="number"
               min={1}
               max={32}
@@ -289,7 +289,7 @@ export const MacStudio: React.FC = () => {
 
           <div className="space-y-1">
             <label className="text-xs text-slate-400">RNG Seed</label>
-            <input
+            <input aria-label="RNG Seed"
               type="number"
               value={seed}
               onChange={(e) => setSeed(parseInt(e.target.value) || 0)}
@@ -373,7 +373,7 @@ export const MacStudio: React.FC = () => {
               <div key={pt.g} className="bg-slate-950/60 border border-slate-800 rounded-xl p-3 text-center space-y-1">
                 <div className="text-[10px] text-slate-400 font-mono">G = {pt.g.toFixed(1)}</div>
                 <div className="text-sm font-bold font-mono text-emerald-300">
-                  {pt.throughput_frames.toFixed(1)} <span className="text-[9px] text-slate-500 font-sans">fps</span>
+                  {pt.throughput_frames.toFixed(1)} <span className="text-[9px] text-slate-400 font-sans">fps</span>
                 </div>
                 <div className="text-[10px] text-rose-400 font-mono">
                   {(pt.collision_rate * 100).toFixed(0)}% col
@@ -392,7 +392,7 @@ export const MacStudio: React.FC = () => {
             <div className="text-lg font-bold font-mono text-indigo-300">
               {simResult.metrics.attempted_transmissions}
             </div>
-            <span className="text-[10px] text-slate-500">
+            <span className="text-[10px] text-slate-400">
               Success: {simResult.metrics.successful_transmissions}
             </span>
           </div>
@@ -402,7 +402,7 @@ export const MacStudio: React.FC = () => {
             <div className="text-lg font-bold font-mono text-rose-300">
               {simResult.metrics.collisions}
             </div>
-            <span className="text-[10px] text-slate-500">
+            <span className="text-[10px] text-slate-400">
               Rate: {(simResult.metrics.collision_rate * 100).toFixed(1)}%
             </span>
           </div>
@@ -412,7 +412,7 @@ export const MacStudio: React.FC = () => {
             <div className="text-lg font-bold font-mono text-emerald-300">
               {simResult.metrics.throughput_frames_per_sec.toFixed(2)}
             </div>
-            <span className="text-[10px] text-slate-500">Frames / sec</span>
+            <span className="text-[10px] text-slate-400">Frames / sec</span>
           </div>
 
           <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 space-y-1">
@@ -420,7 +420,7 @@ export const MacStudio: React.FC = () => {
             <div className="text-lg font-bold font-mono text-sky-300">
               {(simResult.metrics.throughput_bits_per_sec / 1000).toFixed(1)} kbps
             </div>
-            <span className="text-[10px] text-slate-500">Bits / sec</span>
+            <span className="text-[10px] text-slate-400">Bits / sec</span>
           </div>
 
           <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 space-y-1">
@@ -428,7 +428,7 @@ export const MacStudio: React.FC = () => {
             <div className="text-lg font-bold font-mono text-amber-300">
               {(simResult.metrics.channel_utilization * 100).toFixed(1)}%
             </div>
-            <span className="text-[10px] text-slate-500">Busy / Total Time</span>
+            <span className="text-[10px] text-slate-400">Busy / Total Time</span>
           </div>
 
           <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 space-y-1">
@@ -436,7 +436,7 @@ export const MacStudio: React.FC = () => {
             <div className="text-lg font-bold font-mono text-slate-200">
               {simResult.metrics.average_backoff_delay_us.toFixed(0)} µs
             </div>
-            <span className="text-[10px] text-slate-500">BEB Delay</span>
+            <span className="text-[10px] text-slate-400">BEB Delay</span>
           </div>
         </div>
       )}
@@ -497,7 +497,7 @@ export const MacStudio: React.FC = () => {
             </div>
           </div>
 
-          <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
+          <div aria-label="Simulation Event Log" role="log" tabIndex={0} className="space-y-2 max-h-80 overflow-y-auto pr-2">
             {simResult.events.slice(0, 100).map((ev) => {
               const isCol = ev.event_type === 'collision_detected' || ev.event_type === 'jam_signal_sent';
               const isSucc = ev.event_type === 'transmission_success';

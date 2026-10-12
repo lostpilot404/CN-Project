@@ -34,6 +34,7 @@ from netsim.application.http import HttpConfig, simulate_http
 from netsim.application.smtp import SmtpConfig, simulate_smtp
 from netsim.application.snmp import SnmpConfig, simulate_snmp
 from netsim.core.engine import SimulationEngine
+from netsim.core.schema import require_int, require_non_empty
 from netsim.datalink.checksum import internet_checksum, verify_checksum
 from netsim.datalink.crc import calculate_crc, verify_crc
 from netsim.datalink.flow_control import (
@@ -42,8 +43,8 @@ from netsim.datalink.flow_control import (
     simulate_selective_repeat,
     simulate_sliding_window,
 )
-from netsim.datalink.hamming import hamming_decode, hamming_encode
-from netsim.datalink.mac import MacConfig, simulate_mac
+from netsim.datalink.hamming import ParityMode, hamming_encode, verify_and_correct_hamming
+from netsim.datalink.mac import MacConfig, MacProtocol, simulate_mac
 from netsim.experiments.config import ComparativeExperimentConfig, SweepConfig
 from netsim.experiments.runner import run_comparative_experiment, run_parameter_sweep
 from netsim.faults.model import FaultScheduleEntry, FaultType
@@ -794,10 +795,12 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         proto = parse_enum(NatProtocol, str(args.get("protocol", "tcp")).upper(), "NAT protocol")
         table.add_static_dnat_rule(
             protocol=proto,
-            public_port=int(args.get("public_port") or args.get("publicPort")),
-            private_ip=args.get("private_ip") or args.get("privateIp"),
-            private_port=int(args.get("private_port") or args.get("privatePort")),
-            description=args.get("description", "Static Port Forwarding"),
+            public_port=require_int(arg(args, "public_port", "publicPort"), "public_port", minimum=0, maximum=65535),
+            private_ip=require_non_empty(arg(args, "private_ip", "privateIp"), "private_ip"),
+            private_port=require_int(
+                arg(args, "private_port", "privatePort"), "private_port", minimum=0, maximum=65535
+            ),
+            description=str(arg(args, "description", default="Static Port Forwarding")),
         )
         return table.to_dict()
 
@@ -809,10 +812,10 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         table = SESSION.nat_tables[nid]
         proto = parse_enum(NatProtocol, str(args.get("protocol", "tcp")).upper(), "NAT protocol")
         res = table.translate_outbound(
-            src_ip=args.get("src_ip") or args.get("srcIp"),
-            src_port=int(args.get("src_port") or args.get("srcPort")),
-            dst_ip=args.get("dst_ip") or args.get("dstIp"),
-            dst_port=int(args.get("dst_port") or args.get("dstPort")),
+            src_ip=require_non_empty(arg(args, "src_ip", "srcIp"), "src_ip"),
+            src_port=require_int(arg(args, "src_port", "srcPort"), "src_port", minimum=0, maximum=65535),
+            dst_ip=require_non_empty(arg(args, "dst_ip", "dstIp"), "dst_ip"),
+            dst_port=require_int(arg(args, "dst_port", "dstPort"), "dst_port", minimum=0, maximum=65535),
             protocol=proto,
             current_time_us=0,
         )
@@ -826,10 +829,10 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         table = SESSION.nat_tables[nid]
         proto = parse_enum(NatProtocol, str(args.get("protocol", "tcp")).upper(), "NAT protocol")
         res = table.translate_inbound(
-            src_ip=args.get("src_ip") or args.get("srcIp"),
-            src_port=int(args.get("src_port") or args.get("srcPort")),
-            dst_ip=args.get("dst_ip") or args.get("dstIp"),
-            dst_port=int(args.get("dst_port") or args.get("dstPort")),
+            src_ip=require_non_empty(arg(args, "src_ip", "srcIp"), "src_ip"),
+            src_port=require_int(arg(args, "src_port", "srcPort"), "src_port", minimum=0, maximum=65535),
+            dst_ip=require_non_empty(arg(args, "dst_ip", "dstIp"), "dst_ip"),
+            dst_port=require_int(arg(args, "dst_port", "dstPort"), "dst_port", minimum=0, maximum=65535),
             protocol=proto,
             current_time_us=1000,
         )
@@ -849,7 +852,11 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         if parity_mode not in ("even", "odd"):
             raise CommandError(f"Unsupported parity mode '{parity_mode}'. Expected 'even' or 'odd'")
         try:
-            return hamming_decode(codeword, even_parity=(parity_mode == "even")).to_dict()
+            # Return the full verification result: the client contract (see
+            # `HammingVerifyResult` in src/types/datalink.ts) includes the syndrome, the corrected
+            # codeword and the status message, which `hamming_decode` does not carry.
+            result = verify_and_correct_hamming(codeword, ParityMode.EVEN if parity_mode == "even" else ParityMode.ODD)
+            return result.to_dict()
         except ValueError as exc:
             raise CommandError(str(exc)) from exc
 
@@ -893,47 +900,47 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
 
     elif cmd in ("simulate_pure_aloha", "simulatePureAloha"):
         cfg_data = config_arg(args)
-        cfg = MacConfig.from_dict(cfg_data)
-        cfg.protocol = "pure_aloha"  # type: ignore
-        return simulate_mac(cfg).to_dict()
+        mac_cfg = MacConfig.from_dict(cfg_data)
+        mac_cfg.protocol = MacProtocol.PURE_ALOHA
+        return simulate_mac(mac_cfg).to_dict()
 
     elif cmd in ("simulate_slotted_aloha", "simulateSlottedAloha"):
         cfg_data = config_arg(args)
-        cfg = MacConfig.from_dict(cfg_data)
-        cfg.protocol = "slotted_aloha"  # type: ignore
-        return simulate_mac(cfg).to_dict()
+        mac_cfg = MacConfig.from_dict(cfg_data)
+        mac_cfg.protocol = MacProtocol.SLOTTED_ALOHA
+        return simulate_mac(mac_cfg).to_dict()
 
     elif cmd in ("simulate_csma", "simulateCsma"):
         cfg_data = config_arg(args)
-        cfg = MacConfig.from_dict(cfg_data)
-        cfg.protocol = "csma"  # type: ignore
-        return simulate_mac(cfg).to_dict()
+        mac_cfg = MacConfig.from_dict(cfg_data)
+        mac_cfg.protocol = MacProtocol.CSMA
+        return simulate_mac(mac_cfg).to_dict()
 
     elif cmd in ("simulate_csma_cd", "simulateCsmaCd"):
         cfg_data = config_arg(args)
-        cfg = MacConfig.from_dict(cfg_data)
-        cfg.protocol = "csma_cd"  # type: ignore
-        return simulate_mac(cfg).to_dict()
+        mac_cfg = MacConfig.from_dict(cfg_data)
+        mac_cfg.protocol = MacProtocol.CSMA_CD
+        return simulate_mac(mac_cfg).to_dict()
 
     # 6. Transport Layer
     elif cmd in ("simulate_tcp", "simulateTcp"):
-        cfg = _transport_config(args)
+        transport_cfg = _transport_config(args)
         try:
-            return simulate_tcp(cfg, SESSION.project).to_dict()
+            return simulate_tcp(transport_cfg, SESSION.project).to_dict()
         except ValueError as exc:
             raise CommandError(str(exc)) from exc
 
     elif cmd in ("simulate_udp", "simulateUdp"):
-        cfg = _transport_config(args)
+        transport_cfg = _transport_config(args)
         try:
-            return simulate_udp(cfg, SESSION.project).to_dict()
+            return simulate_udp(transport_cfg, SESSION.project).to_dict()
         except ValueError as exc:
             raise CommandError(str(exc)) from exc
 
     elif cmd in ("simulate_tcp_congestion", "simulateTcpCongestion"):
-        cfg = _transport_config(args)
+        transport_cfg = _transport_config(args)
         try:
-            return simulate_tcp(cfg, SESSION.project).to_dict()
+            return simulate_tcp(transport_cfg, SESSION.project).to_dict()
         except ValueError as exc:
             raise CommandError(str(exc)) from exc
 
@@ -993,13 +1000,13 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
 
     elif cmd in ("run_parameter_sweep_command", "runParameterSweepCommand"):
         cfg_data = config_arg(args)
-        cfg = SweepConfig.from_dict(cfg_data)
-        return run_parameter_sweep(cfg, SESSION.project).to_dict()
+        sweep_cfg = SweepConfig.from_dict(cfg_data)
+        return run_parameter_sweep(sweep_cfg, SESSION.project).to_dict()
 
     elif cmd in ("run_comparative_experiment_command", "runComparativeExperimentCommand"):
         cfg_data = config_arg(args)
-        cfg = ComparativeExperimentConfig.from_dict(cfg_data)
-        return run_comparative_experiment(cfg, SESSION.project).to_dict()
+        comparison_cfg = ComparativeExperimentConfig.from_dict(cfg_data)
+        return run_comparative_experiment(comparison_cfg, SESSION.project).to_dict()
 
     else:
         raise UnknownCommandError(f"Unknown API command: '{cmd}'")
