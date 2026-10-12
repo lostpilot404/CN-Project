@@ -195,6 +195,22 @@ Exercised over HTTP against a live `python/netsim/server.py 8765` — not by cal
 - **Ports and processes:** the service binds loopback only; a second instance on the same port
   fails loudly with the OS bind error rather than silently misbehaving. No orphaned subprocesses
   were observed after the suites (verified with `pgrep`).
+- **Same-origin proxy path exercised end to end.** The front-end resolves the service through
+  `/netsim-api/*` when the page is not on loopback, and that rewrite had never been executed.
+  With the Vite dev server running (`npm run dev`, port 1420):
+
+  ```
+  GET  /                                -> HTTP 200 (app shell served)
+  GET  /netsim-api/health               -> {"status":"ok","backend":"python",
+                                            "authority":"python-simulation-core","version":"0.9.0"}
+  POST /netsim-api/api/create_project   -> {"status":"ok","result":{"metadata":
+                                            {"name":"PROXY-ROUNDTRIP"} ...}}
+  POST /netsim-api/api/add_node         -> HTTP 400 (validation error propagates through the proxy)
+  POST /netsim-api/api/nope             -> HTTP 404 (unknown command propagates through the proxy)
+  ```
+
+  Both resolution paths (direct loopback and same-origin proxy) are therefore proven against the
+  live service; the round-trip decision in `apiClient.ts` is not just inspected, it is executed.
 
 ---
 
@@ -430,6 +446,7 @@ problem, and was therefore left alone.
 | `npm run build` | built successfully | 0 |
 | `git diff --check` | no whitespace errors | 0 |
 | `npx playwright test --list` | 21 tests discovered | 0 |
+| Same-origin proxy round trip (dev server + service) | `/health`, a command, a 400 and a 404 all correct | 0 |
 | `npx playwright test` | **could not run** — browser executable absent (download blocked) | 1 |
 | `cargo test` / `cargo clippy` | **could not run** — no Rust toolchain installed | n/a |
 
@@ -461,6 +478,7 @@ two unnamed toggle controls and the swallowed-error UX issue).
 4. **Layout at 1440×900 / 1280×720 / 1024×768** — the overflow assertion exists in the E2E suite
    but could not be executed; only a static review of fixed widths was possible.
 5. **Screen-reader / contrast / keyboard-navigation audit** — no tooling available.
+   (The proxy path, previously on this list, has since been executed — see §7.)
 6. **Bit-exact parity with the historical Rust RNG** — not achievable and not claimed; semantic
    parity only.
 
