@@ -81,7 +81,7 @@ commits; its state is recorded in the Addendum so the git history is never resta
 | `0823a4d` | ci: run the gates on Node 22.22.2 (jsdom 30 cannot initialise on Node 20) — **CI-fix snapshot**, all three jobs green |
 | `ee8d304` | docs: final counts, Phase F reassessment and the residual/CI addendum (this report's §9) |
 | `1390345` | **manual acceptance audit commit** — the running application was exercised on this commit; P1 dialog reset, P2 stale results and P2 320 px canvas fixed; `FINAL_MANUAL_ACCEPTANCE_AUDIT.md` + 63 screenshots in `audit-evidence/` |
-| (final) | documentation/metadata-only cleanup (this edit): count reconciliation + accurate Node engine range. **No application-behavior change and no new manual acceptance run** — the manual record applies to `1390345` |
+| (release) | `chore: clean submission workspace and reconcile final verification` — documentation/metadata-only release cleanup (CI history + workspace hygiene). **No application-behavior change and no new manual acceptance run**; the manual record applies to `1390345` |
 
 ---
 
@@ -428,12 +428,14 @@ corrected environment (§5, §9.3).
 | [38926068557](https://github.com/lostpilot404/CN-Project/actions/runs/38926068557) | `0823a4d` | ✓ (34s) | ✓ (50s) | ✓ (1m54s) | **All three jobs green** after the Node 22.22.2 pin |
 | [38927210571](https://github.com/lostpilot404/CN-Project/actions/runs/38927210571) | `ee8d304` | ✓ (30s) | ✓ (44s) | ✓ (1m48s) | All three jobs green on the addendum commit |
 | [38937799285](https://github.com/lostpilot404/CN-Project/actions/runs/38937799285) | `1390345` | ✓ (23s) | ✓ (51s) | ✓ (1m59s) | **All three jobs green on the manual-audit commit** |
+| [38950409049](https://github.com/lostpilot404/CN-Project/actions/runs/38950409049) | `bf24556` | ✓ (34s) | ✓ (49s) | ✓ (1m56s) | All three jobs green on the **documentation/metadata commit** — automated gates only; **not** a new manual browser audit |
 
 All runs are `pull_request` runs on [PR #2](https://github.com/lostpilot404/CN-Project/pull/2)
 (draft, CI verification only — `main` untouched and unmerged). GitHub-hosted e2e uses stock
 Playwright Chromium — the sandbox browser substitution (§5 note) does not apply there. The
-final documentation/metadata commit is expected to mirror `1390345`'s result (no code change);
-its run is the latest on PR #2.
+final release commit (workspace cleanup + this reconciliation) changes no code; its own CI run
+is the latest run on PR #2 and is confirmed in the delivery notes, since a commit cannot record
+its own result.
 
 ### 9.5 Residual-pass commit trail
 
@@ -445,7 +447,8 @@ its run is the latest on PR #2.
 | `0823a4d` | CI runtime fix (Node 22.22.2) + test-22 readiness fix — CI green here |
 | `ee8d304` | this addendum, count reconciliation (217/123/27 at the time), Phase F reassessment |
 | `1390345` | **manual acceptance audit** — application exercised here (record + evidence); P1/P2 fixes; counts become 217/124/27 |
-| (final) | documentation/metadata-only: count + engine-range reconciliation; no behavior change, no new manual run |
+| `bf24556` | documentation/metadata-only: count + engine-range reconciliation; CI run 38950409049 (automated gates only) |
+| (release) | `chore: clean submission workspace and reconcile final verification` — workspace hygiene + CI-history reconciliation; no behavior change, no new manual run |
 
 ### 9.6 Unresolved / unverified behaviour (explicit)
 
