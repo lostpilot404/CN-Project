@@ -433,6 +433,10 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
             project = Project.from_dict(data)
         except (KeyError, TypeError, ValueError) as exc:
             raise CommandError(f"Project JSON is not a valid NetSim project: {exc}") from exc
+        if project.schema_version != 1:
+            raise CommandError(
+                f"Unsupported project schema version {project.schema_version}: this build supports version 1"
+            )
         validate_project(project)
         SESSION.push_undo()
         SESSION.project = project

@@ -165,6 +165,20 @@ export function App() {
     }
   };
 
+  const handleLoadProject = async (jsonContent: string) => {
+    try {
+      // The service validates before it replaces anything: a rejected import leaves
+      // the current project untouched. Success is only reported after that reply.
+      const loaded = await api.loadProjectJson(jsonContent);
+      setProject(loaded);
+      await refreshProject();
+      await refreshSimulation();
+      showToast('Project imported', 'success');
+    } catch (err) {
+      showToast(`Import failed: ${describeError(err)}`, 'error');
+    }
+  };
+
   const handleResetProject = async () => {
     try {
       const snap = await api.resetSimulation();
@@ -353,6 +367,7 @@ export function App() {
         currentTimeUs={currentTimeUs}
         onNewProject={handleNewProject}
         onSaveProject={handleSaveProject}
+        onLoadProject={handleLoadProject}
         onResetProject={handleResetProject}
         backendStatus={backendStatus}
       />

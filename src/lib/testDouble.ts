@@ -325,6 +325,62 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
       return Promise.resolve(mockProject as unknown as T);
     }
 
+    case 'save_project_json': {
+      return Promise.resolve(JSON.stringify(mockProject, null, 2) as unknown as T);
+    }
+
+    case 'load_project_json': {
+      const raw = args?.jsonContent as string | undefined;
+      if (raw === undefined || raw === null || raw === '') {
+        return Promise.reject(new Error('No project JSON supplied'));
+      }
+      let data: unknown;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        return Promise.reject(new Error('Project JSON is not valid JSON'));
+      }
+      if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+        return Promise.reject(new Error('Project JSON must decode to an object'));
+      }
+      const candidate = data as Partial<Project> & { schemaVersion?: number; schema_version?: number };
+      const version = candidate.schemaVersion ?? candidate.schema_version ?? 1;
+      if (version !== 1) {
+        return Promise.reject(
+          new Error(`Unsupported project schema version ${version}: this build supports version 1`)
+        );
+      }
+      if (!Array.isArray(candidate.nodes) || !Array.isArray(candidate.links)) {
+        return Promise.reject(new Error("Project JSON is not a valid NetSim project: missing 'nodes' or 'links'"));
+      }
+      const nodeIds = candidate.nodes.map((n) => n.id);
+      if (new Set(nodeIds).size !== nodeIds.length) {
+        return Promise.reject(new Error('Project contains duplicate node identifiers'));
+      }
+      pushMockUndo();
+      mockProject = {
+        ...mockProject,
+        metadata: candidate.metadata ?? mockProject.metadata,
+        nodes: candidate.nodes as Project['nodes'],
+        links: candidate.links as Project['links'],
+      };
+      // Imported projects carry their own state: engine and per-project registries reset.
+      mockSimTimeUs = 0;
+      mockEvents = [];
+      mockCircuits = [];
+      mockCircuitCount = 0;
+      Object.assign(mockCircuitMetrics, {
+        requests_total: 0,
+        requests_accepted: 0,
+        requests_blocked: 0,
+        circuits_released: 0,
+        circuits_active: 0,
+        acceptance_rate: 0,
+        blocking_rate: 0,
+      });
+      return Promise.resolve(mockProject as unknown as T);
+    }
+
     case 'add_node': {
       pushMockUndo();
       const label = args?.label as string;
