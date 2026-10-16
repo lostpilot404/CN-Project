@@ -65,8 +65,14 @@ them — not by calling `dispatch_command` directly.
 ## 4. Utility tests (`python-tools/`)
 
 ```bash
+.venv/bin/pip install -r python-tools/requirements.txt   # matplotlib: needed by plot_metrics.py
 .venv/bin/pytest python-tools/tests -q
 ```
+
+`python-tools/requirements.txt` is part of the supported test gate, not an optional extra: both the
+utility test suite and `mypy` import `plot_metrics.py`, which imports matplotlib. In an environment
+without it, ~21 utility tests fail on `ModuleNotFoundError: matplotlib` and mypy reports two errors —
+that shape of failure is a setup problem, not a code regression.
 
 | File | Focus |
 |---|---|

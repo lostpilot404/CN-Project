@@ -52,7 +52,10 @@ produce a simulation result on its own: an unreachable backend raises an error t
 # 1. Python service (authoritative simulation core) — terminal 1
 python3 -m venv .venv
 .venv/bin/pip install pytest ruff mypy   # pytest-cov is optional, for coverage reports
-.venv/bin/pip install -r python-tools/requirements.txt   # optional: only matplotlib, for charts
+# Required for the supported verification commands: the python-tools test suite and the
+# mypy check both import python-tools/plot_metrics.py, which needs matplotlib.
+# Install it in every environment where you intend to run the full test gate.
+.venv/bin/pip install -r python-tools/requirements.txt
 .venv/bin/python python/netsim/server.py 8765      # http://127.0.0.1:8765/health
 
 # 2. Front-end — terminal 2
@@ -218,7 +221,7 @@ command never returns a substitute result.
 | `src/lib/api.ts` | Typed command surface consumed by the UI |
 | `src/lib/testDouble.ts` | In-memory double used **only** by the vitest runner |
 | `e2e/` | Playwright browser suite (`netsim.spec.ts` functional, `a11y.spec.ts` axe-core audit) |
-| `python-tools/` | Optional standalone scripts for analysing exported experiment JSON, with their own test suite; only `matplotlib` is needed (`requirements.txt`) |
+| `python-tools/` | Optional standalone scripts for analysing exported experiment JSON, with their own test suite. Not needed to run the simulator, but `pip install -r python-tools/requirements.txt` (matplotlib) is required before running the utility tests and `mypy` |
 
 ## Further documentation
 
