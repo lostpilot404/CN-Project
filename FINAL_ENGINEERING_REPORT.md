@@ -53,7 +53,7 @@ cold-start Playwright path.
 | Item | Value |
 |---|---|
 | Branch | `arena/541edc3e-cn-project` (pushed to `origin`, clean tree at delivery) |
-| Commits authored this effort | **15** (`786abb6` … final docs commit), linear on top of the docs baseline |
+| Commits authored this effort | **18** (`786abb6` … final docs/metadata commit), linear on top of the docs baseline |
 | `main` | untouched at `d213648`; obsolete `arena/5d41fe31-cn-project` never used |
 | Large artifacts | none committed; all test output ephemeral |
 
@@ -79,7 +79,9 @@ commits; its state is recorded in the Addendum so the git history is never resta
 | `bc630a1` | docs: reconcile report, handoff and guides with the residual pass; refresh stale test expectations |
 | `9d90753` | ci: persist vitest junit output as an artifact when the unit gate fails |
 | `0823a4d` | ci: run the gates on Node 22.22.2 (jsdom 30 cannot initialise on Node 20) — **CI-fix snapshot**, all three jobs green |
-| (final) | this addendum + count reconciliation; its own CI run is the latest on PR #2 |
+| `ee8d304` | docs: final counts, Phase F reassessment and the residual/CI addendum (this report's §9) |
+| `1390345` | **manual acceptance audit commit** — the running application was exercised on this commit; P1 dialog reset, P2 stale results and P2 320 px canvas fixed; `FINAL_MANUAL_ACCEPTANCE_AUDIT.md` + 63 screenshots in `audit-evidence/` |
+| (final) | documentation/metadata-only cleanup (this edit): count reconciliation + accurate Node engine range. **No application-behavior change and no new manual acceptance run** — the manual record applies to `1390345` |
 
 ---
 
@@ -236,7 +238,7 @@ per-defect resolutions and SHAs, history preserved), QUALITY_AUDIT_REPORT (histo
 | 4 | `.venv/bin/ruff format --check python/ python-tools/` | all formatted | 0 |
 | 5 | `.venv/bin/mypy` | clean, 67 files, no ignores | 0 |
 | 6 | `npx tsc --noEmit` | clean | 0 |
-| 7 | `npx vitest run` | **123 passed, 11 skipped** (live suite opt-in) | 0 |
+| 7 | `npx vitest run` | **124 passed, 11 skipped** (live suite opt-in; 123 at the residual-pass snapshot, +1 dialog-poll regression test added by the manual acceptance audit) | 0 |
 | 8 | `npm run build` | succeeds; split chunks as above | 0 |
 | 9 | `NETSIM_LIVE_API=1 npx vitest run src/integration` | **11 passed** (real service) | 0 |
 | 10 | `npx playwright test e2e/netsim.spec.ts` (**cold start**, nothing listening) | **24 passed** (functional incl. keyboard connect workflow) | 0 |
@@ -244,8 +246,9 @@ per-defect resolutions and SHAs, history preserved), QUALITY_AUDIT_REPORT (histo
 | 12 | `npm ci` then the bundle guard (`! grep "not implemented in mock mode" dist/assets/`; `grep "No simulation service is available for command" dist/assets/`) | clean install; guard passes both conditions | 0 |
 
 Local matrix re-executed 2026-10-16 after the Node/CI fix and the test-22 readiness fix;
-counts 217/83/123(+11)/11/24/3 supersede the earlier figures 211/83/115(+11)/11/22(+3)/3
-quoted in the first edition of this report. Historical baseline counts (154/80/93/24) remain
+counts 217/83/124(+11)/11/24/3 supersede the earlier figures 211/83/115(+11)/11/22(+3)/3
+quoted in the first edition of this report (124 = 123 residual-pass + 1 manual-audit regression
+test; see FINAL_MANUAL_ACCEPTANCE_AUDIT.md §7 for the post-audit regression run). Historical baseline counts (154/80/93/24) remain
 superseded as before.
 
 **Local vs GitHub Actions:** the table above was executed in this sandbox (Python 3.11 venv,
@@ -326,7 +329,7 @@ npm run dev        # http://localhost:1420
 .venv/bin/ruff check . && .venv/bin/ruff format --check python/ python-tools/
 .venv/bin/mypy
 npx tsc --noEmit
-npx vitest run                                      # 123 (+11 live, skipped)
+npx vitest run                                      # 124 (+11 live, skipped)
 npm run build
 NETSIM_LIVE_API=1 npx vitest run src/integration    # 11 (service must run)
 npx playwright test e2e/netsim.spec.ts              # 24 (starts both servers itself)
@@ -391,7 +394,11 @@ environment initialisation (`webidl.util.markAsUncloneable is not a function`) b
 body ran — 17 "unhandled errors" were 17 test environments failing to boot, not 17 application
 test failures. Fix (`0823a4d`): both `actions/setup-node` steps pin **22.22.2** — verified to
 satisfy every `engines.node` in the complete installed tree (highest floor on the 22.x line);
-`package.json` declares `engines.node >=22.22.2` and README/handoff state the same runtime.
+`package.json` originally declared `engines.node >=22.22.2`; a metadata audit of all 170
+  engine-bearing packages later tightened this to `^22.22.2` — Node 23.x is rejected by 10
+  installed packages and 25.x by 4 (the jsdom family admits only `^22.22.2 || ^24.15.0 ||
+  >=26.0.0`), while 24.15+/26+ satisfy the metadata but were never exercised here. Only
+  22.22.2 (CI) and 22.22.3 (local) are verified.
 No dependency upgrades; no test bypasses. A cold `npm ci` + full local matrix was re-run on the
 corrected environment (§5, §9.3).
 
@@ -401,7 +408,7 @@ corrected environment (§5, §9.3).
 |---|---|---|
 | `npm ci` (clean install) | 0 vulnerabilities blocking; clean install | 0 |
 | `npx tsc --noEmit` | clean | 0 |
-| `npx vitest run` | **123 passed, 11 skipped** (134 incl. 8 ConnectWorkflow tests) | 0 |
+| `npx vitest run` | **124 passed, 11 skipped** (135 incl. 9 ConnectWorkflow tests — the 9th is the dialog-poll regression test from the manual audit) | 0 |
 | `npm run build` | succeeds (largest chunk 374 kB index / 366 kB charts) | 0 |
 | bundle guard (test double absent from `dist/`) | both conditions pass | 0 |
 | `pytest python/tests -q` | **217 passed** (211 + 6 routing-policy tests) | 0 |
@@ -419,12 +426,14 @@ corrected environment (§5, §9.3).
 | [38919904749](https://github.com/lostpilot404/CN-Project/actions/runs/38919904749) | `bc630a1` | ✓ | ✗ | ✓ | Front-end unit step failed on Node 20 runtime incompatibility (§9.2) |
 | [38920763705](https://github.com/lostpilot404/CN-Project/actions/runs/38920763705) | `9d90753` | ✓ | ✗ | ✓ | Same failure; junit artifact retained |
 | [38926068557](https://github.com/lostpilot404/CN-Project/actions/runs/38926068557) | `0823a4d` | ✓ (34s) | ✓ (50s) | ✓ (1m54s) | **All three jobs green** after the Node 22.22.2 pin |
+| [38927210571](https://github.com/lostpilot404/CN-Project/actions/runs/38927210571) | `ee8d304` | ✓ (30s) | ✓ (44s) | ✓ (1m48s) | All three jobs green on the addendum commit |
+| [38937799285](https://github.com/lostpilot404/CN-Project/actions/runs/38937799285) | `1390345` | ✓ (23s) | ✓ (51s) | ✓ (1m59s) | **All three jobs green on the manual-audit commit** |
 
 All runs are `pull_request` runs on [PR #2](https://github.com/lostpilot404/CN-Project/pull/2)
-(draft, CI verification only — `main` untouched and unmerged). The commit containing this
-addendum is the final commit of the branch; its checks are the latest run on PR #2 and are
-confirmed in the delivery notes. GitHub-hosted e2e uses stock Playwright Chromium — the
-sandbox browser substitution (§5 note) does not apply there.
+(draft, CI verification only — `main` untouched and unmerged). GitHub-hosted e2e uses stock
+Playwright Chromium — the sandbox browser substitution (§5 note) does not apply there. The
+final documentation/metadata commit is expected to mirror `1390345`'s result (no code change);
+its run is the latest on PR #2.
 
 ### 9.5 Residual-pass commit trail
 
@@ -434,7 +443,9 @@ sandbox browser substitution (§5 note) does not apply there.
 | `bc630a1` | docs reconciliation + stale test-expectation refresh |
 | `9d90753` | CI diagnostics (junit artifact on unit-gate failure) |
 | `0823a4d` | CI runtime fix (Node 22.22.2) + test-22 readiness fix — CI green here |
-| (final) | this addendum, count reconciliation (217/123/27), Phase F reassessment |
+| `ee8d304` | this addendum, count reconciliation (217/123/27 at the time), Phase F reassessment |
+| `1390345` | **manual acceptance audit** — application exercised here (record + evidence); P1/P2 fixes; counts become 217/124/27 |
+| (final) | documentation/metadata-only: count + engine-range reconciliation; no behavior change, no new manual run |
 
 ### 9.6 Unresolved / unverified behaviour (explicit)
 
@@ -445,3 +456,9 @@ sandbox browser substitution (§5 note) does not apply there.
   SACK/window scaling, circuit switching as admission control only.
 - GitHub Actions results in §9.4 cover the three CI jobs; nothing else runs remotely (no
   coverage upload, no matrix across OS/Node versions).
+- Disclosed residual P3 items from the manual acceptance audit (record: FINAL_MANUAL_ACCEPTANCE_AUDIT.md
+  §4): React Flow attribution overlaps the canvas toolbar at exactly 320 px; one unexplained,
+  non-reproduced prefix-slider observation; `add_node` with an unknown type key silently defaults
+  to `pc` (lenient API default). None affects the verified workflows.
+- The manual acceptance audit exercised the running application on `1390345`; the final
+  documentation/metadata commit did not trigger a new manual run (no behavior changed).

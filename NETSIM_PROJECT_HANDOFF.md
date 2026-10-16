@@ -16,7 +16,7 @@ on branch `arena/83075673-cn-project` (`origin/main`), repository `lostpilot404/
 > residual pass) changed several things the body describes: live forwarding now dispatches
 > Dijkstra **and** Bellman-Ford under the active `set_forwarding_policy`, keyboard connect
 > exists on the topology canvas, 9 workspace interiors were individually refreshed, and the
-> test counts moved on (final: 217 Python / 83 tools / 123+11 frontend / 11 live / 24+3
+> test counts moved on (final: 217 Python / 83 tools / 124+11 frontend / 11 live / 24+3
 > Playwright). **For current behaviour and the final verified counts, read
 > `FINAL_ENGINEERING_REPORT.md` (incl. §9 addendum) first** — it supersedes this document where
 > they disagree; this document remains the deepest technical reference.
@@ -375,7 +375,7 @@ simulation results without the Python process.
 | Requirement | Version | Evidence |
 |---|---|---|
 | Python | **3.11 or newer** (`requires-python = ">=3.11"`); verified on 3.11.2 | **Verified** |
-| Node.js + npm | Node 22.22.2+ per `package.json` engines and `README.md`; verified on Node v22.22.3 / npm 10.9.8, CI pinned to 22.22.2 (the jsdom 30 / jest-dom 7 line requires ^22.22.2 and does not run on Node 20) | **Verified** |
+| Node.js + npm | Node 22.x LTS at 22.22.2+ (`package.json` engines `^22.22.2`); verified on Node v22.22.2 (CI) and v22.22.3 / npm 10.9.8 (local). Other majors untested; the jsdom 30 line admits only ^22.22.2 \|\| ^24.15.0 \|\| >=26 and Node 23.x/25.x are rejected by installed packages | **Verified** |
 | A Chromium build | Only for the browser suite. Playwright's own download **fails** in restricted-egress sandboxes (`cdn.playwright.dev` is not reachable here) | **Verified** |
 | Cargo / Rust / Tauri | **Not required and not present.** Do not add them | **Verified** |
 | Operating system | Linux verified; Windows/macOS untested | **Known limitation** |

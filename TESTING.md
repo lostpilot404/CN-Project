@@ -41,9 +41,10 @@ request: the Python tests and utility tests with ruff and mypy; the front-end ty
 tests and a production build (plus a check that the bundle contains only the inert test-double
 stub); and both browser suites from a cold start — Playwright's `webServer` starts the Python
 service and the dev server itself, which is exactly the cold-start path that must stay green.
-CI pins **Node 22.22.2** (declared in `package.json` engines): the jsdom 30 / jest-dom 7 test
-stack cannot initialise on Node 20 (`webidl.util.markAsUncloneable is not a function` before
-any test body runs), so a green local run requires Node 22.22.2 or newer.
+CI pins **Node 22.22.2** and `package.json` declares `^22.22.2` (22.x LTS, 22.22.2+ within the
+22.x line — verified on 22.22.2/22.22.3; other majors are untested and Node 23.x/25.x are
+excluded by dependency engine ranges). The jsdom 30 / jest-dom 7 test stack cannot initialise
+on Node 20 (`webidl.util.markAsUncloneable is not a function` before any test body runs).
 
 ## 3. Python tests
 

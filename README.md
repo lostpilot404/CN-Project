@@ -42,7 +42,7 @@ produce a simulation result on its own: an unreachable backend raises an error t
 ## Prerequisites
 
 - **Python 3.11 or newer** (the core and the service).
-- **Node.js 22.22.2 or newer** (22.x LTS) with npm (the front-end build and tests). CI pins 22.22.2; the jsdom-based test stack does not run on Node 20.
+- **Node.js 22.x LTS, 22.22.2 or newer within 22.x** with npm (the front-end build and tests). `package.json` declares `^22.22.2`; CI pins 22.22.2 and the audit environment ran 22.22.3. Other majors are untested — and several dependencies exclude Node 23.x/25.x outright, while the jsdom 30 stack cannot run on Node 20.
 - A Chromium browser for the browser test suite. Playwright can install one itself, or you can
   point it at an existing binary — see [Browser tests](#browser-tests).
 
@@ -97,7 +97,7 @@ of checks that could not be executed in earlier audit environments.
 | Python lint + format | `.venv/bin/ruff check . && .venv/bin/ruff format --check python/ python-tools/` | clean (80 files) |
 | Python static types | `.venv/bin/mypy` | **clean** (67 files, no `# type: ignore`) |
 | Front-end typecheck | `npx tsc --noEmit` | clean |
-| Front-end unit/component tests | `npx vitest run` | **123 passed, 11 skipped** (live suite opt-in) |
+| Front-end unit/component tests | `npx vitest run` | **124 passed, 11 skipped** (live suite opt-in) |
 | Front-end ↔ service integration | `NETSIM_LIVE_API=1 npx vitest run src/integration` | **11 passed** (real service) |
 | Production build | `npm run build` | succeeds; split chunks (largest ≈ 375 kB, was 1115 kB); the bundle contains only the inert test-double stub, never the full double |
 | Browser end-to-end (cold start) | `npx playwright test` | **27 passed** in a real Chromium (24 functional + 3 axe-core accessibility, both servers started by the suite itself) |
