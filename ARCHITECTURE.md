@@ -60,6 +60,8 @@ Two modules carry the integration:
 |---|---|
 | `src/lib/apiClient.ts` | Endpoint resolution, `/health` probing, retry, and the two error types (`BackendUnavailableError`, `BackendCommandError`). Contains no simulation logic. |
 | `src/lib/api.ts` | The typed command surface: one method per backend command, all dispatched through `callCommand`. |
+| `src/lib/exportResults.ts` | Experiment result exports: JSON (the verbatim backend result consumed by `python-tools`) and tidy CSV with units in the column names; filename generation and browser download. No simulation logic. |
+| `src/components/ui/ConfirmDialog.tsx` | The shared accessible confirmation dialog (role=dialog, focus management, Escape) used before any destructive/replace action such as project import. |
 
 Endpoint resolution order: `VITE_NETSIM_API_URL` → `http://127.0.0.1:8765` → same-origin
 `/netsim-api`. The dev server proxies the same-origin prefix to the Python service, so a proxied or

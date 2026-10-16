@@ -1594,6 +1594,24 @@ that NetSim is "deployed", "release-grade" or "packaged" would be false.
 
 ## 14. Known limitations and unresolved risks
 
+> **Status rollup (2026-10-16, branch `arena/541edc3e-cn-project`).** The symptom text in each
+> subsection below is preserved as the historical record; this table is the current state.
+>
+> | § | Topic | Current status |
+> |---|---|---|
+> | 14.1 | Cold-start Playwright failure | **Resolved** in `786abb6` (option 1: `VITE_NETSIM_API_URL` removed from the webServer env). Verified: cold `npx playwright test` → **25 passed** |
+> | 14.2 | README dependency gap | **Resolved** in `786abb6` (quickstart installs `python-tools/requirements.txt`) |
+> | 14.3 | Heuristic forwarding, no fault reroute | **Resolved** in `5209d8c` (table-driven per-hop forwarding, TTL/loop guards, alternate path after link-down; `tests/test_forwarding.py`) |
+> | 14.4 | Goodput == throughput | **Resolved** in `0880da5` (documented distinct definitions; `tests/test_qos_definitions.py`) |
+> | 14.5 | Per-engine determinism only | **By design** — documented claim boundary, unchanged |
+> | 14.6 | ALGORITHMS.md described nonexistent features | **Resolved** in `9f28fd7` (circuit switching implemented as an educational admission-control model: `switching/circuit.py`, three commands, dedicated workspace) and `d769fa2` (scope/status annotations throughout the docs) |
+> | 14.7 | Source-tree navigation traps | **By design** — `history.py` unused, `transport/congestion.py` shim kept; unchanged |
+> | 14.8 | Server hardening gaps | **Partially resolved** in `70e3425` (5 MiB request cap → structured 413; malformed/negative Content-Length and body rejection; `tests/test_request_limits.py`). Still open: no authentication, permissive CORS, no rate limiting, single-threaded `HTTPServer` — loopback binding remains the mitigation |
+> | 14.9 | Build/packaging/CI gaps | **Partially resolved** in `70e3425` (GitHub Actions CI running the full gate incl. cold-start e2e; code splitting — largest chunk 370 kB, was 1.11 MB). Still open: no tags, no packaging, no Python lockfile |
+> | 14.10 | Test double is a parallel implementation | **By design** — maintained; contract drift now guarded by `python-tools/tests/test_ui_export_schema.py` and `python/tests/test_engine_schema.py`, and the api.ts ↔ testDouble command sets are identical (63 commands, verified) |
+> | 14.11 | Non-failure observations | Chunk-size warning **gone** (code splitting); act(...) noise and the audit's absolute path note stand |
+> | 14.12 | Scope limits by design | **Documented** in `d769fa2` — README "Implementation scope" table and per-feature scope notes now state exactly what is Implemented / Partial / Illustrative |
+
 ### 14.1 The browser suite passes only when the servers are pre-started (open harness defect)
 
 **Symptom (reproduced twice today).** With nothing listening, `npx playwright test` starts both
@@ -1637,6 +1655,11 @@ working; the *harness* removes the candidate it needs.
 Whichever you choose, update `TESTING.md` §9 and the README table, and verify both the cold and the
 reuse paths.
 
+> **Resolved 2026-10-16 (`786abb6`) — option 1.** `VITE_NETSIM_API_URL` was removed from the
+> `webServer` env block (only `NETSIM_API_TARGET` is set). Verified both paths on 2026-10-16:
+> cold `npx playwright test` with nothing listening → **25 passed** (the suite starts both
+> servers itself); the reuse path → same result with servers pre-started.
+
 ### 14.2 The README quickstart omits the dependency the tool tests need
 
 `README.md` installs `pytest ruff mypy` only. Running `python-tools/tests` then fails 21 tests and
@@ -1644,6 +1667,9 @@ reuse paths.
 Correct the install line to include `pip install -r python-tools/requirements.txt` (or annotate the
 tool commands as requiring it). Until then, treat a fresh-environment failure in exactly those
 shapes as a setup problem, not a code regression.
+
+> **Resolved 2026-10-16 (`786abb6`).** The quickstart and `TESTING.md` now install
+> `pip install -r python-tools/requirements.txt` explicitly.
 
 ### 14.3 Packet forwarding is a heuristic, and faults do not reroute traffic
 
@@ -1655,6 +1681,12 @@ alternative path. Route recalculation exists for routing tables and experiment `
 path is wrong; the honest description is "route recomputation is reported, packets follow the
 topology as it stands".
 
+> **Resolved 2026-10-16 (`5209d8c`).** Packet forwarding is now table-driven per hop: each hop
+> resolves the next hop from the routing graph computed by the selected algorithm/metric
+> (Dijkstra or Bellman-Ford), with an enforced TTL/hop limit, a loop guard, explicit per-packet
+> drop causes, and alternate-path delivery after a link-down fault. Pinned by
+> `python/tests/test_forwarding.py` and the golden parity suites.
+
 ### 14.4 Goodput is identical to throughput
 
 `compute_network_qos` computes both from `bytes_delivered · 8 · 1e6 / elapsed_us`, and
@@ -1663,6 +1695,12 @@ live sweep table (throughput column equals goodput column at every point). The t
 separate quantities but carry the same value; there is no header-overhead or retransmission
 deduction in the numerator. Fixing this requires a definition change (payload vs on-the-wire bits)
 and a coordinated DTO/test update — do not silently "correct" one side.
+
+> **Resolved 2026-10-16 (`0880da5`).** Throughput and goodput are now distinct, documented
+> quantities: throughput counts wire bytes (headers + payload, including retransmissions) at a
+> stated measurement boundary; goodput counts only unique delivered application payload.
+> Hand-calculated anchors live in `python/tests/test_qos_definitions.py`; DTOs, the test double
+> and the QoS workspace were updated together.
 
 ### 14.5 Determinism is per-engine, not cross-engine
 
@@ -1680,6 +1718,15 @@ routes") describe behaviour that is not implemented: the string "circuit" appear
 `python/` or `src/` (**Verified** by grep), and packets do not take multiple routes. Treat
 `ALGORITHMS.md` as a formula reference, not a feature list, and prefer §6 of this document for
 capability questions.
+
+> **Resolved 2026-10-16 (`9f28fd7`, docs `d769fa2`).** Circuit switching is now implemented as a
+> clearly scoped educational admission-control model (`python/netsim/switching/circuit.py`;
+> `request_circuit` / `teardown_circuit` / `get_circuit_state`; a dedicated Circuit Switching
+> workspace): setup resolves the authoritative routed path and reserves the requested rate on
+> every link (all-or-nothing), blocked requests return precise reasons, teardown releases
+> capacity, and utilisation/blocking metrics are reported. `ALGORITHMS.md` §16 describes the
+> implemented model with its not-modelled boundaries, and §17's "different routes" wording is
+> annotated (per-packet load-balancing across routes is not modelled).
 
 ### 14.7 Two navigation traps in the source tree
 
@@ -1701,6 +1748,12 @@ network without adding real controls. Path traversal was probed historically (`.
 and URL-encoded variants → 404, never a file read) and remains structurally impossible because the
 server maps only `/health` and the command table (**Code-inspected**).
 
+> **Partially resolved 2026-10-16 (`70e3425`).** Request bodies are now capped at 5 MiB with a
+> structured 413, and malformed/negative `Content-Length` headers, malformed JSON, non-object
+> bodies and invalid UTF-8 are structured 400s without tracebacks
+> (`python/tests/test_request_limits.py`). Authentication, CORS tightening, rate limiting and a
+> threaded server remain open; loopback binding is unchanged.
+
 ### 14.9 Build, packaging and CI gaps
 
 No CI workflow, no tags, no packaging, no lockfile for Python (only `package-lock.json` for npm). The
@@ -1713,6 +1766,13 @@ production bundle is a single 1.11 MB JS chunk (288 kB gzip) with a Rollup chunk
 aliased away outside vitest (**Verified** in `dist/`) but it must be kept in step with the real
 engine: when a payload shape changes, the double, the DTO types and the acceptance tests all need
 updating, or the unit suite will pass while the browser suite fails.
+
+> **Maintained 2026-10-16.** The double now mirrors the import/export commands, the circuit
+> commands and the per-project state isolation of the real service. Drift is guarded by
+> `python-tools/tests/test_ui_export_schema.py` (UI export shape vs both tools) and
+> `python/tests/test_engine_schema.py` (engine sweep vs both tools); the api.ts ↔ testDouble
+> command sets are identical (63/63, verified). The double remains vitest-only: the production
+> bundle contains only the rejecting stub (checked in CI).
 
 ### 14.11 Observations from today's runs that are not failures
 

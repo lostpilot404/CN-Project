@@ -86,21 +86,22 @@ fails loudly with the operating system's bind error rather than silently serving
 
 ## Verification status
 
-Every count below was produced by running the command in this repository. See
-[`QUALITY_AUDIT_REPORT.md`](QUALITY_AUDIT_REPORT.md) for the full evidence and for the list of
-checks that could not be executed in the audit environment.
+Every count below was produced by running the command in this repository (2026-10-16). See
+[`QUALITY_AUDIT_REPORT.md`](QUALITY_AUDIT_REPORT.md) for the historical evidence and for the list
+of checks that could not be executed in earlier audit environments.
 
 | Suite | Command | Result |
 |---|---|---|
-| Python tests | `.venv/bin/python -m pytest python/tests -q` | **154 passed** |
-| Utility tests (`python-tools/`) | `.venv/bin/pytest python-tools/tests -q` | **80 passed**, 99% statement coverage of both scripts |
-| Python lint + format | `.venv/bin/ruff check . && .venv/bin/ruff format --check python/ python-tools/` | clean (71 files) |
-| Python static types | `.venv/bin/mypy` | **clean** (63 files, no `# type: ignore`) |
+| Python tests | `.venv/bin/python -m pytest python/tests -q` | **211 passed** |
+| Utility tests (`python-tools/`) | `.venv/bin/pytest python-tools/tests -q` | **83 passed** |
+| Python lint + format | `.venv/bin/ruff check . && .venv/bin/ruff format --check python/ python-tools/` | clean (80 files) |
+| Python static types | `.venv/bin/mypy` | **clean** (67 files, no `# type: ignore`) |
 | Front-end typecheck | `npx tsc --noEmit` | clean |
-| Front-end unit/component tests | `npx vitest run` | **93 passed, 11 skipped** (live suite opt-in) |
+| Front-end unit/component tests | `npx vitest run` | **115 passed, 11 skipped** (live suite opt-in) |
 | Front-end ↔ service integration | `NETSIM_LIVE_API=1 npx vitest run src/integration` | **11 passed** (real service) |
-| Production build | `npm run build` | succeeds |
-| Browser end-to-end | `npx playwright test` | **24 passed** in a real Chromium (22 functional + 2 axe-core accessibility) |
+| Production build | `npm run build` | succeeds; split chunks (largest 370 kB, was 1115 kB); bundle contains only the inert test-double stub |
+| Browser end-to-end (cold start) | `npx playwright test` | **25 passed** in a real Chromium (22 functional + 3 axe-core accessibility, both servers started by the suite itself) |
+| Accessibility audit alone | `npx playwright test e2e/a11y.spec.ts` | **3 passed** — 10 workspaces, 24 sub-views, dialogs/transient states (WCAG 2.0/2.1 A+AA) |
 
 ### Running the tests
 
@@ -122,10 +123,15 @@ NETSIM_LIVE_API=1 npx vitest run src/integration       # terminal 2
 
 # Browser end-to-end (starts both servers itself via playwright.config.ts)
 npx playwright test
+npx playwright test e2e/a11y.spec.ts        # accessibility audit alone
 ```
 
 The integration suite is skipped unless `NETSIM_LIVE_API=1` is set, which is why `npx vitest run`
 reports 11 skipped tests. They are not disabled — they require a running service.
+
+CI (`.github/workflows/ci.yml`) runs the same gate on every push and pull request: Python tests
+and tool tests, ruff, mypy, tsc, vitest, a production build with a double-free bundle check, and
+the browser suites from a cold start.
 
 ### Browser tests
 

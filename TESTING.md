@@ -36,6 +36,12 @@ Accessibility audit          axe-core over every workspace + sub-view e2e/a11y.s
 Each layer is independent of the one above it. A lower layer failing is never masked by a higher
 layer passing.
 
+Continuous integration (`.github/workflows/ci.yml`) runs this same ladder on every push and pull
+request: the Python tests and utility tests with ruff and mypy; the front-end typecheck, unit
+tests and a production build (plus a check that the bundle contains only the inert test-double
+stub); and both browser suites from a cold start — Playwright's `webServer` starts the Python
+service and the dev server itself, which is exactly the cold-start path that must stay green.
+
 ## 3. Python tests
 
 `.venv/bin/python -m pytest python/tests -q`
@@ -49,6 +55,11 @@ layer passing.
 | `test_api_contract.py` | Requests through the **real HTTP service**: malformed payloads, nested-object validation, 400 vs 404 vs 500 mapping, state leakage between projects. Each test names the defect it guards |
 | `test_parity_golden.py` | Golden values across protocols and application-layer simulations (DNS, HTTP, FTP, SMTP, SNMP) |
 | `test_server.py` | Server lifecycle: readiness, port binding, one request per command |
+| `test_forwarding.py` | Table-driven per-hop forwarding: direct/multi-hop paths, deterministic tie-breaks, mid-flight link-down reroute, loop-guard protection, TTL and no-route drops, restore |
+| `test_qos_definitions.py` | Hand-calculated throughput vs goodput anchors (TCP/UDP headers, retransmission overhead, delivered/dropped cases, 0-length intervals) |
+| `test_circuit_switching.py` | Circuit admission model: setup/reservation, all-or-nothing blocking, competing requests, teardown/reuse, link-down and topology-mutation releases, project resets, malformed requests |
+| `test_project_io.py` | Import/export contract: save/load round trips, schema-version rejection, duplicate/dangling identifiers, state resets, rejected imports leave the project intact |
+| `test_request_limits.py` | HTTP hardening: request-body cap (413), malformed/negative Content-Length, malformed JSON, non-object bodies, invalid UTF-8 — all structured, no tracebacks |
 
 The API-contract and server tests start the real HTTP service in-process on a loopback port, so
 routing, JSON parsing and error mapping are exercised exactly as a browser client would exercise
@@ -79,6 +90,7 @@ that shape of failure is a setup problem, not a code regression.
 | `test_analyze_results.py` | sweep-document parsing, missing/extra keys, `n/a` for unmeasurable values, exit codes |
 | `test_plot_metrics.py` | strict value handling, PNG output (chunks walked, not offset-guessed), missing-matplotlib path |
 | `test_engine_schema.py` | **drift guard** — runs a real sweep through the engine and feeds the result to both tools |
+| `test_ui_export_schema.py` | **drift guard** — the UI's JSON export shape is parsed by both tools (including the analyze CLI) |
 | `test_cli.py` | both scripts as subprocesses: malformed JSON, wrong types, bad paths, exit codes |
 
 The scripts live in a hyphenated directory, so `conftest.py` loads them by path with
@@ -117,6 +129,9 @@ npm run build           # production bundle
 | `src/lib/apiClient.test.ts` | Endpoint resolution order, health probing, retry, `BackendUnavailableError` vs `BackendCommandError` |
 | `src/App.test.ts` | Application shell, sidebar/navbar state, backend status reporting |
 | `src/Phase*Acceptance.test.ts` | Per-phase acceptance of the workspaces (topology, addressing, datalink, transport, application, experiments) |
+| `src/CircuitSwitching.test.tsx` | Circuit Switching workspace: empty states, accepted/blocked results from the service, client-side validation, teardown |
+| `src/ProjectImport.test.tsx` | Import workflow: confirmation dialog, oversized files, contract rejections, save/load round trip |
+| `src/ExperimentExport.test.tsx` | Result exports: filenames, python-tools JSON schema, CSV columns/units/empty cells, comparison deltas, download feedback |
 
 Component tests drive real user interactions (clicks, typing) through the component tree and assert
 on rendered output. They run against an in-memory test double, which is aliased away in every

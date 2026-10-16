@@ -220,8 +220,17 @@ malformed fault is rejected with a message rather than being silently accepted.
 | Action | Result |
 |---|---|
 | **Export JSON** (navbar) | The whole project as versioned JSON |
+| **Import JSON** (navbar) | Loads a `.netsim` / project JSON file — see below |
 | **save_project_json** | The same document, via the API |
 | **load_project_json** | Rebuilds topology, positions, interfaces, link parameters and node states |
+
+**Importing.** Pick the file, then confirm the dialog — importing **replaces** the current
+project, so nothing is touched until you confirm. The service validates the document (JSON
+shape, schema version, duplicate identifiers, links that reference unknown nodes) before it
+replaces anything: a rejected import leaves the current project exactly as it was and shows the
+server's message. Success is reported only after the service has accepted the file. Accepted
+schema version is 1; anything else is rejected by name. Importing also resets engine state, NAT
+tables and circuit reservations, exactly like **New**.
 
 Loading validates the document and reports what is wrong rather than partially applying it.
 
@@ -237,6 +246,15 @@ python python-tools/plot_metrics.py sweep.json out.png # throughput/latency char
 
 They read the JSON produced by the parameter-sweep experiment and fail with a clear message if given
 something else.
+
+**Exporting from the UI.** Both the sweep and comparative result panels have **Export JSON** and
+**Export CSV** buttons. The JSON export is the verbatim backend result — the file the two scripts
+above consume unchanged. The CSV exports are tidy tables for spreadsheets: sweep CSVs carry one
+row per run (with its seed) and one aggregate row per sweep point (run count, seed list,
+stddev/min/max where measured), with units in the column names and empty cells where a value does
+not apply; comparison CSVs carry one row per metric with both scenario values, the raw delta and
+the percentage shift (empty when a percentage is not defined). Filenames identify the experiment
+kind, name and timestamp.
 
 ## 16. When something goes wrong
 
