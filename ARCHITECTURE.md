@@ -129,6 +129,7 @@ fault instead of a client error.
 | `models/` | `node`, `interface`, `link`, `packet`, `project`, `history` |
 | `routing/` | `graph`, `dijkstra`, `bellman_ford`, `table` |
 | `addressing/` | `ipv4`, `ipv6`, `vlsm`, `nat` |
+| `switching/` | `circuit` — educational circuit-switching admission model |
 | `datalink/` | `hamming`, `crc`, `checksum`, `flow_control`, `mac` |
 | `transport/` | `tcp`, `udp`, congestion control |
 | `application/` | `dns`, `http`, `ftp`, `smtp`, `snmp` |

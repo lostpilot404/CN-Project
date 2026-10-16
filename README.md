@@ -1,4 +1,4 @@
-# NetSim — Interactive Computer Network Simulation Platform
+# NetSim — Interactive Computer Network Simulation and Performance Analysis Platform
 
 NetSim is an educational computer-network simulator: a discrete-event simulation core written in
 **Python 3.11+** and a **React 18 + TypeScript** front-end that renders what the core returns.
@@ -187,10 +187,38 @@ Representative commands:
 | Data link | `calculate_hamming_encode`, `verify_and_correct_hamming`, `calculate_crc`, `verify_crc`, `calculate_internet_checksum`, `verify_internet_checksum`, `simulate_sliding_window`, `simulate_go_back_n`, `simulate_selective_repeat`, `simulate_pure_aloha`, `simulate_slotted_aloha`, `simulate_csma`, `simulate_csma_cd` |
 | Transport / application | `simulate_tcp`, `simulate_udp`, `simulate_tcp_congestion`, `simulate_dns`, `simulate_http`, `simulate_ftp`, `simulate_smtp`, `simulate_snmp` |
 | QoS, faults, experiments | `get_current_qos_metrics`, `schedule_fault_command`, `run_parameter_sweep_command`, `run_comparative_experiment_command` |
+| Circuit switching | `request_circuit`, `teardown_circuit`, `get_circuit_state` |
 
 Errors are structured: HTTP 400 with `{ "status": "error", "code": "invalid_request", "message": ... }`
 for rejected input, 404 for an unknown command, 500 for a genuine internal fault. A rejected
 command never returns a substitute result.
+
+## Implementation scope
+
+NetSim is an educational simulator. The table below states honestly what each area does today —
+**Implemented** (fully exercised by tests), **Partial** (real behaviour with documented
+boundaries), and **Illustrative** (visual or model output that does not claim production
+protocol behaviour).
+
+| Area | Status | What it does and does not do |
+|---|---|---|
+| Packet switching engine | Implemented | Discrete-event store-and-forward engine with per-hop table-driven forwarding (Dijkstra/Bellman-Ford next hop), enforced TTL/hop limit, loop guard, explicit per-packet drop causes, and deterministic per-seed replay. |
+| Circuit switching | Partial | Educational admission-control model in the Circuit Switching workspace: setup resolves the same authoritative routing path and reserves the requested rate on **every** link (all-or-nothing), blocked requests get a precise reason, teardown releases capacity, and per-link utilisation/blocking metrics are reported. It is a resource-reservation model — there is no call signalling, no holding-time traffic pattern, and no cross-connect hardware behaviour. |
+| IPv4 / subnetting | Implemented | Subnet calculation, VLSM allocation and validation are real arithmetic. |
+| IPv6 | Partial | Validation, RFC 5952 canonical formatting, expansion/compression and scope classification are real. IPv6 addresses are **text labels**: the packet engine forwards IPv4-style headers only, and no IPv6 routing, neighbour discovery or dual-stack behaviour is simulated. |
+| NAT | Partial | Real stateful NAPT model: dynamic SNAT with per-router port pools, static DNAT rules, timeout tracking, and strict per-router/per-project state isolation. Prefix handling normalises wildcarded `0.x` octets. It is not a full NAT traversal story: no ALGs, no port-preservation heuristics beyond the pool, no ICMP error rewriting. |
+| MAC / Ethernet | Illustrative | Interfaces carry generated MAC identifiers and the L2 header visualisation shows Ethernet II fields (with FCS). There is **no** MAC learning, bridging, ARP/ND resolution or switch forwarding — MACs are display identifiers, and the L2 header addresses on packets are fixed illustrative values, not learned from the topology. |
+| Sliding window / GBN / Selective Repeat | Partial | A receding-window time-step model with real window/sequence/ACK/timeout/retransmission bookkeeping per protocol (in-order delivery, GBN rewind, SR buffering). It is a teaching model: discrete rounds, simplified ACK timing, no delayed ACKs or ACK loss. |
+| Hamming / CRC / checksum | Implemented | Real algorithms with intermediate values exposed for learning (parity placement, syndrome-based single-bit correction, modulo-2 division, one's-complement arithmetic). |
+| TCP | Partial | Educational transport simulation over the real routed topology: three-way handshake, slow start, congestion avoidance, fast retransmit, timeout recovery, Jacobson-style RTT estimation, and wire-vs-goodput accounting. It is **not** a production stack: no SACK, no window scaling, no delayed ACKs, simplified congestion response, and the receiver window is not modelled as a bottleneck. |
+| UDP | Implemented | Single-phase datagram path over the same routed engine, with loss recorded without recovery. |
+| Application models (DNS/HTTP/FTP/SMTP/SNMP) | Illustrative | Request/response event timelines with realistic field visualisation (e.g. DNS record types, HTTP methods/status). No real application payloads, caches or server state machines are executed. |
+| QoS metrics | Implemented | Throughput and goodput are distinct documented quantities (wire rate vs unique delivered payload; see the QoS metric definitions), with hand-calculated regression coverage. |
+| Faults | Implemented | Scheduled link down/restore events with downstream rerouting through the forwarding table and exactly-once drop accounting. |
+| Experiments (sweeps, A/B comparisons) | Implemented | Seeded, deterministic batch runs over the real engine with aggregated statistics, raw deltas, and JSON/CSV exports consumable by `python-tools`. |
+
+The same distinctions are restated next to the affected features in `USER_GUIDE.md`, and the
+algorithm-level boundaries are documented in `ALGORITHMS.md`.
 
 ## Known limitations
 

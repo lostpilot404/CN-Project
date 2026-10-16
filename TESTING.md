@@ -172,7 +172,7 @@ against the API:
 - packet inspector: five protocol layers compared against `get_packet_details`
 - routing tables, subnet/VLSM, Hamming/CRC/checksum, GBN, MAC protocols
 - TCP, UDP, congestion window, DNS, QoS counts, sweep reproducibility, A/B delta
-- layout: no horizontal overflow across 9 workspaces × 3 viewport widths
+- layout: no horizontal overflow across the workspaces at the supported viewport widths
 
 Tests that assert rendered topology call `resetProject()` first so runs are order-independent.
 Selectors are scoped by `data-testid`; where a label also appears in the minimap, the scope is the
@@ -193,8 +193,8 @@ npx playwright test e2e/a11y.spec.ts
 ```
 
 `e2e/a11y.spec.ts` runs axe-core (via `@axe-core/playwright`) over the real UI and the real
-service, tagged `wcag2a`, `wcag2aa`, `wcag21a` and `wcag21aa`. It audits all nine workspaces and 23
-sub-views, and **fails on a violation of any impact level** — the assertion collects every view's
+service, tagged `wcag2a`, `wcag2aa`, `wcag21a` and `wcag21aa`. It audits every workspace in the
+spec's `WORKSPACES` list and every sub-view in `SUB_VIEWS`, and **fails on a violation of any impact level** — the assertion collects every view's
 findings first, so one broken workspace does not hide the others.
 
 What it does *not* establish, and what is therefore still unverified in the report:
