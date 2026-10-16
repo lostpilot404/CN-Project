@@ -113,7 +113,7 @@ export const SwitchingWorkspace = ({ project }: SwitchingWorkspaceProps) => {
             engine, where each packet is forwarded independently.
           </p>
         </div>
-        <div className="text-[11px] text-slate-500 text-right shrink-0">
+        <div className="text-[11px] text-slate-400 text-right shrink-0">
           <div>Model: hop-count shortest path</div>
           <div>Reservations: shared per link</div>
         </div>
@@ -216,7 +216,7 @@ export const SwitchingWorkspace = ({ project }: SwitchingWorkspaceProps) => {
             Establish Circuit
           </button>
         </div>
-        <p className="text-[11px] text-slate-500">
+        <p className="text-[11px] text-slate-400">
           A request is admitted only when every link on the path can carry the full reserved rate.
           Requests that cannot be satisfied are blocked without side effects.
         </p>
@@ -225,7 +225,7 @@ export const SwitchingWorkspace = ({ project }: SwitchingWorkspaceProps) => {
       {/* Last result */}
       <section aria-label="Setup result" aria-live="polite">
         {lastResult === null ? (
-          <div className="rounded-xl border border-dashed border-slate-800 px-4 py-3 text-xs text-slate-500">
+          <div className="rounded-xl border border-dashed border-slate-800 px-4 py-3 text-xs text-slate-400">
             No circuit request submitted yet. Configure a connection above and press
             “Establish Circuit”.
           </div>
@@ -267,10 +267,10 @@ export const SwitchingWorkspace = ({ project }: SwitchingWorkspaceProps) => {
           className="lg:col-span-2 rounded-xl border border-slate-800 bg-slate-900/50 p-4 space-y-3"
         >
           <h2 className="text-sm font-semibold text-slate-200">
-            Circuits <span className="text-slate-500 font-normal">({activeCircuits.length} active)</span>
+            Circuits <span className="text-slate-400 font-normal">({activeCircuits.length} active)</span>
           </h2>
           {activeCircuits.length === 0 && releasedCircuits.length === 0 ? (
-            <div className="py-6 text-center text-xs text-slate-500">No circuits yet.</div>
+            <div className="py-6 text-center text-xs text-slate-400">No circuits yet.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -318,7 +318,7 @@ export const SwitchingWorkspace = ({ project }: SwitchingWorkspaceProps) => {
                             Teardown
                           </button>
                         ) : (
-                          <span className="text-[10px] text-slate-500" title={c.released_reason ?? ''}>
+                          <span className="text-[10px] text-slate-400" title={c.released_reason ?? ''}>
                             released
                           </span>
                         )}
@@ -372,7 +372,7 @@ export const SwitchingWorkspace = ({ project }: SwitchingWorkspaceProps) => {
             Link Reservations
           </h2>
           {reservedLinks.length === 0 ? (
-            <div className="text-xs text-slate-500">No capacity reserved.</div>
+            <div className="text-xs text-slate-400">No capacity reserved.</div>
           ) : (
             <ul className="space-y-2.5">
               {reservedLinks.map((l) => (

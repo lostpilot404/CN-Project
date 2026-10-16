@@ -54,8 +54,8 @@ export const Navbar = ({
       {/* Brand & Project Info */}
       <div className="flex items-center space-x-4">
         <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-brand-500/20">
-            <Activity className="w-5 h-5 text-white" />
+          <div className="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center">
+            <Activity className="w-5 h-5 text-white" aria-hidden="true" />
           </div>
           <div>
             <div className="flex items-center space-x-2">

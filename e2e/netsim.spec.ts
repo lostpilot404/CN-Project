@@ -681,6 +681,9 @@ test.describe('NetSim full-stack end-to-end', () => {
       { width: 1440, height: 900 },
       { width: 1280, height: 720 },
       { width: 1024, height: 768 },
+      { width: 768, height: 900 },
+      { width: 375, height: 812 },
+      { width: 320, height: 700 },
     ];
     const workspaces = [
       'Topology Canvas',
@@ -690,6 +693,7 @@ test.describe('NetSim full-stack end-to-end', () => {
       'Algorithm Studio',
       'Transport Layer',
       'Application Layer',
+      'Circuit Switching',
       'QoS Performance',
       'Batch Experiments',
     ];

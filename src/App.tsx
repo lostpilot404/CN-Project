@@ -445,6 +445,8 @@ export function App() {
           {toast && (
             <div
               data-testid="toast-notification"
+              role={toast.type === 'error' ? 'alert' : 'status'}
+              aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
               className={`fixed bottom-16 right-6 z-50 px-4 py-2.5 rounded-xl shadow-2xl backdrop-blur-md border text-xs font-medium flex items-center space-x-2 transition-all duration-300 animate-in fade-in slide-in-from-bottom-2 ${
                 toast.type === 'error'
                   ? 'bg-rose-950/90 text-rose-200 border-rose-800/80 shadow-rose-950/50'

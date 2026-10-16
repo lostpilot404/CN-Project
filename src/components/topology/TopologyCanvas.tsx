@@ -67,6 +67,8 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
 }) => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedLinkId, setSelectedLinkId] = useState<string | null>(null);
+  const [snapEnabled, setSnapEnabled] = useState(true);
+  const [showHelp, setShowHelp] = useState(false);
 
   const nodeTypes = useMemo(() => ({ custom: CustomNode }), []);
 
@@ -207,9 +209,31 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
 
   const onNodeDragStop = useCallback(
     (_event: unknown, node: FlowNode) => {
-      onNodePositionChange(node.id, { x: node.position.x, y: node.position.y });
+      // Optional snap-to-grid: 10 px grid keeps topologies aligned without pixel hunting.
+      const position = snapEnabled
+        ? { x: Math.round(node.position.x / 10) * 10, y: Math.round(node.position.y / 10) * 10 }
+        : { x: node.position.x, y: node.position.y };
+      setNodes((nds) => nds.map((n) => (n.id === node.id ? { ...n, position } : n)));
+      onNodePositionChange(node.id, position);
     },
-    [onNodePositionChange]
+    [onNodePositionChange, snapEnabled]
+  );
+
+  // Arrow-key nudge for the selected node (Shift = coarse step).
+  const nudgeSelectedNode = useCallback(
+    (dx: number, dy: number, coarse: boolean) => {
+      if (!selectedNodeId) return;
+      const current = nodes.find((n) => n.id === selectedNodeId);
+      if (!current) return;
+      const step = coarse ? 40 : 10;
+      const raw = { x: current.position.x + dx * step, y: current.position.y + dy * step };
+      const position = snapEnabled
+        ? { x: Math.round(raw.x / 10) * 10, y: Math.round(raw.y / 10) * 10 }
+        : raw;
+      setNodes((nds) => nds.map((n) => (n.id === selectedNodeId ? { ...n, position } : n)));
+      onNodePositionChange(selectedNodeId, position);
+    },
+    [selectedNodeId, nodes, snapEnabled, onNodePositionChange]
   );
 
   // Global keyboard shortcuts for Undo, Redo, and Delete
@@ -247,6 +271,20 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
           onDeleteLink(selectedLinkId);
           setSelectedLinkId(null);
         }
+      } else if (e.key === 'Escape') {
+        setShowHelp(false);
+        setSelectedNodeId(null);
+        setSelectedLinkId(null);
+      } else if (e.key === '?') {
+        e.preventDefault();
+        setShowHelp((open) => !open);
+      } else if (e.key.startsWith('Arrow') && selectedNodeId) {
+        e.preventDefault();
+        const step = e.shiftKey;
+        if (e.key === 'ArrowUp') nudgeSelectedNode(0, -1, step);
+        else if (e.key === 'ArrowDown') nudgeSelectedNode(0, 1, step);
+        else if (e.key === 'ArrowLeft') nudgeSelectedNode(-1, 0, step);
+        else if (e.key === 'ArrowRight') nudgeSelectedNode(1, 0, step);
       }
     };
 
@@ -260,6 +298,7 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
     onRedo,
     onDeleteNode,
     onDeleteLink,
+    nudgeSelectedNode,
   ]);
 
   return (
@@ -301,6 +340,32 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
 
         <div className="w-[1px] h-4 bg-slate-800" />
 
+        {/* Snap-to-grid toggle */}
+        <button
+          onClick={() => setSnapEnabled((v) => !v)}
+          aria-pressed={snapEnabled}
+          title="Snap nodes to a 10 px grid (toggle)"
+          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+            snapEnabled ? 'text-cyan-300 bg-cyan-950/50' : 'text-slate-300 hover:bg-slate-800'
+          }`}
+          data-testid="snap-toggle"
+        >
+          Snap {snapEnabled ? 'On' : 'Off'}
+        </button>
+
+        {/* Keyboard help */}
+        <button
+          onClick={() => setShowHelp((v) => !v)}
+          title="Keyboard shortcuts (?)"
+          aria-label="Keyboard shortcuts"
+          className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800"
+          data-testid="keyboard-help"
+        >
+          Keys ?
+        </button>
+
+        <div className="w-[1px] h-4 bg-slate-800" />
+
         {/* Topology Summary Counts */}
         <div className="flex items-center space-x-3 px-2 text-[11px] font-mono text-slate-400">
           <span className="flex items-center space-x-1">
@@ -337,6 +402,50 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
           className="!bg-slate-900/80 !border-slate-800 !rounded-lg"
         />
       </ReactFlow>
+
+      {/* Keyboard help overlay */}
+      {showHelp && (
+        <div
+          className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70"
+          onClick={() => setShowHelp(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="keyboard-help-title"
+            className="w-[min(24rem,90vw)] rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+            data-testid="keyboard-help-overlay"
+          >
+            <h2 id="keyboard-help-title" className="text-sm font-semibold text-slate-100">
+              Keyboard shortcuts
+            </h2>
+            <dl className="mt-3 space-y-1.5 text-xs text-slate-300">
+              {[
+                ['Ctrl/⌘ + Z', 'Undo'],
+                ['Ctrl/⌘ + Y or Shift + Ctrl/⌘ + Z', 'Redo'],
+                ['Delete / Backspace', 'Remove selected node or link'],
+                ['Arrow keys', 'Nudge the selected node by 10 px'],
+                ['Shift + Arrow keys', 'Nudge the selected node by 40 px'],
+                ['?', 'Toggle this help'],
+                ['Escape', 'Close help / clear selection'],
+              ].map(([keys, what]) => (
+                <div key={keys} className="flex justify-between gap-4">
+                  <dt className="font-mono text-cyan-300">{keys}</dt>
+                  <dd className="text-right text-slate-400">{what}</dd>
+                </div>
+              ))}
+            </dl>
+            <button
+              type="button"
+              onClick={() => setShowHelp(false)}
+              className="mt-4 w-full rounded-md border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Properties Inspector Panel */}
       <PropertyEditor
