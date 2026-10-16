@@ -78,6 +78,55 @@
   background-color: #080d1a !important;
 }
 
+/* Controls: styled zoom/reset bar (library default is a white strip) */
+.react-flow__controls {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.react-flow__controls-button {
+  background: #0f172a;
+  border-bottom: 1px solid #1e293b;
+  width: 28px;
+  height: 28px;
+}
+
+.react-flow__controls-button:hover {
+  background: #1e293b;
+}
+
+.react-flow__controls-button svg {
+  fill: #cbd5e1;
+}
+
+/* MiniMap: dark panel instead of the default light frame */
+.react-flow__minimap {
+  background-color: rgba(15, 23, 42, 0.85);
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+}
+
+.react-flow__minimap-mask {
+  fill: rgba(6, 10, 18, 0.72);
+}
+
+/* Library attribution kept, restyled to match the canvas chrome */
+.react-flow__attribution {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 1px 6px;
+  margin: 8px;
+}
+
+.react-flow__attribution a {
+  color: #94a3b8;
+  font-size: 10px;
+}
+
 .react-flow__node {
   cursor: grab;
 }

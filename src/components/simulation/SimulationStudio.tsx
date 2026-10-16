@@ -200,6 +200,19 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
           </button>
         </div>
       )}
+      {/* Workspace Header */}
+      <div className="border-b border-slate-800 bg-slate-900/60 backdrop-blur px-6 py-3 flex items-center space-x-3">
+        <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400">
+          <Layers className="w-4 h-4" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold text-slate-200">Simulation &amp; Events</h2>
+          <p className="text-[11px] text-slate-400">
+            Discrete-event playback, packet injection and the full event timeline
+          </p>
+        </div>
+      </div>
+
       {/* Top Playback & Metrics Toolbar */}
       <div className="h-14 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between px-4 z-10">
         {/* Playback action buttons */}
@@ -215,7 +228,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
           ) : (
             <button
               onClick={handleRunBurst}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-700 hover:bg-cyan-800 text-white transition-colors shadow-sm cursor-pointer"
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white transition-colors shadow-sm cursor-pointer"
               title="Advance 50ms virtual simulation time"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
@@ -255,7 +268,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
           {/* Inject Packet Button */}
           <button
             onClick={() => setShowInjectModal(true)}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white transition-colors shadow-sm cursor-pointer"
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white transition-colors shadow-sm cursor-pointer"
           >
             <Send className="w-3.5 h-3.5" />
             <span>Inject Packet</span>
@@ -327,7 +340,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
           {/* Active Packets Carousel */}
           {packets.length > 0 && (
             <div className="p-2.5 border-b border-slate-800 bg-slate-950/40">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <div className="text-[10px] font-bold text-slate-400 tracking-wider mb-1.5 flex items-center justify-between">
                 <span>Active Packets ({packets.length})</span>
                 <span className="text-[9px] text-slate-400">Click to inspect</span>
               </div>
@@ -464,7 +477,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
             <form onSubmit={handleInjectPacket} className="p-4 space-y-3 font-mono text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
+                  <label className="text-[10px] text-slate-400 font-semibold block mb-1">
                     Source Node
                   </label>
                   <select aria-label="Source Node"
@@ -481,7 +494,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
+                  <label className="text-[10px] text-slate-400 font-semibold block mb-1">
                     Destination Node
                   </label>
                   <select aria-label="Destination Node"
@@ -500,7 +513,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
 
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
+                  <label className="text-[10px] text-slate-400 font-semibold block mb-1">
                     Payload Size
                   </label>
                   <input aria-label="Payload Size"
@@ -514,7 +527,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
+                  <label className="text-[10px] text-slate-400 font-semibold block mb-1">
                     App Protocol
                   </label>
                   <select aria-label="App Protocol"
@@ -530,7 +543,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
+                  <label className="text-[10px] text-slate-400 font-semibold block mb-1">
                     Transport
                   </label>
                   <select aria-label="Transport"
@@ -554,7 +567,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 font-bold text-white shadow-md cursor-pointer"
+                  className="px-4 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 font-bold text-white shadow-md cursor-pointer"
                 >
                   Inject Packet
                 </button>

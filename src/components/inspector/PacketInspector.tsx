@@ -235,7 +235,7 @@ export const PacketInspector: React.FC<PacketInspectorProps> = ({
     created: 'bg-slate-700/60 text-slate-300 border-slate-600',
     queued: 'bg-amber-950/60 text-amber-300 border-amber-800',
     transmitting: 'bg-cyan-950/60 text-cyan-300 border-cyan-800 animate-pulse',
-    in_flight: 'bg-indigo-950/60 text-indigo-300 border-indigo-800',
+    in_flight: 'bg-brand-950/60 text-brand-300 border-brand-800',
     delivered: 'bg-emerald-950/60 text-emerald-300 border-emerald-800',
     dropped_queue_full: 'bg-rose-950/60 text-rose-300 border-rose-800',
     dropped_bit_error: 'bg-rose-950/60 text-rose-300 border-rose-800',
@@ -271,7 +271,7 @@ export const PacketInspector: React.FC<PacketInspectorProps> = ({
         {/* Source -> Destination & Current Location */}
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/80">
-            <span className="text-[10px] text-slate-400 uppercase font-semibold">Route Path</span>
+            <span className="text-[10px] text-slate-400 font-semibold">Route Path</span>
             <div className="flex items-center space-x-1 font-mono text-slate-200 mt-0.5">
               <span>{packet.src_node_id}</span>
               <ArrowRight className="w-3 h-3 text-cyan-400" />
@@ -280,7 +280,7 @@ export const PacketInspector: React.FC<PacketInspectorProps> = ({
           </div>
 
           <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/80">
-            <span className="text-[10px] text-slate-400 uppercase font-semibold">Current Location</span>
+            <span className="text-[10px] text-slate-400 font-semibold">Current Location</span>
             <div className="flex items-center space-x-1.5 font-mono text-emerald-400 mt-0.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
               <span>{packet.current_node_id}</span>
@@ -305,7 +305,7 @@ export const PacketInspector: React.FC<PacketInspectorProps> = ({
 
       {/* 5-Layer Stack Cards */}
       <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5">
-        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">
+        <div className="text-[10px] font-bold text-slate-400 tracking-wider px-1">
           OSI / TCP-IP 5-Layer Headers
         </div>
         {layers.map((layer) => (

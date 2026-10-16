@@ -31,10 +31,10 @@ export const LayerCard: React.FC<LayerCardProps> = ({
       text: 'text-cyan-400',
     },
     3: {
-      border: 'border-indigo-500/40',
-      bg: 'bg-indigo-950/20',
-      badge: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
-      text: 'text-indigo-400',
+      border: 'border-brand-500/40',
+      bg: 'bg-brand-950/20',
+      badge: 'bg-brand-500/20 text-brand-300 border-brand-500/30',
+      text: 'text-brand-400',
     },
     2: {
       border: 'border-emerald-500/40',
@@ -137,7 +137,7 @@ export const LayerCard: React.FC<LayerCardProps> = ({
                 key={idx}
                 className="bg-slate-900/60 p-1.5 rounded border border-slate-800/60 flex flex-col justify-between"
               >
-                <span className="text-[10px] text-slate-400 uppercase tracking-wider">
+                <span className="text-[10px] text-slate-400 tracking-wider">
                   {f.label}
                 </span>
                 <div className="flex items-baseline justify-between mt-0.5">
@@ -163,8 +163,8 @@ export const LayerCard: React.FC<LayerCardProps> = ({
           {/* Raw Byte Representation (Display-only formatting) */}
           {showRawHex && layer.isModeled && (
             <div className="p-2 rounded bg-slate-950 border border-slate-800 font-mono text-[10px] text-slate-400 space-y-1">
-              <div className="text-[9px] text-slate-400 uppercase font-semibold">
-                Authoritative Field Hex Map:
+              <div className="text-[9px] text-slate-400 font-semibold">
+                Field hex map:
               </div>
               <div className="flex flex-wrap gap-1.5 text-cyan-300">
                 {layer.headerFields

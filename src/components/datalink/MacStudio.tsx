@@ -157,7 +157,7 @@ export const MacStudio: React.FC = () => {
               onClick={() => setActiveProto(p.id)}
               className={`px-4 py-2 rounded-lg text-xs font-semibold transition flex items-center space-x-2 ${
                 activeProto === p.id
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                  ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
               }`}
             >
@@ -170,7 +170,7 @@ export const MacStudio: React.FC = () => {
           <button
             onClick={runParameterSweep}
             disabled={sweeping}
-            className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-indigo-300 border border-indigo-700/40 transition flex items-center space-x-1.5"
+            className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-brand-300 border border-brand-700/40 transition flex items-center space-x-1.5"
             title="Measure throughput across offered load G range"
           >
             <TrendingUp className="w-3.5 h-3.5" />
@@ -179,7 +179,7 @@ export const MacStudio: React.FC = () => {
           <button
             onClick={runSimulation}
             disabled={loading}
-            className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2"
+            className="px-5 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-700 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-brand-600/20 transition flex items-center space-x-2"
           >
             <Play className="w-4 h-4 fill-white" />
             <span>{loading ? 'Simulating...' : 'Run Simulation'}</span>
@@ -189,15 +189,15 @@ export const MacStudio: React.FC = () => {
 
       {errorMsg && (
         <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-800/60 text-rose-200 text-xs">
-          <span className="font-semibold block uppercase">Simulation Error</span>
+          <span className="font-semibold block">Simulation Error</span>
           <p className="mt-1 font-mono">{errorMsg}</p>
         </div>
       )}
 
       {/* Control Deck */}
       <div className="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-5 space-y-4">
-        <div className="flex items-center space-x-2 text-xs font-semibold text-slate-300 uppercase tracking-wider">
-          <Sliders className="w-4 h-4 text-indigo-400" />
+        <div className="flex items-center space-x-2 text-xs font-semibold text-slate-300 tracking-wider">
+          <Sliders className="w-4 h-4 text-brand-400" />
           <span>Shared Channel & Contention Parameters</span>
         </div>
 
@@ -311,7 +311,7 @@ export const MacStudio: React.FC = () => {
                   value="one_persistent"
                   checked={persistenceMode === 'one_persistent'}
                   onChange={() => setPersistenceMode('one_persistent')}
-                  className="accent-indigo-500"
+                  className="accent-brand-500"
                 />
                 <span>1-Persistent (Continuously sense, transmit when idle)</span>
               </label>
@@ -323,7 +323,7 @@ export const MacStudio: React.FC = () => {
                   value="non_persistent"
                   checked={persistenceMode === 'non_persistent'}
                   onChange={() => setPersistenceMode('non_persistent')}
-                  className="accent-indigo-500"
+                  className="accent-brand-500"
                 />
                 <span>Non-Persistent (Defer random backoff if busy)</span>
               </label>
@@ -335,7 +335,7 @@ export const MacStudio: React.FC = () => {
                   value="p_persistent"
                   checked={persistenceMode === 'p_persistent'}
                   onChange={() => setPersistenceMode('p_persistent')}
-                  className="accent-indigo-500"
+                  className="accent-brand-500"
                 />
                 <span>p-Persistent (Slot-based probability p)</span>
               </label>
@@ -351,7 +351,7 @@ export const MacStudio: React.FC = () => {
                   step={0.05}
                   value={pProbability}
                   onChange={(e) => setPProbability(parseFloat(e.target.value))}
-                  className="accent-indigo-500 w-28 cursor-pointer"
+                  className="accent-brand-500 w-28 cursor-pointer"
                 />
               </div>
             )}
@@ -364,7 +364,7 @@ export const MacStudio: React.FC = () => {
         <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 space-y-4">
           <div className="flex items-center space-x-2">
             <TrendingUp className="w-4 h-4 text-emerald-400" />
-            <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+            <span className="text-xs font-semibold text-slate-200 tracking-wider">
               Measured Throughput Curve (Offered Load G Sweep)
             </span>
           </div>
@@ -388,8 +388,8 @@ export const MacStudio: React.FC = () => {
       {simResult && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 space-y-1">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider">Attempted Tx</span>
-            <div className="text-lg font-bold font-mono text-indigo-300">
+            <span className="text-[10px] text-slate-400 tracking-wider">Attempted Tx</span>
+            <div className="text-lg font-bold font-mono text-brand-300">
               {simResult.metrics.attempted_transmissions}
             </div>
             <span className="text-[10px] text-slate-400">
@@ -398,7 +398,7 @@ export const MacStudio: React.FC = () => {
           </div>
 
           <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 space-y-1">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider">Collisions</span>
+            <span className="text-[10px] text-slate-400 tracking-wider">Collisions</span>
             <div className="text-lg font-bold font-mono text-rose-300">
               {simResult.metrics.collisions}
             </div>
@@ -408,7 +408,7 @@ export const MacStudio: React.FC = () => {
           </div>
 
           <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 space-y-1">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider">Throughput (fps)</span>
+            <span className="text-[10px] text-slate-400 tracking-wider">Throughput (fps)</span>
             <div className="text-lg font-bold font-mono text-emerald-300">
               {simResult.metrics.throughput_frames_per_sec.toFixed(2)}
             </div>
@@ -416,7 +416,7 @@ export const MacStudio: React.FC = () => {
           </div>
 
           <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 space-y-1">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider">Throughput (bps)</span>
+            <span className="text-[10px] text-slate-400 tracking-wider">Throughput (bps)</span>
             <div className="text-lg font-bold font-mono text-sky-300">
               {(simResult.metrics.throughput_bits_per_sec / 1000).toFixed(1)} kbps
             </div>
@@ -424,7 +424,7 @@ export const MacStudio: React.FC = () => {
           </div>
 
           <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 space-y-1">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider">Channel Utilization</span>
+            <span className="text-[10px] text-slate-400 tracking-wider">Channel Utilization</span>
             <div className="text-lg font-bold font-mono text-amber-300">
               {(simResult.metrics.channel_utilization * 100).toFixed(1)}%
             </div>
@@ -432,7 +432,7 @@ export const MacStudio: React.FC = () => {
           </div>
 
           <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 space-y-1">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider">Avg Backoff Delay</span>
+            <span className="text-[10px] text-slate-400 tracking-wider">Avg Backoff Delay</span>
             <div className="text-lg font-bold font-mono text-slate-200">
               {simResult.metrics.average_backoff_delay_us.toFixed(0)} µs
             </div>
@@ -445,8 +445,8 @@ export const MacStudio: React.FC = () => {
       {simResult && simResult.slot_records.length > 0 ? (
         <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 space-y-4">
           <div className="flex items-center space-x-2">
-            <Layers className="w-4 h-4 text-indigo-400" />
-            <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+            <Layers className="w-4 h-4 text-brand-400" />
+            <span className="text-xs font-semibold text-slate-200 tracking-wider">
               Slotted ALOHA Slot-by-Slot Discrete Trace ({simResult.slot_records.length} Slots)
             </span>
           </div>
@@ -487,9 +487,9 @@ export const MacStudio: React.FC = () => {
         <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <Activity className="w-4 h-4 text-indigo-400" />
-              <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
-                Authoritative Event Trace ({simResult.events.length} Events Recorded)
+              <Activity className="w-4 h-4 text-brand-400" />
+              <span className="text-xs font-semibold text-slate-200 tracking-wider">
+                Event trace ({simResult.events.length} Events Recorded)
               </span>
             </div>
             <div className="text-[10px] font-mono text-slate-400">
@@ -521,13 +521,13 @@ export const MacStudio: React.FC = () => {
                     <span className="font-mono text-[11px] font-bold text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
                       {ev.timestamp_us.toLocaleString()} µs
                     </span>
-                    <span className="font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-black/40 border border-white/10">
+                    <span className="font-bold text-[10px] tracking-wider px-2 py-0.5 rounded bg-black/40 border border-white/10">
                       {ev.event_type.replace('_', ' ')}
                     </span>
                     <span className="font-medium text-xs">{ev.description}</span>
                   </div>
 
-                  <span className="font-mono text-[10px] text-slate-400 uppercase">
+                  <span className="font-mono text-[10px] text-slate-400">
                     Channel: {ev.channel_state}
                   </span>
                 </div>

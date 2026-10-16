@@ -657,13 +657,16 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
     elif cmd in ("set_forwarding_policy", "setForwardingPolicy"):
         """Configure the routing model that governs live packet forwarding.
 
-        The policy is explicit and shared with the routing graph: 'dijkstra' (shortest
-        path) over one of the supported metrics. Default: dijkstra + hop_count.
+        The policy is explicit and shared with the routing graph: 'dijkstra' (heap-based
+        shortest path) or 'bellman_ford' (|V|-1 relaxation) over one of the supported
+        metrics. Both algorithms minimise the metric with the same deterministic
+        tie-break, so tables, convergence telemetry and live forwarding agree. Default:
+        dijkstra + hop_count.
         """
         algo_raw = arg(args, "algorithm", default=SESSION.engine.forwarding_algorithm)
         algo_str = str(algo_raw).strip().lower().replace("-", "_")
-        if algo_str not in ("dijkstra",):
-            raise CommandError(f"Unsupported forwarding algorithm '{algo_raw}'. Expected 'dijkstra'")
+        if algo_str not in ("dijkstra", "bellman_ford"):
+            raise CommandError(f"Unsupported forwarding algorithm '{algo_raw}'. Expected 'dijkstra' or 'bellman_ford'")
         metric_raw = arg(args, "metric_type", "metricType", default=SESSION.engine.forwarding_metric.value)
         metric = parse_enum(MetricType, metric_raw, "routing metric")
         SESSION.engine.forwarding_algorithm = algo_str

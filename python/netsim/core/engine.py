@@ -20,7 +20,7 @@ from ..models.packet import (
     PhysicalLayerInfo,
     TransportHeader,
 )
-from ..routing.graph import MetricType, RoutingGraph
+from ..routing.graph import MetricType, RoutingAlgorithm, RoutingGraph
 from .clock import SimTime
 from .delays import calculate_arrival_time_us, calculate_tx_delay_us
 from .events import SimEvent
@@ -41,8 +41,11 @@ from .rng import DeterministicRng
 #   metric    : hop_count (every usable link costs 1)
 #
 # These defaults are explicit so the application, the routing tables and the live
-# packet path agree. `set_forwarding_policy` can change them at runtime; the active
-# policy is reported in `get_simulation_state`.
+# packet path agree. `set_forwarding_policy` can change them at runtime — the
+# algorithm may be 'dijkstra' or 'bellman_ford' (both minimise the metric with the
+# same deterministic tie-break, so the chosen policy never changes which path is
+# selected, only the computation that finds it). The active policy is reported in
+# `get_simulation_state`.
 FORWARDING_ALGORITHM_DEFAULT = "dijkstra"
 FORWARDING_METRIC_DEFAULT = MetricType.HOP_COUNT
 
@@ -158,24 +161,30 @@ class SimulationEngine:
     def resolve_forwarding(self, current_node_id: str, dst_node_id: str) -> ForwardingDecision:
         """Resolve the next hop toward ``dst_node_id`` from the current topology.
 
-        Uses the authoritative routing graph (Dijkstra shortest path under the active
-        forwarding metric) over links that are currently usable. When no usable route
-        exists, the decision records *why*: a path that only exists across DOWN links is
-        classified as ``dropped_link_down``; a topology with no path at all (disconnected
-        destination, or no forward-capable transit node) is classified as
-        ``dropped_no_route``. A packet is never delivered just because no onward link
-        was found.
+        Uses the authoritative routing graph under the active forwarding policy
+        (algorithm: ``dijkstra`` or ``bellman_ford``; metric: the configured metric)
+        over links that are currently usable. Both algorithms minimise the metric with
+        the same deterministic tie-break, so the live path and the routing tables agree
+        whichever policy is selected. When no usable route exists, the decision records
+        *why*: a path that only exists across DOWN links is classified as
+        ``dropped_link_down``; a topology with no path at all (disconnected destination,
+        or no forward-capable transit node) is classified as ``dropped_no_route``. A
+        packet is never delivered just because no onward link was found.
         """
         if current_node_id == dst_node_id:
             return ForwardingDecision(path=[current_node_id], next_link_id=None, reachable=True)
-        result = self._routing_graph().find_path(current_node_id, dst_node_id)
+        algorithm = RoutingAlgorithm(self.forwarding_algorithm)
+        result = self._routing_graph().find_path(current_node_id, dst_node_id, algorithm=algorithm)
         if result is not None:
             path, edges = result
             if len(path) >= 2 and edges:
                 return ForwardingDecision(path=path, next_link_id=edges[0].link_id, reachable=True)
             return ForwardingDecision(path=path, next_link_id=None, reachable=True)
         # Diagnosis: would a route exist if unavailable links were usable?
-        if self._routing_graph(include_unavailable=True).find_path(current_node_id, dst_node_id) is not None:
+        if (
+            self._routing_graph(include_unavailable=True).find_path(current_node_id, dst_node_id, algorithm=algorithm)
+            is not None
+        ):
             return ForwardingDecision(
                 path=None,
                 next_link_id=None,

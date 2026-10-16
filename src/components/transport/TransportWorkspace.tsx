@@ -153,33 +153,32 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
       data-testid="transport-workspace"
       className="flex-1 flex flex-col h-full bg-slate-950 text-slate-100 overflow-hidden select-none"
     >
-      {/* Studio Header & Tab Navigation */}
-      <header className="h-14 border-b border-slate-800 bg-slate-900/60 px-6 flex items-center justify-between">
+      {/* Workspace Header */}
+      <header className="border-b border-slate-800 bg-slate-900/60 px-6 py-3">
         <div className="flex items-center space-x-3">
-          <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+          <div className="p-2 rounded-lg bg-brand-500/10 text-brand-400 border border-brand-500/20">
             <ArrowLeftRight className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold tracking-wide text-slate-100 flex items-center gap-2">
-              Layer 4 Transport Layer Studio
-              <span className="text-[10px] font-mono uppercase bg-indigo-900/60 text-indigo-300 border border-indigo-700/50 px-2 py-0.5 rounded-full">
-                Authoritative Python Core
-              </span>
+            <h2 className="text-sm font-semibold tracking-wide text-slate-100">
+              Transport Layer
             </h2>
             <p className="text-[11px] text-slate-400">
-              Interactive TCP/UDP End-to-End Simulation, Jacobson/Karn RTT, Reno Congestion Control
+              TCP/UDP end-to-end simulation with Jacobson/Karn RTT estimation and Reno congestion control
             </p>
           </div>
         </div>
+      </header>
 
-        {/* Sub-Studio Selector */}
-        <div className="flex bg-slate-950 border border-slate-800 rounded-lg p-1 space-x-1">
+      {/* Sub-studio tabs */}
+      <div className="border-b border-slate-800/80 px-6 py-2.5">
+        <div className="flex flex-wrap bg-slate-950 border border-slate-800 rounded-lg p-1 space-x-1 w-fit">
           <button
             data-testid="tab-tcp-studio"
             onClick={() => setActiveStudio('tcp')}
             className={`flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all ${
               activeStudio === 'tcp'
-                ? 'bg-indigo-600 text-white shadow-sm'
+                ? 'bg-brand-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
             }`}
           >
@@ -192,7 +191,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
             onClick={() => setActiveStudio('udp')}
             className={`flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all ${
               activeStudio === 'udp'
-                ? 'bg-indigo-600 text-white shadow-sm'
+                ? 'bg-brand-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
             }`}
           >
@@ -205,7 +204,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
             onClick={() => setActiveStudio('congestion')}
             className={`flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all ${
               activeStudio === 'congestion'
-                ? 'bg-indigo-600 text-white shadow-sm'
+                ? 'bg-brand-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
             }`}
           >
@@ -223,7 +222,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
             }}
             className={`flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all ${
               activeStudio === 'comparison'
-                ? 'bg-indigo-600 text-white shadow-sm'
+                ? 'bg-brand-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
             }`}
           >
@@ -231,15 +230,15 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
             <span>TCP vs UDP Comparison</span>
           </button>
         </div>
-      </header>
+      </div>
 
       {/* Main Studio Body */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Config Panel */}
         <aside className="w-80 border-r border-slate-800 bg-slate-900/30 p-4 overflow-y-auto space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-            <span className="text-xs font-bold uppercase text-slate-300 tracking-wider">
-              Simulation Parameters
+            <span className="text-xs font-semibold text-slate-300">
+              Simulation parameters
             </span>
             <span className="text-[10px] text-slate-400 font-mono">L4 Endpoints</span>
           </div>
@@ -250,26 +249,44 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
               <label className="text-[11px] font-medium text-slate-400 block mb-1">
                 Source Endpoint (Host A)
               </label>
-              <input aria-label="Source Endpoint (Host A)"
+              <select aria-label="Source Endpoint (Host A)"
                 data-testid="input-src-node"
-                type="text"
                 value={srcNode}
                 onChange={(e) => setSrcNode(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500"
-              />
+                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-brand-500"
+              >
+                {(project?.nodes ?? []).length > 0 ? (
+                  (project?.nodes ?? []).map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.label} ({n.id})
+                    </option>
+                  ))
+                ) : (
+                  <option value={srcNode}>{srcNode}</option>
+                )}
+              </select>
             </div>
 
             <div>
               <label className="text-[11px] font-medium text-slate-400 block mb-1">
                 Destination Endpoint (Host B)
               </label>
-              <input aria-label="Destination Endpoint (Host B)"
+              <select aria-label="Destination Endpoint (Host B)"
                 data-testid="input-dst-node"
-                type="text"
                 value={dstNode}
                 onChange={(e) => setDstNode(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500"
-              />
+                className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-brand-500"
+              >
+                {(project?.nodes ?? []).length > 0 ? (
+                  (project?.nodes ?? []).map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.label} ({n.id})
+                    </option>
+                  ))
+                ) : (
+                  <option value={dstNode}>{dstNode}</option>
+                )}
+              </select>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -430,7 +447,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
                 data-testid="btn-simulate-tcp"
                 onClick={runTcpSimulation}
                 disabled={isRunning}
-                className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs flex items-center justify-center space-x-2 transition-all shadow-md disabled:bg-slate-700 disabled:text-slate-300"
+                className="w-full py-2 px-3 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-medium text-xs flex items-center justify-center space-x-2 transition-all shadow-md disabled:bg-slate-700 disabled:text-slate-300"
               >
                 <Play className="w-3.5 h-3.5 fill-white" />
                 <span>{isRunning ? 'Simulating...' : 'Simulate TCP Transfer'}</span>
@@ -440,7 +457,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
                 data-testid="btn-simulate-udp"
                 onClick={runUdpSimulation}
                 disabled={isRunning}
-                className="w-full py-2 px-3 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-xs flex items-center justify-center space-x-2 transition-all shadow-md disabled:bg-slate-700 disabled:text-slate-300"
+                className="w-full py-2 px-3 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-medium text-xs flex items-center justify-center space-x-2 transition-all shadow-md disabled:bg-slate-700 disabled:text-slate-300"
               >
                 <Play className="w-3.5 h-3.5 fill-white" />
                 <span>{isRunning ? 'Transmitting...' : 'Simulate UDP Datagrams'}</span>
@@ -450,7 +467,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
                 data-testid="btn-simulate-both"
                 onClick={runBothSimulations}
                 disabled={isRunning}
-                className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs flex items-center justify-center space-x-2 transition-all shadow-md disabled:bg-slate-700 disabled:text-slate-300"
+                className="w-full py-2 px-3 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-medium text-xs flex items-center justify-center space-x-2 transition-all shadow-md disabled:bg-slate-700 disabled:text-slate-300"
               >
                 <Play className="w-3.5 h-3.5 fill-white" />
                 <span>Run TCP vs UDP Comparison</span>
@@ -540,7 +557,7 @@ const TcpStudioView: React.FC<{
         </p>
         <button
           onClick={onRun}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg"
+          className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium rounded-lg"
         >
           Run Default TCP Simulation
         </button>
@@ -555,10 +572,10 @@ const TcpStudioView: React.FC<{
       {/* Route & Status Banner */}
       <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
         <div>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-            Authoritative Derived Route
+          <span className="text-[10px] font-bold tracking-wider text-slate-400 block mb-1">
+            Derived route
           </span>
-          <div className="flex items-center space-x-2 text-xs font-mono text-indigo-300">
+          <div className="flex items-center space-x-2 text-xs font-mono text-brand-300">
             {derived_route.map((hop, i) => (
               <React.Fragment key={i}>
                 <span className="bg-slate-950 border border-slate-800 px-2.5 py-1 rounded">
@@ -571,7 +588,7 @@ const TcpStudioView: React.FC<{
         </div>
 
         <div className="text-right">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+          <span className="text-[10px] font-bold tracking-wider text-slate-400 block mb-1">
             Handshake & Connection
           </span>
           <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-950/80 text-emerald-300 border border-emerald-800">
@@ -584,28 +601,28 @@ const TcpStudioView: React.FC<{
       {/* Jacobson / Karn RTT Panel */}
       <div className="grid grid-cols-4 gap-3" data-testid="rtt-telemetry-panel">
         <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
-          <span className="text-[10px] text-slate-400 uppercase font-semibold">Average RTT</span>
+          <span className="text-[10px] text-slate-400 font-semibold">Average RTT</span>
           <div className="text-lg font-bold text-slate-100 font-mono mt-0.5">
             {metrics.average_rtt_us.toLocaleString()} <span className="text-xs text-slate-400">µs</span>
           </div>
         </div>
 
         <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
-          <span className="text-[10px] text-slate-400 uppercase font-semibold">Smoothed RTT (SRTT)</span>
-          <div className="text-lg font-bold text-indigo-400 font-mono mt-0.5">
+          <span className="text-[10px] text-slate-400 font-semibold">Smoothed RTT (SRTT)</span>
+          <div className="text-lg font-bold text-brand-400 font-mono mt-0.5">
             {metrics.smoothed_rtt_us.toLocaleString()} <span className="text-xs text-slate-400">µs</span>
           </div>
         </div>
 
         <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
-          <span className="text-[10px] text-slate-400 uppercase font-semibold">Final RTO (Jacobson)</span>
+          <span className="text-[10px] text-slate-400 font-semibold">Final RTO (Jacobson)</span>
           <div className="text-lg font-bold text-amber-400 font-mono mt-0.5">
             {metrics.final_rto_us.toLocaleString()} <span className="text-xs text-slate-400">µs</span>
           </div>
         </div>
 
         <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
-          <span className="text-[10px] text-slate-400 uppercase font-semibold">Karn's Rule Status</span>
+          <span className="text-[10px] text-slate-400 font-semibold">Karn's Rule Status</span>
           <div className="text-xs text-emerald-400 font-medium mt-1.5 flex items-center space-x-1">
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>Retransmissions Excluded</span>
@@ -616,9 +633,9 @@ const TcpStudioView: React.FC<{
       {/* Discrete Event Timeline */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 space-y-3">
         <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
-          <h3 className="text-xs font-bold uppercase text-slate-300 tracking-wider flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-indigo-400" />
-            Authoritative Event Trace ({visibleEvents.length}/{result.events.length} Steps)
+          <h3 className="text-xs font-bold text-slate-300 tracking-wider flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-brand-400" />
+            Event trace ({visibleEvents.length}/{result.events.length} Steps)
           </h3>
           <span className="text-[10px] text-slate-400 font-mono">Virtual SimTime</span>
         </div>
@@ -635,7 +652,7 @@ const TcpStudioView: React.FC<{
                   {evt.timestamp_us.toLocaleString()} µs
                 </span>
                 <span
-                  className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
                     evt.event_type.includes('retransmission') || evt.event_type.includes('timeout')
                       ? 'bg-rose-950 text-rose-300 border border-rose-800'
                       : evt.event_type.includes('lost')
@@ -644,7 +661,7 @@ const TcpStudioView: React.FC<{
                       ? 'bg-cyan-950 text-cyan-300 border border-cyan-800'
                       : evt.event_type.includes('established') || evt.event_type.includes('syn')
                       ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                      : 'bg-indigo-950 text-indigo-300 border border-indigo-800'
+                      : 'bg-brand-950 text-brand-300 border border-brand-800'
                   }`}
                 >
                   {evt.event_type.replace(/_/g, ' ')}
@@ -653,7 +670,7 @@ const TcpStudioView: React.FC<{
               </div>
 
               <div className="flex items-center space-x-2 shrink-0 pl-2">
-                <span className="text-[10px] text-indigo-400">
+                <span className="text-[10px] text-brand-400">
                   cwnd: {evt.cwnd_mss.toFixed(1)} MSS
                 </span>
                 <span className="text-[10px] text-slate-400">
@@ -667,7 +684,7 @@ const TcpStudioView: React.FC<{
 
       {/* Measured Performance Metrics */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 space-y-3">
-        <h3 className="text-xs font-bold uppercase text-slate-300 tracking-wider">
+        <h3 className="text-xs font-bold text-slate-300 tracking-wider">
           Measured Performance Telemetry
         </h3>
 
@@ -681,7 +698,7 @@ const TcpStudioView: React.FC<{
 
           <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
             <span className="text-[10px] text-slate-400" title="All wire bits transmitted: payload + per-segment headers, including retransmissions">Throughput (Wire)</span>
-            <div className="text-sm font-bold text-indigo-400 font-mono mt-0.5">
+            <div className="text-sm font-bold text-brand-400 font-mono mt-0.5">
               {(metrics.throughput_bits_per_sec / 1_000_000).toFixed(2)} Mbps
             </div>
           </div>
@@ -722,7 +739,7 @@ const UdpStudioView: React.FC<{
         </p>
         <button
           onClick={onRun}
-          className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium rounded-lg"
+          className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium rounded-lg"
         >
           Run UDP Simulation
         </button>
@@ -755,28 +772,28 @@ const UdpStudioView: React.FC<{
       {/* Metrics Cards */}
       <div className="grid grid-cols-4 gap-3">
         <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
-          <span className="text-[10px] text-slate-400 uppercase font-semibold">Datagrams Delivered</span>
+          <span className="text-[10px] text-slate-400 font-semibold">Datagrams Delivered</span>
           <div className="text-lg font-bold text-emerald-400 font-mono mt-0.5">
             {metrics.segments_delivered} / {metrics.segments_sent}
           </div>
         </div>
 
         <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
-          <span className="text-[10px] text-slate-400 uppercase font-semibold">Throughput</span>
-          <div className="text-lg font-bold text-indigo-400 font-mono mt-0.5">
+          <span className="text-[10px] text-slate-400 font-semibold">Throughput</span>
+          <div className="text-lg font-bold text-brand-400 font-mono mt-0.5">
             {(metrics.throughput_bits_per_sec / 1_000_000).toFixed(2)} Mbps
           </div>
         </div>
 
         <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
-          <span className="text-[10px] text-slate-400 uppercase font-semibold">Goodput</span>
+          <span className="text-[10px] text-slate-400 font-semibold">Goodput</span>
           <div className="text-lg font-bold text-emerald-400 font-mono mt-0.5">
             {(metrics.goodput_bits_per_sec / 1_000_000).toFixed(2)} Mbps
           </div>
         </div>
 
         <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
-          <span className="text-[10px] text-slate-400 uppercase font-semibold">Completion Time</span>
+          <span className="text-[10px] text-slate-400 font-semibold">Completion Time</span>
           <div className="text-lg font-bold text-slate-200 font-mono mt-0.5">
             {metrics.completion_time_us.toLocaleString()} µs
           </div>
@@ -785,7 +802,7 @@ const UdpStudioView: React.FC<{
 
       {/* Datagram Delivery Timeline */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 space-y-3">
-        <h3 className="text-xs font-bold uppercase text-slate-300 tracking-wider">
+        <h3 className="text-xs font-bold text-slate-300 tracking-wider">
           UDP Datagram Trace
         </h3>
 
@@ -800,7 +817,7 @@ const UdpStudioView: React.FC<{
                   {evt.timestamp_us.toLocaleString()} µs
                 </span>
                 <span
-                  className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                     evt.event_type.includes('lost')
                       ? 'bg-rose-950 text-rose-300 border border-rose-800'
                       : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
@@ -835,7 +852,7 @@ const CongestionStudioView: React.FC<{
         </p>
         <button
           onClick={onRun}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg"
+          className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium rounded-lg"
         >
           Run Simulation
         </button>
@@ -852,13 +869,13 @@ const CongestionStudioView: React.FC<{
       {/* SVG Chart of cwnd vs Virtual SimTime */}
       <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold uppercase text-slate-300 tracking-wider flex items-center gap-1.5">
-            <Activity className="w-3.5 h-3.5 text-indigo-400" />
+          <h3 className="text-xs font-bold text-slate-300 tracking-wider flex items-center gap-1.5">
+            <Activity className="w-3.5 h-3.5 text-brand-400" />
             Congestion Window (cwnd) & ssthresh vs Virtual Time
           </h3>
           <div className="flex items-center space-x-3 text-xs">
-            <span className="flex items-center space-x-1 text-indigo-400">
-              <span className="w-3 h-0.5 bg-indigo-400 inline-block" />
+            <span className="flex items-center space-x-1 text-brand-400">
+              <span className="w-3 h-0.5 bg-brand-400 inline-block" />
               <span>cwnd</span>
             </span>
             <span className="flex items-center space-x-1 text-amber-400">
@@ -919,7 +936,7 @@ const CongestionStudioView: React.FC<{
                       ? 'fill-amber-400 stroke-slate-950'
                       : pt.phase === 'timeout_recovery'
                       ? 'fill-rose-400 stroke-slate-950'
-                      : 'fill-indigo-400 stroke-slate-950'
+                      : 'fill-brand-400 stroke-slate-950'
                   }
                   strokeWidth="1"
                 />
@@ -931,7 +948,7 @@ const CongestionStudioView: React.FC<{
 
       {/* Chronological Cwnd Transition Timeline */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 space-y-3">
-        <h3 className="text-xs font-bold uppercase text-slate-300 tracking-wider">
+        <h3 className="text-xs font-bold text-slate-300 tracking-wider">
           Congestion Phase Transitions
         </h3>
 
@@ -946,11 +963,11 @@ const CongestionStudioView: React.FC<{
                   {pt.timestamp_us.toLocaleString()} µs
                 </span>
                 <span
-                  className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded ${
                     pt.phase === 'slow_start'
                       ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                       : pt.phase === 'congestion_avoidance'
-                      ? 'bg-indigo-950 text-indigo-300 border border-indigo-800'
+                      ? 'bg-brand-950 text-brand-300 border border-brand-800'
                       : pt.phase === 'fast_recovery'
                       ? 'bg-amber-950 text-amber-300 border border-amber-800'
                       : 'bg-rose-950 text-rose-300 border border-rose-800'
@@ -962,7 +979,7 @@ const CongestionStudioView: React.FC<{
               </div>
 
               <div className="flex items-center space-x-3 shrink-0">
-                <span className="text-indigo-400 font-bold">cwnd: {pt.cwnd_mss.toFixed(2)} MSS</span>
+                <span className="text-brand-400 font-bold">cwnd: {pt.cwnd_mss.toFixed(2)} MSS</span>
                 <span className="text-amber-400 font-bold">ssthresh: {pt.ssthresh_mss.toFixed(1)} MSS</span>
               </div>
             </div>
@@ -987,11 +1004,11 @@ const ComparisonStudioView: React.FC<{
         <BarChart3 className="w-12 h-12 text-slate-700 mb-3" />
         <h3 className="text-sm font-semibold text-slate-300">Measured Comparison</h3>
         <p className="text-xs text-slate-400 max-w-sm mt-1 mb-4">
-          Runs both TCP and UDP across the authoritative topology to measure real throughput, goodput, and overhead.
+          Runs both TCP and UDP across the simulated topology to measure real throughput, goodput, and overhead.
         </p>
         <button
           onClick={onRunBoth}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg"
+          className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium rounded-lg"
         >
           Execute Dual Benchmark
         </button>
@@ -1007,8 +1024,8 @@ const ComparisonStudioView: React.FC<{
       {/* Side-by-Side Comparison Table */}
       <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-4">
         <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-          <h3 className="text-xs font-bold uppercase text-slate-300 tracking-wider">
-            Authoritative Measured Metrics
+          <h3 className="text-xs font-bold text-slate-300 tracking-wider">
+            Measured metrics
           </h3>
           <span className="text-[10px] text-slate-400 font-mono">Real Measured Values Only</span>
         </div>
@@ -1018,7 +1035,7 @@ const ComparisonStudioView: React.FC<{
             <thead>
               <tr className="border-b border-slate-800 text-slate-400 text-[11px]">
                 <th className="pb-2 font-medium">Metric</th>
-                <th className="pb-2 font-medium text-indigo-400">TCP (Reliable)</th>
+                <th className="pb-2 font-medium text-brand-400">TCP (Reliable)</th>
                 <th className="pb-2 font-medium text-emerald-400">UDP (Datagram)</th>
                 <th className="pb-2 font-medium text-slate-500">Trade-Off Analysis</th>
               </tr>
@@ -1026,7 +1043,7 @@ const ComparisonStudioView: React.FC<{
             <tbody className="divide-y divide-slate-800/60">
               <tr>
                 <td className="py-2.5 text-slate-300 font-sans">Delivered Bytes</td>
-                <td className="py-2.5 text-indigo-300">{tcp.bytes_delivered.toLocaleString()} B</td>
+                <td className="py-2.5 text-brand-300">{tcp.bytes_delivered.toLocaleString()} B</td>
                 <td className="py-2.5 text-emerald-300">{udp.bytes_delivered.toLocaleString()} B</td>
                 <td className="py-2.5 text-slate-400 font-sans text-[11px]">
                   {tcp.bytes_delivered >= udp.bytes_delivered
@@ -1036,7 +1053,7 @@ const ComparisonStudioView: React.FC<{
               </tr>
               <tr>
                 <td className="py-2.5 text-slate-300 font-sans">Raw Throughput</td>
-                <td className="py-2.5 text-indigo-300">
+                <td className="py-2.5 text-brand-300">
                   {(tcp.throughput_bits_per_sec / 1_000_000).toFixed(2)} Mbps
                 </td>
                 <td className="py-2.5 text-emerald-300">
@@ -1048,7 +1065,7 @@ const ComparisonStudioView: React.FC<{
               </tr>
               <tr>
                 <td className="py-2.5 text-slate-300 font-sans">Effective Goodput</td>
-                <td className="py-2.5 text-indigo-300">
+                <td className="py-2.5 text-brand-300">
                   {(tcp.goodput_bits_per_sec / 1_000_000).toFixed(2)} Mbps
                 </td>
                 <td className="py-2.5 text-emerald-300">
@@ -1060,7 +1077,7 @@ const ComparisonStudioView: React.FC<{
               </tr>
               <tr>
                 <td className="py-2.5 text-slate-300 font-sans">Packet Loss Rate</td>
-                <td className="py-2.5 text-indigo-300">{(tcp.packet_loss_rate * 100).toFixed(1)}%</td>
+                <td className="py-2.5 text-brand-300">{(tcp.packet_loss_rate * 100).toFixed(1)}%</td>
                 <td className="py-2.5 text-emerald-300">{(udp.packet_loss_rate * 100).toFixed(1)}%</td>
                 <td className="py-2.5 text-slate-400 font-sans text-[11px]">
                   TCP detects losses and retransmits; UDP accepts drop-tail losses
@@ -1068,7 +1085,7 @@ const ComparisonStudioView: React.FC<{
               </tr>
               <tr>
                 <td className="py-2.5 text-slate-300 font-sans">Retransmissions</td>
-                <td className="py-2.5 text-indigo-300">{tcp.retransmissions}</td>
+                <td className="py-2.5 text-brand-300">{tcp.retransmissions}</td>
                 <td className="py-2.5 text-emerald-300">0 (N/A)</td>
                 <td className="py-2.5 text-slate-400 font-sans text-[11px]">
                   UDP lacks sequence numbers and ACK mechanisms
@@ -1076,7 +1093,7 @@ const ComparisonStudioView: React.FC<{
               </tr>
               <tr>
                 <td className="py-2.5 text-slate-300 font-sans">Completion Time</td>
-                <td className="py-2.5 text-indigo-300">{tcp.completion_time_us.toLocaleString()} µs</td>
+                <td className="py-2.5 text-brand-300">{tcp.completion_time_us.toLocaleString()} µs</td>
                 <td className="py-2.5 text-emerald-300">{udp.completion_time_us.toLocaleString()} µs</td>
                 <td className="py-2.5 text-slate-400 font-sans text-[11px]">
                   TCP overhead includes 3-way handshake and 4-way teardown

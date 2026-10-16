@@ -179,12 +179,28 @@ class RoutingGraph:
                 res.append(hop)
         return res
 
-    def find_path(self, source_node_id: str, target_node_id: str) -> tuple[list[str], list[GraphEdge]] | None:
+    def find_path(
+        self,
+        source_node_id: str,
+        target_node_id: str,
+        algorithm: RoutingAlgorithm = RoutingAlgorithm.DIJKSTRA,
+    ) -> tuple[list[str], list[GraphEdge]] | None:
+        """Deterministic shortest path under ``self.metric_type``.
+
+        ``algorithm`` selects the computation (``dijkstra`` or ``bellman_ford``); both
+        minimise the metric and apply the *same* documented tie-break — among equal-cost
+        candidates the smallest immediate predecessor node id wins — so the live packet
+        path, the routing tables and the two algorithms always agree.
+        """
         if source_node_id not in self.nodes or target_node_id not in self.nodes:
             return None
         if source_node_id == target_node_id:
             return ([source_node_id], [])
+        if algorithm == RoutingAlgorithm.BELLMAN_FORD:
+            return self._find_path_bellman_ford(source_node_id, target_node_id)
+        return self._find_path_dijkstra(source_node_id, target_node_id)
 
+    def _find_path_dijkstra(self, source_node_id: str, target_node_id: str) -> tuple[list[str], list[GraphEdge]] | None:
         dist: dict[str, float] = {n: float("inf") for n in self.nodes}
         dist[source_node_id] = 0
         prev: dict[str, tuple[str, GraphEdge]] = {}
@@ -219,6 +235,66 @@ class RoutingGraph:
                     prev[edge.target] = (node_id, edge)
                     heapq.heappush(heap, (next_cost, edge.target))
 
+        return self._reconstruct_path(source_node_id, target_node_id, prev)
+
+    def _find_path_bellman_ford(
+        self, source_node_id: str, target_node_id: str
+    ) -> tuple[list[str], list[GraphEdge]] | None:
+        """|V|-1 relaxation rounds, then the same deterministic reconstruction."""
+        dist: dict[str, float] = {n: float("inf") for n in self.nodes}
+        dist[source_node_id] = 0
+
+        for _ in range(max(0, len(self.nodes) - 1)):
+            changed = False
+            for node_id in sorted(self.nodes.keys()):
+                cost = dist[node_id]
+                if cost == float("inf"):
+                    continue
+                if node_id != source_node_id and not self.can_forward_traffic(node_id):
+                    continue
+                for edge in self.adjacency.get(node_id, []):
+                    next_cost = cost + edge.metric
+                    if next_cost < dist[edge.target]:
+                        dist[edge.target] = next_cost
+                        changed = True
+            if not changed:
+                break
+
+        if dist[target_node_id] == float("inf"):
+            return None
+
+        # Reconstruction mirrors the Dijkstra tie-break exactly: among predecessors whose
+        # edge attains the minimal cost, the smallest node id wins (edges have positive
+        # metrics, so every predecessor sits strictly closer to the source).
+        prev: dict[str, tuple[str, GraphEdge]] = {}
+        for node_id in sorted(self.nodes.keys()):
+            if node_id == source_node_id:
+                continue
+            best: tuple[str, GraphEdge] | None = None
+            for candidate in sorted(self.nodes.keys()):
+                if candidate == node_id:
+                    continue
+                if candidate != source_node_id and not self.can_forward_traffic(candidate):
+                    continue
+                if dist[candidate] == float("inf"):
+                    continue
+                for edge in self.adjacency.get(candidate, []):
+                    if edge.target != node_id:
+                        continue
+                    if dist[candidate] + edge.metric == dist[node_id]:
+                        if best is None or candidate < best[0]:
+                            best = (candidate, edge)
+            if best is not None:
+                prev[node_id] = best
+
+        return self._reconstruct_path(source_node_id, target_node_id, prev)
+
+    def _reconstruct_path(
+        self,
+        source_node_id: str,
+        target_node_id: str,
+        prev: dict[str, tuple[str, GraphEdge]],
+    ) -> tuple[list[str], list[GraphEdge]] | None:
         if target_node_id not in prev:
             return None
 

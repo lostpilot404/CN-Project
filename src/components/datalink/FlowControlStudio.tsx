@@ -207,7 +207,7 @@ export const FlowControlStudio: React.FC = () => {
               }}
               className={`px-4 py-2 rounded-lg text-xs font-semibold transition flex items-center space-x-2 ${
                 subMode === m.id
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                  ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
               }`}
             >
@@ -219,7 +219,7 @@ export const FlowControlStudio: React.FC = () => {
         <button
           onClick={runSimulation}
           disabled={loading || !!validationError}
-          className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2"
+          className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-700 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-brand-600/20 transition flex items-center space-x-2"
         >
           <Play className="w-4 h-4 fill-white" />
           <span>{loading ? 'Simulating...' : 'Run Simulation'}</span>
@@ -231,7 +231,7 @@ export const FlowControlStudio: React.FC = () => {
         <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-800/60 text-amber-200 flex items-center space-x-3 text-xs">
           <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0" />
           <div>
-            <span className="font-semibold block uppercase tracking-wider">Sequence Space Invariant Violation</span>
+            <span className="font-semibold block tracking-wider">Sequence Space Invariant Violation</span>
             <p className="mt-0.5">{validationError}</p>
           </div>
         </div>
@@ -241,7 +241,7 @@ export const FlowControlStudio: React.FC = () => {
         <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-800/60 text-rose-200 flex items-center space-x-3 text-xs">
           <AlertTriangle className="w-5 h-5 text-rose-400 flex-shrink-0" />
           <div>
-            <span className="font-semibold block uppercase tracking-wider">Simulation Error</span>
+            <span className="font-semibold block tracking-wider">Simulation Error</span>
             <p className="mt-0.5 font-mono">{errorMsg}</p>
           </div>
         </div>
@@ -249,8 +249,8 @@ export const FlowControlStudio: React.FC = () => {
 
       {/* Parameter Control Deck */}
       <div className="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-5">
-        <div className="flex items-center space-x-2 mb-4 text-xs font-semibold text-slate-300 uppercase tracking-wider">
-          <Sliders className="w-4 h-4 text-indigo-400" />
+        <div className="flex items-center space-x-2 mb-4 text-xs font-semibold text-slate-300 tracking-wider">
+          <Sliders className="w-4 h-4 text-brand-400" />
           <span>Protocol Configuration & Virtual Timing</span>
         </div>
 
@@ -365,8 +365,8 @@ export const FlowControlStudio: React.FC = () => {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs text-slate-400">RNG Seed (Authoritative Determinism)</label>
-            <input aria-label="RNG Seed (Authoritative Determinism)"
+            <label className="text-xs text-slate-400">RNG seed</label>
+            <input aria-label="RNG seed"
               type="number"
               value={seed}
               onChange={(e) => setSeed(parseInt(e.target.value) || 0)}
@@ -381,21 +381,21 @@ export const FlowControlStudio: React.FC = () => {
         <div className="space-y-6">
           <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-6">
             <div className="flex items-center space-x-2 mb-4">
-              <TrendingUp className="w-5 h-5 text-indigo-400" />
-              <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">
+              <TrendingUp className="w-5 h-5 text-brand-400" />
+              <h3 className="text-sm font-semibold text-slate-200 tracking-wider">
                 Measured Protocol Metrics: Go-Back-N vs Selective Repeat
               </h3>
             </div>
             <p className="text-xs text-slate-400 mb-6">
-              Both protocols simulated under identical conditions: {totalFrames} frames, window size {windowSize}, sequence space {sequenceSpace}, dropped frames [{droppedFrames.join(', ')}], and seed {seed}. All values are measured by the authoritative Python discrete-event state machines. No winner or ranking is hardcoded.
+              Both protocols simulated under identical conditions: {totalFrames} frames, window size {windowSize}, sequence space {sequenceSpace}, dropped frames [{droppedFrames.join(', ')}], and seed {seed}. All values are measured by the Python discrete-event state machines. No winner or ranking is hardcoded.
             </p>
 
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
-                <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 uppercase text-[10px] tracking-wider">
+                <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 text-[10px] tracking-wider">
                   <tr>
                     <th className="py-3 px-4">Metric</th>
-                    <th className="py-3 px-4 text-indigo-300 font-bold">Go-Back-N (GBN)</th>
+                    <th className="py-3 px-4 text-brand-300 font-bold">Go-Back-N (GBN)</th>
                     <th className="py-3 px-4 text-emerald-300 font-bold">Selective Repeat (SR)</th>
                     <th className="py-3 px-4 text-slate-400">Measured Delta</th>
                   </tr>
@@ -403,7 +403,7 @@ export const FlowControlStudio: React.FC = () => {
                 <tbody className="divide-y divide-slate-800/60 font-mono">
                   <tr>
                     <td className="py-2.5 px-4 font-sans text-slate-300">Total Frames Sent (including re-tx)</td>
-                    <td className="py-2.5 px-4 text-indigo-200">{comparisonGbnResult.metrics.total_frames_sent}</td>
+                    <td className="py-2.5 px-4 text-brand-200">{comparisonGbnResult.metrics.total_frames_sent}</td>
                     <td className="py-2.5 px-4 text-emerald-200">{comparisonSrResult.metrics.total_frames_sent}</td>
                     <td className="py-2.5 px-4 text-slate-400">
                       {comparisonSrResult.metrics.total_frames_sent - comparisonGbnResult.metrics.total_frames_sent > 0
@@ -413,7 +413,7 @@ export const FlowControlStudio: React.FC = () => {
                   </tr>
                   <tr>
                     <td className="py-2.5 px-4 font-sans text-slate-300">Retransmissions</td>
-                    <td className="py-2.5 px-4 text-indigo-200">{comparisonGbnResult.metrics.retransmissions}</td>
+                    <td className="py-2.5 px-4 text-brand-200">{comparisonGbnResult.metrics.retransmissions}</td>
                     <td className="py-2.5 px-4 text-emerald-200">{comparisonSrResult.metrics.retransmissions}</td>
                     <td className="py-2.5 px-4 text-slate-400">
                       {comparisonSrResult.metrics.retransmissions - comparisonGbnResult.metrics.retransmissions}
@@ -421,7 +421,7 @@ export const FlowControlStudio: React.FC = () => {
                   </tr>
                   <tr>
                     <td className="py-2.5 px-4 font-sans text-slate-300">ACK Count</td>
-                    <td className="py-2.5 px-4 text-indigo-200">{comparisonGbnResult.metrics.ack_count}</td>
+                    <td className="py-2.5 px-4 text-brand-200">{comparisonGbnResult.metrics.ack_count}</td>
                     <td className="py-2.5 px-4 text-emerald-200">{comparisonSrResult.metrics.ack_count}</td>
                     <td className="py-2.5 px-4 text-slate-400">
                       {comparisonSrResult.metrics.ack_count - comparisonGbnResult.metrics.ack_count}
@@ -429,7 +429,7 @@ export const FlowControlStudio: React.FC = () => {
                   </tr>
                   <tr>
                     <td className="py-2.5 px-4 font-sans text-slate-300">Total Completion Time (µs)</td>
-                    <td className="py-2.5 px-4 text-indigo-200">{comparisonGbnResult.metrics.completion_time_us}</td>
+                    <td className="py-2.5 px-4 text-brand-200">{comparisonGbnResult.metrics.completion_time_us}</td>
                     <td className="py-2.5 px-4 text-emerald-200">{comparisonSrResult.metrics.completion_time_us}</td>
                     <td className="py-2.5 px-4 text-slate-400">
                       {comparisonSrResult.metrics.completion_time_us - comparisonGbnResult.metrics.completion_time_us} µs
@@ -437,7 +437,7 @@ export const FlowControlStudio: React.FC = () => {
                   </tr>
                   <tr>
                     <td className="py-2.5 px-4 font-sans text-slate-300">Channel Utilization</td>
-                    <td className="py-2.5 px-4 text-indigo-200">{(comparisonGbnResult.metrics.utilization * 100).toFixed(2)}%</td>
+                    <td className="py-2.5 px-4 text-brand-200">{(comparisonGbnResult.metrics.utilization * 100).toFixed(2)}%</td>
                     <td className="py-2.5 px-4 text-emerald-200">{(comparisonSrResult.metrics.utilization * 100).toFixed(2)}%</td>
                     <td className="py-2.5 px-4 text-slate-400">
                       {((comparisonSrResult.metrics.utilization - comparisonGbnResult.metrics.utilization) * 100).toFixed(2)}%
@@ -445,7 +445,7 @@ export const FlowControlStudio: React.FC = () => {
                   </tr>
                   <tr>
                     <td className="py-2.5 px-4 font-sans text-slate-300">Protocol Overhead</td>
-                    <td className="py-2.5 px-4 text-indigo-200">{(comparisonGbnResult.metrics.protocol_overhead * 100).toFixed(2)}%</td>
+                    <td className="py-2.5 px-4 text-brand-200">{(comparisonGbnResult.metrics.protocol_overhead * 100).toFixed(2)}%</td>
                     <td className="py-2.5 px-4 text-emerald-200">{(comparisonSrResult.metrics.protocol_overhead * 100).toFixed(2)}%</td>
                     <td className="py-2.5 px-4 text-slate-400">
                       {((comparisonSrResult.metrics.protocol_overhead - comparisonGbnResult.metrics.protocol_overhead) * 100).toFixed(2)}%
@@ -453,7 +453,7 @@ export const FlowControlStudio: React.FC = () => {
                   </tr>
                   <tr>
                     <td className="py-2.5 px-4 font-sans text-slate-300">Max Receiver Buffer Occupancy</td>
-                    <td className="py-2.5 px-4 text-indigo-200">{comparisonGbnResult.metrics.receiver_buffer_occupancy_max} frames (rejects out-of-order)</td>
+                    <td className="py-2.5 px-4 text-brand-200">{comparisonGbnResult.metrics.receiver_buffer_occupancy_max} frames (rejects out-of-order)</td>
                     <td className="py-2.5 px-4 text-emerald-200">{comparisonSrResult.metrics.receiver_buffer_occupancy_max} frames (buffers out-of-order)</td>
                     <td className="py-2.5 px-4 text-slate-400">
                       +{comparisonSrResult.metrics.receiver_buffer_occupancy_max - comparisonGbnResult.metrics.receiver_buffer_occupancy_max} frames
@@ -487,7 +487,7 @@ export const FlowControlStudio: React.FC = () => {
               <button
                 onClick={() => setIsPlaying(!isPlaying)}
                 className={`px-4 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 ${
-                  isPlaying ? 'bg-amber-700 text-white' : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                  isPlaying ? 'bg-amber-700 text-white' : 'bg-brand-600 hover:bg-brand-700 text-white'
                 }`}
               >
                 <span>{isPlaying ? 'Pause' : 'Auto Play'}</span>
@@ -531,22 +531,22 @@ export const FlowControlStudio: React.FC = () => {
                 max={Math.max(0, simResult.events.length - 1)}
                 value={currentStep}
                 onChange={(e) => setCurrentStep(parseInt(e.target.value))}
-                className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                className="w-full accent-brand-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
               />
             </div>
 
-            <div className="font-mono text-xs text-indigo-300 bg-indigo-950/60 border border-indigo-800/60 px-3 py-1.5 rounded-xl">
+            <div className="font-mono text-xs text-brand-300 bg-brand-950/60 border border-brand-800/60 px-3 py-1.5 rounded-xl">
               Sim Time: {activeEvent?.timestamp_us.toLocaleString()} µs
             </div>
           </div>
 
           {/* Active Step Description */}
           {activeEvent && (
-            <div className="p-4 rounded-xl bg-slate-900 border border-indigo-800/40 text-slate-200 flex items-start space-x-3 text-xs">
-              <Radio className="w-4 h-4 text-indigo-400 flex-shrink-0 mt-0.5" />
+            <div className="p-4 rounded-xl bg-slate-900 border border-brand-800/40 text-slate-200 flex items-start space-x-3 text-xs">
+              <Radio className="w-4 h-4 text-brand-400 flex-shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <div className="flex items-center space-x-2">
-                  <span className="px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 font-mono text-[10px] uppercase font-semibold border border-indigo-800/60">
+                  <span className="px-2 py-0.5 rounded bg-brand-950 text-brand-300 font-mono text-[10px] font-semibold border border-brand-800/60">
                     {activeEvent.event_type.replace('_', ' ')}
                   </span>
                   <span className="text-slate-400 font-mono">
@@ -564,13 +564,13 @@ export const FlowControlStudio: React.FC = () => {
             <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <Layers className="w-4 h-4 text-indigo-400" />
-                  <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+                  <Layers className="w-4 h-4 text-brand-400" />
+                  <span className="text-xs font-semibold text-slate-200 tracking-wider">
                     Sender Window (Size: {windowSize})
                   </span>
                 </div>
                 {activeEvent && (
-                  <span className="text-xs font-mono text-indigo-300">
+                  <span className="text-xs font-mono text-brand-300">
                     Base: {activeEvent.sender_window.send_base} | NextSeq: {activeEvent.sender_window.next_seq_num}
                   </span>
                 )}
@@ -578,7 +578,7 @@ export const FlowControlStudio: React.FC = () => {
 
               {/* Circular Sequence Space Track */}
               <div className="space-y-2">
-                <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
+                <span className="text-[10px] text-slate-400 tracking-wider block">
                   Sequence Number Space [0 .. {sequenceSpace - 1}]
                 </span>
                 <div className="grid grid-cols-8 gap-2">
@@ -592,12 +592,12 @@ export const FlowControlStudio: React.FC = () => {
                         key={seq}
                         className={`p-2.5 rounded-xl text-center border font-mono text-xs transition ${
                           isInWindow
-                            ? 'bg-indigo-950/80 border-indigo-500 text-indigo-200 shadow-md shadow-indigo-900/30'
+                            ? 'bg-brand-950/80 border-brand-500 text-brand-200 shadow-md shadow-brand-900/30'
                             : 'bg-slate-950/60 border-slate-800 text-slate-500'
                         }`}
                       >
                         <div className="font-bold text-sm">{seq}</div>
-                        <div className="text-[9px] uppercase tracking-tighter mt-1">
+                        <div className="text-[9px] tracking-tighter mt-1">
                           {isBase ? 'BASE' : isNext ? 'NEXT' : isInWindow ? 'WIN' : '—'}
                         </div>
                       </div>
@@ -612,7 +612,7 @@ export const FlowControlStudio: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <FileCheck className="w-4 h-4 text-emerald-400" />
-                  <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+                  <span className="text-xs font-semibold text-slate-200 tracking-wider">
                     Receiver State (Delivered: {activeEvent?.receiver_window.delivered_count || 0})
                   </span>
                 </div>
@@ -625,7 +625,7 @@ export const FlowControlStudio: React.FC = () => {
 
               {/* Receiver Slots */}
               <div className="space-y-2">
-                <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
+                <span className="text-[10px] text-slate-400 tracking-wider block">
                   Receiver Sequence Window & Buffering
                 </span>
                 <div className="grid grid-cols-8 gap-2">
@@ -648,7 +648,7 @@ export const FlowControlStudio: React.FC = () => {
                         }`}
                       >
                         <div className="font-bold text-sm">{seq}</div>
-                        <div className="text-[9px] uppercase tracking-tighter mt-1">
+                        <div className="text-[9px] tracking-tighter mt-1">
                           {isBuffered ? 'BUFFER' : isRcvBase ? 'EXPECT' : isInRcvWin ? 'WIN' : '—'}
                         </div>
                       </div>
@@ -661,7 +661,7 @@ export const FlowControlStudio: React.FC = () => {
 
           {/* Frame List State */}
           <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5">
-            <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-4 block">
+            <span className="text-xs font-semibold text-slate-300 tracking-wider mb-4 block">
               Individual Frame Progress & Status
             </span>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
@@ -684,7 +684,7 @@ export const FlowControlStudio: React.FC = () => {
                       <span className="font-bold text-slate-200">F[{fr.frame_index}]</span>
                       <span className="text-[10px] text-slate-400">Seq {fr.seq_num}</span>
                     </div>
-                    <div className="text-[10px] uppercase font-semibold">
+                    <div className="text-[10px] font-semibold">
                       {isDelivered ? 'DELIVERED' : isDropped ? 'DROPPED/RE-TX' : fr.status}
                     </div>
                     <div className="text-[9px] text-slate-500">
@@ -699,15 +699,15 @@ export const FlowControlStudio: React.FC = () => {
           {/* Measured Metrics Card Deck */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
             <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 space-y-1">
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider">Frames Sent</span>
-              <div className="text-lg font-bold font-mono text-indigo-300">
+              <span className="text-[10px] text-slate-400 tracking-wider">Frames Sent</span>
+              <div className="text-lg font-bold font-mono text-brand-300">
                 {simResult.metrics.total_frames_sent}
               </div>
               <span className="text-[10px] text-slate-500">Original: {simResult.metrics.original_frames}</span>
             </div>
 
             <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 space-y-1">
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider">Retransmissions</span>
+              <span className="text-[10px] text-slate-400 tracking-wider">Retransmissions</span>
               <div className="text-lg font-bold font-mono text-amber-300">
                 {simResult.metrics.retransmissions}
               </div>
@@ -715,7 +715,7 @@ export const FlowControlStudio: React.FC = () => {
             </div>
 
             <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 space-y-1">
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider">ACK Count</span>
+              <span className="text-[10px] text-slate-400 tracking-wider">ACK Count</span>
               <div className="text-lg font-bold font-mono text-emerald-300">
                 {simResult.metrics.ack_count}
               </div>
@@ -723,7 +723,7 @@ export const FlowControlStudio: React.FC = () => {
             </div>
 
             <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 space-y-1">
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider">Completion Time</span>
+              <span className="text-[10px] text-slate-400 tracking-wider">Completion Time</span>
               <div className="text-lg font-bold font-mono text-slate-200">
                 {simResult.metrics.completion_time_us.toLocaleString()} µs
               </div>
@@ -731,7 +731,7 @@ export const FlowControlStudio: React.FC = () => {
             </div>
 
             <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 space-y-1">
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider">Utilization</span>
+              <span className="text-[10px] text-slate-400 tracking-wider">Utilization</span>
               <div className="text-lg font-bold font-mono text-sky-300">
                 {(simResult.metrics.utilization * 100).toFixed(2)}%
               </div>
@@ -739,7 +739,7 @@ export const FlowControlStudio: React.FC = () => {
             </div>
 
             <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3.5 space-y-1">
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider">Overhead</span>
+              <span className="text-[10px] text-slate-400 tracking-wider">Overhead</span>
               <div className="text-lg font-bold font-mono text-slate-300">
                 {(simResult.metrics.protocol_overhead * 100).toFixed(2)}%
               </div>

@@ -710,4 +710,55 @@ test.describe('NetSim full-stack end-to-end', () => {
       }
     }
   });
+
+  test('22. Topology editor: create a connection through the keyboard workflow', async ({ page }) => {
+    await resetProject(page, 'connect-keyboard');
+    const before = await command<{ links: unknown[] }>(page, 'get_project');
+    expect(before.links).toHaveLength(2);
+
+    // The 'c' shortcut opens the dialog without touching the pointer.
+    await page.keyboard.press('c');
+    const dialog = page.getByTestId('connect-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveAttribute('role', 'dialog');
+    // Focus lands on the first field, so the workflow is operable from the keyboard alone.
+    await expect(page.getByLabel('Source node')).toBeFocused();
+
+    // Defaults: source = first node, target = last node — node-1 -> node-3 is a new link.
+    await page.getByTestId('connect-dialog-confirm').click();
+    await expect(dialog).toBeHidden();
+
+    const after = await command<{ links: { source: { node_id: string }; target: { node_id: string } }[] }>(
+      page,
+      'get_project'
+    );
+    expect(after.links).toHaveLength(3);
+    const added = after.links.find(
+      (l) =>
+        (l.source.node_id === 'node-1' && l.target.node_id === 'node-3') ||
+        (l.source.node_id === 'node-3' && l.target.node_id === 'node-1')
+    );
+    expect(added, 'the keyboard workflow must create the node-1 <-> node-3 link').toBeTruthy();
+  });
+
+  test('23. Topology editor: the connection dialog validates choices and cancels cleanly', async ({ page }) => {
+    await resetProject(page, 'connect-validation');
+
+    // Open via the toolbar button this time (pointer and keyboard entry points both work).
+    await page.getByTestId('connect-nodes').click();
+    const dialog = page.getByTestId('connect-dialog');
+    await expect(dialog).toBeVisible();
+
+    // Connecting a node to itself is rejected before any backend call.
+    await page.getByLabel('Target node').selectOption('node-1');
+    await page.getByTestId('connect-dialog-confirm').click();
+    await expect(page.getByRole('alert')).toContainText('cannot connect to itself');
+    await expect(dialog).toBeVisible();
+
+    // Escape closes the dialog and changes nothing.
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    const project = await command<{ links: unknown[] }>(page, 'get_project');
+    expect(project.links).toHaveLength(2);
+  });
 });

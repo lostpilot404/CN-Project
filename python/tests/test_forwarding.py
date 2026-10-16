@@ -24,7 +24,7 @@ from netsim.models.link import Link, LinkEndpoint, LinkStatus
 from netsim.models.node import Node, NodeType
 from netsim.models.packet import PacketState
 from netsim.models.project import Project
-from netsim.routing.graph import MetricType
+from netsim.routing.graph import MetricType, RoutingAlgorithm, RoutingGraph
 
 # ---------------------------------------------------------------------------
 # Engine-level helpers (deterministic, no HTTP)
@@ -517,3 +517,85 @@ def test_identical_seeded_runs_are_deterministic_through_the_api(api):
     first = run_once()
     second = run_once()
     assert first == second
+
+
+# ---------------------------------------------------------------------------
+# 9. Bellman-Ford as a supported live-forwarding algorithm
+# ---------------------------------------------------------------------------
+
+
+def _all_pairs_paths(project: Project, algorithm) -> dict[tuple[str, str], tuple | None]:
+    graph = RoutingGraph.from_topology(project.nodes, project.links, MetricType.HOP_COUNT)
+    result = {}
+    for src in [n.id for n in project.nodes]:
+        for dst in [n.id for n in project.nodes]:
+            result[(src, dst)] = graph.find_path(src, dst, algorithm=algorithm)
+    return result
+
+
+@pytest.mark.parametrize("metric", [MetricType.HOP_COUNT, MetricType.PROPAGATION_DELAY, MetricType.INVERSE_BANDWIDTH])
+def test_bellman_ford_and_dijkstra_agree_on_every_pair(metric):
+    """Both algorithms minimise the metric with the same deterministic tie-break.
+
+    On every topology pair and metric, the live path (nodes AND chosen edges) must be
+    identical, so switching the forwarding policy can never change which path a packet
+    takes — only the computation that finds it.
+    """
+    for project in (make_linear_project(), make_diamond_project(), make_reroute_project()):
+        graph = RoutingGraph.from_topology(project.nodes, project.links, metric)
+        for src in [n.id for n in project.nodes]:
+            for dst in [n.id for n in project.nodes]:
+                dij = graph.find_path(src, dst, algorithm=RoutingAlgorithm.DIJKSTRA)
+                bmf = graph.find_path(src, dst, algorithm=RoutingAlgorithm.BELLMAN_FORD)
+                if dij is None:
+                    assert bmf is None, f"{src}->{dst} unreachable for Dijkstra but not Bellman-Ford"
+                    continue
+                assert bmf is not None, f"{src}->{dst} reachable for Dijkstra but not Bellman-Ford"
+                assert dij[0] == bmf[0], f"node path differs on {src}->{dst}: {dij[0]} vs {bmf[0]}"
+                assert [e.link_id for e in dij[1]] == [e.link_id for e in bmf[1]]
+
+
+def test_bellman_ford_tie_break_matches_dijkstra_on_equal_cost_paths():
+    """Equal-cost diamond: both algorithms must pick the same arm (smallest predecessor id)."""
+    project = make_diamond_project(fast_via_top=False)  # both arms cost 2 hops, equal delay
+    graph = RoutingGraph.from_topology(project.nodes, project.links, MetricType.HOP_COUNT)
+    dij = graph.find_path("node-a", "node-b", algorithm=RoutingAlgorithm.DIJKSTRA)
+    bmf = graph.find_path("node-a", "node-b", algorithm=RoutingAlgorithm.BELLMAN_FORD)
+    assert dij is not None and bmf is not None
+    assert dij[0] == bmf[0]
+    # Deterministic documented tie-break: smallest predecessor node id ('rt-t' < 'rt-u').
+    assert dij[0] == ["node-a", "rt-t", "node-b"]
+
+
+def test_forwarding_policy_accepts_bellman_ford_and_reports_it(api):
+    policy = api.result("set_forwarding_policy", {"algorithm": "bellman_ford", "metricType": "hop_count"})
+    assert policy == {
+        "algorithm": "bellman_ford",
+        "metric_type": "hop_count",
+        "default_ttl": DEFAULT_PACKET_TTL,
+    }
+    state = api.result("get_simulation_state")
+    assert state["forwarding_policy"]["algorithm"] == "bellman_ford"
+    # Hyphenated spelling is normalised like the engine does.
+    policy2 = api.result("set_forwarding_policy", {"algorithm": "Bellman-Ford", "metricType": "hop_count"})
+    assert policy2["algorithm"] == "bellman_ford"
+    api.result("set_forwarding_policy", {"algorithm": "dijkstra", "metricType": "hop_count"})
+
+
+def test_live_delivery_is_identical_under_both_forwarding_algorithms(api):
+    """The same packet is delivered by the same path whichever algorithm governs forwarding."""
+    outcomes = {}
+    for algorithm in ("dijkstra", "bellman_ford"):
+        api.result("create_project", {"name": f"algo-{algorithm}"})
+        api.result("set_forwarding_policy", {"algorithm": algorithm, "metricType": "hop_count"})
+        api.result("inject_packet", {"srcNodeId": "node-1", "dstNodeId": "node-3", "sizeBytes": 512})
+        api.result("run_simulation_until_empty")
+        state = api.result("get_simulation_state")
+        metrics = state["metrics"]
+        outcomes[algorithm] = {
+            "delivered": metrics["packets_delivered"],
+            "drops": sum(metrics[k] for k in metrics if k.startswith("packets_dropped")),
+        }
+        api.result("set_forwarding_policy", {"algorithm": "dijkstra", "metricType": "hop_count"})
+    assert outcomes["dijkstra"]["delivered"] == 1
+    assert outcomes["bellman_ford"] == outcomes["dijkstra"]

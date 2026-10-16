@@ -227,13 +227,10 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
       <div className="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur px-6 py-4 flex items-center justify-between">
         <div>
           <div className="flex items-center space-x-2.5">
-            <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <div className="p-1.5 rounded-lg bg-brand-500/10 text-brand-400 border border-brand-500/20">
               <FlaskConical className="w-5 h-5" />
             </div>
-            <h2 className="text-lg font-bold text-slate-100 tracking-tight">Experimentation & Sweeps Lab</h2>
-            <span className="text-xs px-2.5 py-0.5 rounded-full font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              Deterministic Monte Carlo
-            </span>
+            <h2 className="text-lg font-bold text-slate-100 tracking-tight">Batch Experiments</h2>
           </div>
           <p className="text-xs text-slate-400 mt-1">
             Execute deterministic parameter sweeps and comparative A/B studies across multiple pseudorandom seeds.
@@ -246,7 +243,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
             onClick={() => setActiveTab('sweep')}
             className={`px-3 py-1.5 rounded-lg transition flex items-center space-x-1.5 ${
               activeTab === 'sweep'
-                ? 'bg-indigo-600 text-white shadow-md'
+                ? 'bg-brand-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -257,7 +254,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
             onClick={() => setActiveTab('comparative')}
             className={`px-3 py-1.5 rounded-lg transition flex items-center space-x-1.5 ${
               activeTab === 'comparative'
-                ? 'bg-indigo-600 text-white shadow-md'
+                ? 'bg-brand-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -284,7 +281,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
             <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div className="flex items-center space-x-2">
-                  <Sparkles className="w-4 h-4 text-indigo-400" />
+                  <Sparkles className="w-4 h-4 text-brand-400" />
                   <h3 className="text-sm font-semibold text-slate-200">Sweep Design Configuration</h3>
                 </div>
                 <div className="flex items-center space-x-1.5 text-[11px] text-slate-400">
@@ -323,7 +320,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     type="text"
                     value={sweepName}
                     onChange={(e) => setSweepName(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500"
                   />
                 </div>
 
@@ -332,7 +329,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   <select aria-label="Experiment Target"
                     value={sweepTarget}
                     onChange={(e) => setSweepTarget(e.target.value as ExperimentTarget)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500"
                   >
                     <option value="tcp">TCP (Transport & Flow Control)</option>
                     <option value="udp">UDP (Connectionless Datagram)</option>
@@ -347,7 +344,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   <select aria-label="Variable Parameter"
                     value={sweepParamType}
                     onChange={(e) => handleSweepPreset(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500"
                   >
                     <option value="link_bandwidth">Link Bandwidth (bps)</option>
                     <option value="propagation_delay">Link Propagation Delay (µs)</option>
@@ -370,7 +367,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     step="5000"
                     value={sweepDurationUs}
                     onChange={(e) => setSweepDurationUs(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500"
                   />
                 </div>
 
@@ -383,7 +380,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     value={sweepValuesStr}
                     onChange={(e) => setSweepValuesStr(e.target.value)}
                     placeholder="e.g. 1000000, 10000000, 100000000"
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500 font-mono"
                   />
                 </div>
 
@@ -396,7 +393,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     value={sweepSeedsStr}
                     onChange={(e) => setSweepSeedsStr(e.target.value)}
                     placeholder="e.g. 42, 101, 202"
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500 font-mono"
                   />
                 </div>
 
@@ -409,7 +406,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     min="1"
                     value={sweepPacketCount}
                     onChange={(e) => setSweepPacketCount(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500 font-mono"
                   />
                 </div>
               </div>
@@ -421,7 +418,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                 <button
                   onClick={handleRunSweep}
                   disabled={isRunning}
-                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/20 transition flex items-center space-x-2 disabled:bg-slate-700 disabled:text-slate-300"
+                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-600/20 transition flex items-center space-x-2 disabled:bg-slate-700 disabled:text-slate-300"
                 >
                   <Play className={`w-3.5 h-3.5 ${isRunning ? 'animate-spin' : ''}`} />
                   <span>{isRunning ? 'Simulating Sweep Points...' : 'Execute Parameter Sweep'}</span>
@@ -451,7 +448,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   </div>
                   <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
                     <span className="text-slate-400 text-xs">Sweep Variable</span>
-                    <div className="text-xl font-bold text-indigo-400 mt-0.5 capitalize">
+                    <div className="text-xl font-bold text-brand-400 mt-0.5 capitalize">
                       {sweepResult.parameter_name.replace(/_/g, ' ')}
                     </div>
                     <span className="text-[11px] text-slate-400">
@@ -472,7 +469,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-3">
                     <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                       <div className="flex items-center space-x-2">
-                        <TrendingUp className="w-4 h-4 text-indigo-400" />
+                        <TrendingUp className="w-4 h-4 text-brand-400" />
                         <h4 className="text-xs font-semibold text-slate-200">
                           Performance Curve: Throughput & Latency vs {sweepResult.parameter_name}
                         </h4>
@@ -533,7 +530,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                       <tbody className="divide-y divide-slate-800/50">
                         {sweepResult.points.map((pt, idx) => (
                           <tr key={idx} className="hover:bg-slate-800/30 transition">
-                            <td className="py-2.5 px-3 font-mono font-bold text-indigo-300">
+                            <td className="py-2.5 px-3 font-mono font-bold text-brand-300">
                               {pt.parameter_value}
                             </td>
                             <td className="py-2.5 px-3 font-mono text-slate-200">
@@ -628,7 +625,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                       type="text"
                       value={scenarioAName}
                       onChange={(e) => setScenarioAName(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500"
                     />
                   </div>
                   <div>
@@ -638,7 +635,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                       step="1000000"
                       value={scenarioABw}
                       onChange={(e) => setScenarioABw(Number(e.target.value))}
-                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 font-mono focus:outline-none focus:border-brand-500"
                     />
                   </div>
                 </div>
@@ -657,7 +654,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                       type="text"
                       value={scenarioBName}
                       onChange={(e) => setScenarioBName(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500"
                     />
                   </div>
                   <div>
@@ -667,7 +664,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                       step="1000000"
                       value={scenarioBBw}
                       onChange={(e) => setScenarioBBw(Number(e.target.value))}
-                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 font-mono focus:outline-none focus:border-brand-500"
                     />
                   </div>
                 </div>
@@ -680,7 +677,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     type="text"
                     value={compSeedsStr}
                     onChange={(e) => setCompSeedsStr(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 font-mono focus:outline-none focus:border-brand-500"
                   />
                 </div>
                 <div>
@@ -689,7 +686,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     type="number"
                     value={compDurationUs}
                     onChange={(e) => setCompDurationUs(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500"
                   />
                 </div>
               </div>
@@ -698,7 +695,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                 <button
                   onClick={handleRunComparative}
                   disabled={isRunning}
-                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2 disabled:bg-slate-700 disabled:text-slate-300"
+                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-600/20 transition flex items-center space-x-2 disabled:bg-slate-700 disabled:text-slate-300"
                 >
                   <GitCompare className={`w-3.5 h-3.5 ${isRunning ? 'animate-spin' : ''}`} />
                   <span>{isRunning ? 'Running Comparative Analysis...' : 'Run Comparative A/B Test'}</span>

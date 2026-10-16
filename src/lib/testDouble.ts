@@ -2990,9 +2990,19 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
     }
 
     case 'set_forwarding_policy': {
+      const algorithm = ((args?.algorithm as string) || 'dijkstra').toLowerCase().replace(/-/g, '_');
+      if (algorithm !== 'dijkstra' && algorithm !== 'bellman_ford') {
+        return Promise.reject(
+          new Error(`Unsupported forwarding algorithm '${args?.algorithm}'. Expected 'dijkstra' or 'bellman_ford'`)
+        );
+      }
+      const metricType = (args?.metricType as string) || 'hop_count';
+      if (!['hop_count', 'propagation_delay', 'inverse_bandwidth'].includes(metricType)) {
+        return Promise.reject(new Error(`Unsupported routing metric '${metricType}'`));
+      }
       return Promise.resolve({
-        algorithm: 'dijkstra',
-        metric_type: (args?.metricType as string) || 'hop_count',
+        algorithm,
+        metric_type: metricType,
         default_ttl: 64,
       } as unknown as T);
     }

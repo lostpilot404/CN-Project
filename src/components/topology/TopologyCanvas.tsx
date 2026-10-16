@@ -15,7 +15,8 @@ import {
   MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Undo2, Redo2, Network, Cpu } from 'lucide-react';
+import { Undo2, Redo2, Network, Cpu, Link2 } from 'lucide-react';
+import { ConnectDialog } from './ConnectDialog';
 import { CustomNode } from './CustomNode';
 import { DevicePalette } from './DevicePalette';
 import { PropertyEditor } from './PropertyEditor';
@@ -26,7 +27,7 @@ interface TopologyCanvasProps {
   project: Project | null;
   historyStatus: HistoryStatus;
   onAddNode: (type: NodeType, label: string) => void;
-  onConnectNodes: (sourceId: string, targetId: string) => void;
+  onConnectNodes: (sourceId: string, targetId: string) => Promise<string | null>;
   onUpdateNode: (nodeId: string, label: string, state: NodeState) => Promise<void>;
   onNodePositionChange: (nodeId: string, position: { x: number; y: number }) => Promise<void>;
   onDeleteNode: (nodeId: string) => Promise<void>;
@@ -69,6 +70,7 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
   const [selectedLinkId, setSelectedLinkId] = useState<string | null>(null);
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [showHelp, setShowHelp] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
 
   const nodeTypes = useMemo(() => ({ custom: CustomNode }), []);
 
@@ -81,6 +83,12 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
     if (!project || !selectedLinkId) return null;
     return project.links.find((l) => l.id === selectedLinkId) || null;
   }, [project, selectedLinkId]);
+
+  // Keyboard/AT selection of a canvas node (Enter or Space on the focused node).
+  const selectNode = useCallback((nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    setSelectedLinkId(null);
+  }, []);
 
   // Map Project nodes to XYFlow nodes
   const initialNodes: FlowNode[] = useMemo(() => {
@@ -95,9 +103,11 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
         nodeType: n.node_type,
         ip: n.interfaces[0]?.ipv4 || 'Unconfigured',
         status: n.state,
+        nodeId: n.id,
+        onSelect: selectNode,
       },
     }));
-  }, [project, selectedNodeId]);
+  }, [project, selectedNodeId, selectNode]);
 
   // Map Project links to XYFlow edges
   const initialEdges: FlowEdge[] = useMemo(() => {
@@ -186,7 +196,9 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
     (params: Connection) => {
       if (params.source && params.target) {
         setEdges((eds) => addEdge(params, eds));
-        onConnectNodes(params.source, params.target);
+        // Drag connections report failures through the App toast; the keyboard dialog
+        // surfaces the same authoritative add_link errors inline.
+        void onConnectNodes(params.source, params.target);
       }
     },
     [onConnectNodes]
@@ -275,9 +287,12 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
         setShowHelp(false);
         setSelectedNodeId(null);
         setSelectedLinkId(null);
-      } else if (e.key === '?') {
+      } else if (e.key === '?' ) {
         e.preventDefault();
         setShowHelp((open) => !open);
+      } else if ((e.key === 'c' || e.key === 'C') && project && project.nodes.length >= 2) {
+        e.preventDefault();
+        setConnectOpen(true);
       } else if (e.key.startsWith('Arrow') && selectedNodeId) {
         e.preventDefault();
         const step = e.shiftKey;
@@ -299,6 +314,7 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
     onDeleteNode,
     onDeleteLink,
     nudgeSelectedNode,
+    project,
   ]);
 
   return (
@@ -307,7 +323,7 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
       <DevicePalette onAddDevice={onAddNode} />
 
       {/* Top Topology Canvas Action Bar */}
-      <div className="absolute top-4 left-64 z-10 flex items-center space-x-2 bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl px-2 py-1.5 shadow-xl select-none">
+      <div className="absolute top-4 left-4 z-10 flex items-center space-x-2 bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl px-2 py-1.5 shadow-xl select-none">
         {/* Undo Button */}
         <button
           onClick={onUndo}
@@ -353,6 +369,18 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
           Snap {snapEnabled ? 'On' : 'Off'}
         </button>
 
+        {/* Keyboard-accessible connection workflow */}
+        <button
+          onClick={() => setConnectOpen(true)}
+          disabled={!project || project.nodes.length < 2}
+          title="Connect two nodes (C)"
+          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+          data-testid="connect-nodes"
+        >
+          <Link2 className="w-3.5 h-3.5" aria-hidden="true" />
+          Connect
+        </button>
+
         {/* Keyboard help */}
         <button
           onClick={() => setShowHelp((v) => !v)}
@@ -392,12 +420,20 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
         onPaneClick={onPaneClick}
         onNodeDragStop={onNodeDragStop}
         fitView
+        proOptions={{ hideAttribution: false }}
+        attributionPosition="top-right"
         className="bg-slate-950"
       >
         <Background color="#1e293b" gap={20} size={1} />
-        <Controls className="!bg-slate-900 !border-slate-800 !fill-slate-300" />
+        <Controls position="bottom-left" style={{ bottom: 64 }} className="!bg-slate-900 !border-slate-800 !fill-slate-300" />
         <MiniMap
-          nodeColor="#38aaf6"
+          nodeColor={(node) => {
+            const status = (node.data as { status?: string } | undefined)?.status;
+            if (status === 'up') return '#38aaf6';
+            if (status === 'degraded') return '#fbbf24';
+            return '#64748b';
+          }}
+          nodeStrokeWidth={1.5}
           maskColor="rgba(6, 10, 18, 0.7)"
           className="!bg-slate-900/80 !border-slate-800 !rounded-lg"
         />
@@ -425,6 +461,7 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
                 ['Ctrl/⌘ + Z', 'Undo'],
                 ['Ctrl/⌘ + Y or Shift + Ctrl/⌘ + Z', 'Redo'],
                 ['Delete / Backspace', 'Remove selected node or link'],
+                ['C', 'Connect two nodes (source and target dialog)'],
                 ['Arrow keys', 'Nudge the selected node by 10 px'],
                 ['Shift + Arrow keys', 'Nudge the selected node by 40 px'],
                 ['?', 'Toggle this help'],
@@ -446,6 +483,18 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
           </div>
         </div>
       )}
+
+      {/* Keyboard-accessible connection workflow */}
+      <ConnectDialog
+        open={connectOpen}
+        nodes={(project?.nodes ?? []).map((n) => ({ id: n.id, label: n.label }))}
+        onCancel={() => setConnectOpen(false)}
+        onConfirm={async (sourceId, targetId) => {
+          const failure = await onConnectNodes(sourceId, targetId);
+          if (!failure) setConnectOpen(false);
+          return failure;
+        }}
+      />
 
       {/* Properties Inspector Panel */}
       <PropertyEditor

@@ -89,7 +89,7 @@ export const ControlBar = ({
 
         <button
           onClick={onSendDemoPacket}
-          className="flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white transition-colors shadow-sm cursor-pointer"
+          className="flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white transition-colors shadow-sm cursor-pointer"
           title="Inject packet into topology"
         >
           <Send className="w-3.5 h-3.5" />
@@ -139,7 +139,7 @@ export const ControlBar = ({
                 : 'bg-emerald-400'
             }`}
           />
-          <span className="uppercase text-[10px] font-bold text-slate-300">{status}</span>
+          <span className="text-[10px] font-bold text-slate-300">{status}</span>
         </div>
       </div>
     </div>

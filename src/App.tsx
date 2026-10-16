@@ -225,15 +225,17 @@ export function App() {
     await refreshSimulation();
   };
 
-  const handleConnectNodes = async (sourceId: string, targetId: string) => {
+  const handleConnectNodes = async (sourceId: string, targetId: string): Promise<string | null> => {
     try {
       await api.addLink(sourceId, targetId);
       await refreshProject();
       await refreshSimulation();
       showToast('Connection created successfully', 'success');
+      return null;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       showToast(msg, 'error');
+      return msg;
     }
   };
 
