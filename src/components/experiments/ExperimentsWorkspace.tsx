@@ -19,6 +19,7 @@ import {
   Legend,
 } from 'recharts';
 import { api } from '../../lib/api';
+import { ExportButtons } from './ExportButtons';
 import { Project } from '../../types/project';
 import {
   SweepConfig,
@@ -431,6 +432,12 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
             {/* Sweep Results Visualizer */}
             {sweepResult && (
               <div className="space-y-6 animate-in fade-in">
+                {/* Export: JSON is the verbatim backend result for python-tools; CSV is tidy data */}
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-slate-200">Result Export</h4>
+                  <ExportButtons kind="sweep" result={sweepResult} />
+                </div>
+
                 {/* Result Highlights */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
@@ -702,6 +709,12 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
             {/* Comparative Results */}
             {compResult && (
               <div className="space-y-6 animate-in fade-in">
+                {/* Export: JSON is the verbatim backend result; CSV holds one row per metric */}
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-slate-200">Result Export</h4>
+                  <ExportButtons kind="comparison" result={compResult} />
+                </div>
+
                 {/* Deltas Table */}
                 <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3">
