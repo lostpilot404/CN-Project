@@ -31,6 +31,12 @@ export const ConfirmDialog = ({
   const cancelRef = useRef<HTMLButtonElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
+  // `onCancel` is often an inline closure re-created on every parent render (the app
+  // polls state at 1 Hz); depending on it would re-run this effect every tick and yank
+  // focus back to the Cancel button mid-interaction.
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
+
   useEffect(() => {
     if (!open) return;
     previouslyFocused.current = document.activeElement as HTMLElement | null;
@@ -38,7 +44,7 @@ export const ConfirmDialog = ({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onCancel();
+        onCancelRef.current();
       }
     };
     document.addEventListener('keydown', onKeyDown);
@@ -46,7 +52,7 @@ export const ConfirmDialog = ({
       document.removeEventListener('keydown', onKeyDown);
       previouslyFocused.current?.focus?.();
     };
-  }, [open, onCancel]);
+  }, [open]);
 
   if (!open) return null;
 

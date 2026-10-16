@@ -123,6 +123,43 @@ describe('Keyboard connection workflow (ConnectDialog)', () => {
     expect(document.activeElement).toBe(last);
   });
 
+  it('keeps its form state and inline errors across parent re-renders (1 Hz poll regression)', async () => {
+    // The app re-renders the canvas on a state poll, producing fresh `nodes`/`onCancel`
+    // identities every tick. A dialog effect that depends on those identities resets the
+    // form and clears errors mid-interaction — this pins the fix.
+    function PollingHost() {
+      const [tick, setTick] = useState(0);
+      return (
+        <div>
+          <button type="button" onClick={() => setTick((t) => t + 1)}>
+            tick
+          </button>
+          <ConnectDialog
+            key="d"
+            open
+            nodes={NODES.map((n) => ({ ...n }))}
+            onConfirm={vi.fn().mockResolvedValue('backend said no')}
+            onCancel={vi.fn()}
+          />
+          <span data-tick>{tick}</span>
+        </div>
+      );
+    }
+    render(<PollingHost />);
+    // user makes a deliberate choice and triggers a validation error
+    await userEvent.selectOptions(screen.getByLabelText('Target node'), 'node-1');
+    await userEvent.click(screen.getByTestId('connect-dialog-confirm'));
+    await screen.findByRole('alert');
+    // parent re-render with fresh prop identities (what the 1 s poll does)
+    await userEvent.click(screen.getByRole('button', { name: 'tick' }));
+    await userEvent.click(screen.getByRole('button', { name: 'tick' }));
+    // selections and the inline error must survive
+    expect(screen.getByLabelText('Target node')).toHaveValue('node-1');
+    expect(screen.getByRole('alert').textContent).toContain('cannot connect to itself');
+    // and focus must not be yanked back to the first field
+    expect(screen.getByLabelText('Source node')).not.toHaveFocus();
+  });
+
   it('renders nothing when closed', () => {
     render(
       <ConnectDialog open={false} nodes={NODES} onConfirm={vi.fn()} onCancel={vi.fn()} />

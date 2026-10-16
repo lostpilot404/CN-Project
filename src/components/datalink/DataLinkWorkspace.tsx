@@ -659,9 +659,9 @@ export const DataLinkWorkspace: React.FC = () => {
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-slate-300">
-                    Generator Polynomial $G(x)$ (Binary Bitstring)
+                    Generator polynomial G(x) (binary bitstring)
                   </label>
-                  <input aria-label="Generator Polynomial $G(x)$ (Binary Bitstring)"
+                  <input aria-label="Generator polynomial G(x) (binary bitstring)"
                     type="text"
                     value={crcPoly}
                     onChange={(e) => {
@@ -672,7 +672,7 @@ export const DataLinkWorkspace: React.FC = () => {
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm font-mono text-amber-300 tracking-wider focus:outline-none focus:border-amber-500 transition"
                   />
                   <p className="text-[11px] text-slate-400">
-                    Polynomial degree $r = {Math.max(0, crcPoly.length - 1)}$. Must begin with '1' and degree $\ge 1$.
+                    Polynomial degree r = {Math.max(0, crcPoly.length - 1)}. Must begin with '1' and have degree at least 1.
                   </p>
                 </div>
               </div>
@@ -705,7 +705,7 @@ export const DataLinkWorkspace: React.FC = () => {
                       CRC remainder and transmitted frame
                     </span>
                     <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-brand-950 text-brand-300 border border-brand-800">
-                      Degree $r = {crcCalcRes.degree}$
+                      Degree r = {crcCalcRes.degree}
                     </span>
                   </div>
 

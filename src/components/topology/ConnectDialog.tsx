@@ -35,21 +35,30 @@ export const ConnectDialog = ({ open, nodes, busy = false, onConfirm, onCancel }
   const firstFieldRef = useRef<HTMLSelectElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
+  // The parent re-creates `nodes`/`onCancel` every render (it re-renders on a 1 Hz
+  // state poll), so the init/trap effect must depend on `open` only — otherwise every
+  // parent tick resets the form, clears inline errors and steals focus mid-entry.
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
+
   useEffect(() => {
     if (!open) return;
+    const current = nodesRef.current;
     previouslyFocused.current = document.activeElement as HTMLElement | null;
     setError(null);
     // Sensible defaults: first and last node.
-    setSourceId((prev) => (prev && nodes.some((n) => n.id === prev) ? prev : nodes[0]?.id ?? ''));
+    setSourceId((prev) => (prev && current.some((n) => n.id === prev) ? prev : current[0]?.id ?? ''));
     setTargetId((prev) =>
-      prev && nodes.some((n) => n.id === prev) ? prev : nodes[nodes.length - 1]?.id ?? ''
+      prev && current.some((n) => n.id === prev) ? prev : current[current.length - 1]?.id ?? ''
     );
     firstFieldRef.current?.focus();
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onCancel();
+        onCancelRef.current();
         return;
       }
       if (e.key !== 'Tab') return;
@@ -73,7 +82,7 @@ export const ConnectDialog = ({ open, nodes, busy = false, onConfirm, onCancel }
       document.removeEventListener('keydown', onKeyDown);
       previouslyFocused.current?.focus?.();
     };
-  }, [open, nodes, onCancel]);
+  }, [open]);
 
   if (!open) return null;
 

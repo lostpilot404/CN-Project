@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import {
   ReactFlow,
   Background,
@@ -83,6 +83,14 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
     if (!project || !selectedLinkId) return null;
     return project.links.find((l) => l.id === selectedLinkId) || null;
   }, [project, selectedLinkId]);
+
+  // Stable props for ConnectDialog: the app re-renders this canvas on a 1 Hz poll, so
+  // inline arrays/closures there would re-trigger dialog effects every tick.
+  const connectableNodes = useMemo(
+    () => (project?.nodes ?? []).map((n) => ({ id: n.id, label: n.label })),
+    [project]
+  );
+  const closeConnectDialog = useCallback(() => setConnectOpen(false), []);
 
   // Keyboard/AT selection of a canvas node (Enter or Space on the focused node).
   const selectNode = useCallback((nodeId: string) => {
@@ -248,7 +256,13 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
     [selectedNodeId, nodes, snapEnabled, onNodePositionChange]
   );
 
-  // Global keyboard shortcuts for Undo, Redo, and Delete
+  // Global keyboard shortcuts for Undo, Redo, and Delete.
+  // `project` is read through a ref so the listener never runs with a stale closure:
+  // the toolbar enables as soon as the project renders, but a listener re-attached in
+  // the post-paint effect can lag one tick behind — a keypress in that window would
+  // otherwise see project=null and be dropped.
+  const projectRef = useRef(project);
+  projectRef.current = project;
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't intercept if user is typing in an input or textarea
@@ -290,7 +304,7 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
       } else if (e.key === '?' ) {
         e.preventDefault();
         setShowHelp((open) => !open);
-      } else if ((e.key === 'c' || e.key === 'C') && project && project.nodes.length >= 2) {
+      } else if ((e.key === 'c' || e.key === 'C') && projectRef.current && projectRef.current.nodes.length >= 2) {
         e.preventDefault();
         setConnectOpen(true);
       } else if (e.key.startsWith('Arrow') && selectedNodeId) {
@@ -314,7 +328,6 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
     onDeleteNode,
     onDeleteLink,
     nudgeSelectedNode,
-    project,
   ]);
 
   return (
@@ -323,7 +336,7 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
       <DevicePalette onAddDevice={onAddNode} />
 
       {/* Top Topology Canvas Action Bar */}
-      <div className="absolute top-4 left-4 z-10 flex items-center space-x-2 bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl px-2 py-1.5 shadow-xl select-none">
+      <div className="absolute top-4 left-4 right-4 z-10 flex flex-wrap items-center gap-x-2 gap-y-1 bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl px-2 py-1.5 shadow-xl select-none">
         {/* Undo Button */}
         <button
           onClick={onUndo}
@@ -487,8 +500,8 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
       {/* Keyboard-accessible connection workflow */}
       <ConnectDialog
         open={connectOpen}
-        nodes={(project?.nodes ?? []).map((n) => ({ id: n.id, label: n.label }))}
-        onCancel={() => setConnectOpen(false)}
+        nodes={connectableNodes}
+        onCancel={closeConnectDialog}
         onConfirm={async (sourceId, targetId) => {
           const failure = await onConnectNodes(sourceId, targetId);
           if (!failure) setConnectOpen(false);

@@ -90,6 +90,8 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
       setSubnetInfo(res);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : String(err));
+      // A failed submit must not leave the previous input's results on screen.
+      setSubnetInfo(null);
     }
   }, [ipv4Input]);
 
@@ -105,6 +107,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
       setSplitResult(res);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : String(err));
+      setSplitResult(null);
     }
   };
 
@@ -116,6 +119,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
       setVlsmResult(res);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : String(err));
+      setVlsmResult(null);
     }
   };
 
@@ -144,6 +148,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
       setIpv6Info(res);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : String(err));
+      setIpv6Info(null);
     }
   }, [ipv6Input]);
 
