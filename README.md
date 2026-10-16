@@ -42,7 +42,7 @@ produce a simulation result on its own: an unreachable backend raises an error t
 ## Prerequisites
 
 - **Python 3.11 or newer** (the core and the service).
-- **Node.js 18 or newer** with npm (the front-end build and tests).
+- **Node.js 22.22.2 or newer** (22.x LTS) with npm (the front-end build and tests). CI pins 22.22.2; the jsdom-based test stack does not run on Node 20.
 - A Chromium browser for the browser test suite. Playwright can install one itself, or you can
   point it at an existing binary — see [Browser tests](#browser-tests).
 

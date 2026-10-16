@@ -2,6 +2,12 @@ name: CI
 
 # Full verification gate for NetSim. Every command here is one of the documented
 # verification steps in TESTING.md — CI runs exactly what a developer runs locally.
+#
+# Node is pinned to 22.22.2 (not '20'): the jsdom 30 / @testing-library/jest-dom 7
+# line requires ^22.22.2 || ^24.15.0 || >=26.0.0 and undici 8 requires >=22.19.0.
+# On Node 20, vitest dies during environment initialisation
+# (webidl.util.markAsUncloneable is not a function) before any test body runs —
+# that is a runtime incompatibility, not application test failures.
 on:
   push:
     branches: [main]
@@ -49,7 +55,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22.22.2'
           cache: npm
 
       - name: Install dependencies
@@ -59,7 +65,15 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Unit tests
-        run: npx vitest run --reporter=default --reporter=junit --outputFile=test-results/vitest-junit.xml
+        run: |
+          set +e
+          npx vitest run --reporter=default --reporter=junit --outputFile=test-results/vitest-junit.xml
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ]; then
+            python3 ci/emit_vitest_annotations.py test-results/vitest-junit.xml
+          fi
+          exit "$code"
 
       - name: Upload unit-test report
         if: failure()
@@ -86,7 +100,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22.22.2'
           cache: npm
 
       - uses: actions/setup-python@v5

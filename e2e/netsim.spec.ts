@@ -716,8 +716,10 @@ test.describe('NetSim full-stack end-to-end', () => {
     const before = await command<{ links: unknown[] }>(page, 'get_project');
     expect(before.links).toHaveLength(2);
 
-    // Wait for the canvas toolbar (and its keyboard handler) to be mounted before pressing keys.
-    await expect(page.getByTestId('connect-nodes')).toBeVisible();
+    // The toolbar button is rendered (and disabled) while the project is still loading; its
+    // enabled state is the readiness signal for the 'c' shortcut, which also requires a loaded
+    // project with at least two nodes. keyboard.press has no actionability check, so assert it.
+    await expect(page.getByTestId('connect-nodes')).toBeEnabled();
     // The 'c' shortcut opens the dialog without touching the pointer.
     await page.keyboard.press('c');
     const dialog = page.getByTestId('connect-dialog');

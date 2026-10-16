@@ -364,7 +364,7 @@ simulation results without the Python process.
 | Requirement | Version | Evidence |
 |---|---|---|
 | Python | **3.11 or newer** (`requires-python = ">=3.11"`); verified on 3.11.2 | **Verified** |
-| Node.js + npm | Node 18+ per `README.md`; verified on Node v22.22.3 / npm 10.9.8 | **Verified** |
+| Node.js + npm | Node 22.22.2+ per `package.json` engines and `README.md`; verified on Node v22.22.3 / npm 10.9.8, CI pinned to 22.22.2 (the jsdom 30 / jest-dom 7 line requires ^22.22.2 and does not run on Node 20) | **Verified** |
 | A Chromium build | Only for the browser suite. Playwright's own download **fails** in restricted-egress sandboxes (`cdn.playwright.dev` is not reachable here) | **Verified** |
 | Cargo / Rust / Tauri | **Not required and not present.** Do not add them | **Verified** |
 | Operating system | Linux verified; Windows/macOS untested | **Known limitation** |
