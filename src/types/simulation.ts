@@ -12,11 +12,19 @@ export interface SimulationMetrics {
   packets_dropped_loss: number;
   packets_dropped_error: number;
   packets_dropped_link_down: number;
+  packets_dropped_ttl: number;
+  packets_dropped_no_route: number;
   bytes_transmitted: number;
   bytes_delivered: number;
   total_latency_us: number;
   min_latency_us?: number | null;
   max_latency_us?: number | null;
+}
+
+export interface ForwardingPolicy {
+  algorithm: string;
+  metric_type: string;
+  default_ttl: number;
 }
 
 export interface QueueSnapshot {
@@ -37,5 +45,6 @@ export interface SimulationStateSnapshot {
   metrics: SimulationMetrics;
   queues: QueueSnapshot[];
   packets?: Packet[];
+  forwarding_policy?: ForwardingPolicy;
 }
 

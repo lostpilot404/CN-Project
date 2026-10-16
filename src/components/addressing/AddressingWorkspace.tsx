@@ -90,6 +90,8 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
       setSubnetInfo(res);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : String(err));
+      // A failed submit must not leave the previous input's results on screen.
+      setSubnetInfo(null);
     }
   }, [ipv4Input]);
 
@@ -105,6 +107,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
       setSplitResult(res);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : String(err));
+      setSplitResult(null);
     }
   };
 
@@ -116,6 +119,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
       setVlsmResult(res);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : String(err));
+      setVlsmResult(null);
     }
   };
 
@@ -144,6 +148,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
       setIpv6Info(res);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : String(err));
+      setIpv6Info(null);
     }
   }, [ipv6Input]);
 
@@ -244,15 +249,12 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-slate-800 gap-4">
         <div className="flex items-center space-x-3">
-          <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30">
+          <div className="p-2 bg-brand-500/10 text-brand-400 rounded-lg border border-brand-500/20">
             <Hash className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
-              Addressing & Translation Studio
-              <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                Authoritative Python Core
-              </span>
+            <h2 className="text-lg font-bold tracking-tight text-white">
+              Addressing &amp; NAT
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
               IPv4/CIDR calculations, true VLSM allocation, duplicate IP auditing, IPv6 RFC 5952, and stateful NAT/NAPT
@@ -281,7 +283,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               }}
               className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition border ${
                 isActive
-                  ? 'bg-emerald-600/25 border-emerald-500/80 text-emerald-300 shadow-sm'
+                  ? 'bg-brand-600/25 border-brand-500/80 text-brand-300 shadow-sm'
                   : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
               }`}
             >
@@ -310,7 +312,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
           {/* Input strip */}
           <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl flex flex-col md:flex-row items-center gap-4">
             <div className="flex-1 w-full">
-              <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+              <label className="block text-[11px] font-semibold text-slate-400 tracking-wider mb-1">
                 IPv4 Address with CIDR Prefix or Subnet Mask
               </label>
               <div className="flex items-center space-x-2">
@@ -323,7 +325,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                 />
                 <button
                   onClick={calculateIpv4}
-                  className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium rounded-lg transition"
+                  className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium rounded-lg transition"
                 >
                   Calculate
                 </button>
@@ -331,7 +333,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
             </div>
             {subnetInfo && (
               <div className="w-full md:w-64">
-                <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                <label className="block text-[11px] font-semibold text-slate-400 tracking-wider mb-1">
                   Prefix Slider: /{subnetInfo.prefix_length}
                 </label>
                 <input
@@ -345,7 +347,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                     const ipOnly = ipv4Input.split('/')[0].split(' ')[0];
                     setIpv4Input(`${ipOnly}/${newP}`);
                   }}
-                  className="w-full accent-emerald-500 cursor-pointer"
+                  className="w-full accent-brand-500 cursor-pointer"
                 />
               </div>
             )}
@@ -355,17 +357,17 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
           {subnetInfo && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-xl space-y-1">
-                <span className="text-[11px] text-slate-400 font-semibold uppercase">Network Address</span>
+                <span className="text-[11px] text-slate-400 font-semibold">Network Address</span>
                 <p className="text-base font-bold font-mono text-emerald-400">{subnetInfo.network_address}</p>
                 <span className="text-[10px] text-slate-400 font-mono">/{subnetInfo.prefix_length}</span>
               </div>
               <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-xl space-y-1">
-                <span className="text-[11px] text-slate-400 font-semibold uppercase">Broadcast Address</span>
+                <span className="text-[11px] text-slate-400 font-semibold">Broadcast Address</span>
                 <p className="text-base font-bold font-mono text-slate-200">{subnetInfo.broadcast_address}</p>
                 <span className="text-[10px] text-slate-400 font-mono">Wildcard: {subnetInfo.wildcard_mask}</span>
               </div>
               <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-xl space-y-1">
-                <span className="text-[11px] text-slate-400 font-semibold uppercase">Usable Host Range</span>
+                <span className="text-[11px] text-slate-400 font-semibold">Usable Host Range</span>
                 <p className="text-xs font-bold font-mono text-slate-200">
                   {subnetInfo.first_usable_ip} - {subnetInfo.last_usable_ip}
                 </p>
@@ -374,7 +376,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                 </span>
               </div>
               <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-xl space-y-1">
-                <span className="text-[11px] text-slate-400 font-semibold uppercase">Classification & Scope</span>
+                <span className="text-[11px] text-slate-400 font-semibold">Classification & Scope</span>
                 <p className="text-xs font-bold text-slate-200">{subnetInfo.ip_class}</p>
                 <span className="text-[10px] text-slate-400">{subnetInfo.scope}</span>
               </div>
@@ -384,18 +386,18 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
           {/* Binary Representation */}
           {subnetInfo && (
             <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-xl space-y-3 font-mono text-xs">
-              <h4 className="font-semibold text-slate-300 uppercase tracking-wider font-sans text-xs">
+              <h4 className="font-semibold text-slate-300 tracking-wider font-sans text-xs">
                 Binary Dotted Notation
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <span className="text-[10px] text-slate-400 uppercase font-sans">IP Address Binary:</span>
+                  <span className="text-[10px] text-slate-400 font-sans">IP Address Binary:</span>
                   <div className="p-2 bg-slate-950 rounded border border-slate-800 text-emerald-300">
                     {subnetInfo.ip_binary}
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <span className="text-[10px] text-slate-400 uppercase font-sans">Subnet Mask Binary:</span>
+                  <span className="text-[10px] text-slate-400 font-sans">Subnet Mask Binary:</span>
                   <div className="p-2 bg-slate-950 rounded border border-slate-800 text-slate-300">
                     {subnetInfo.mask_binary}
                   </div>
@@ -408,7 +410,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
           <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <h4 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+                <h4 className="text-xs font-semibold text-slate-200 tracking-wider">
                   Equal-Prefix Subnet Splitting
                 </h4>
                 <p className="text-xs text-slate-400">
@@ -482,7 +484,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
           <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <h4 className="text-xs font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                <h4 className="text-xs font-semibold text-slate-200 tracking-wider flex items-center gap-2">
                   <Layers className="w-4 h-4 text-emerald-400" />
                   True VLSM (Variable Length Subnet Mask) Allocation
                 </h4>
@@ -501,7 +503,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                 />
                 <button
                   onClick={handleCalculateVlsm}
-                  className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium rounded-lg transition"
+                  className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium rounded-lg transition"
                 >
                   Allocate VLSM
                 </button>
@@ -510,7 +512,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
 
             {/* Requirements list editor */}
             <div className="space-y-2">
-              <span className="text-[11px] font-semibold text-slate-400 uppercase">Subnet Requirements:</span>
+              <span className="text-[11px] font-semibold text-slate-400">Subnet Requirements:</span>
               <div className="space-y-2">
                 {vlsmReqs.map((req, idx) => (
                   <div key={idx} className="flex items-center space-x-2">
@@ -568,19 +570,19 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               {/* Summary Stats */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-slate-900/70 border border-slate-800 p-3 rounded-xl">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Total Needed</span>
+                  <span className="text-[10px] text-slate-400 font-semibold">Total Needed</span>
                   <p className="text-base font-bold text-slate-200">{vlsmResult.total_needed_hosts} hosts</p>
                 </div>
                 <div className="bg-slate-900/70 border border-slate-800 p-3 rounded-xl">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Allocated Capacity</span>
+                  <span className="text-[10px] text-slate-400 font-semibold">Allocated Capacity</span>
                   <p className="text-base font-bold text-emerald-400">{vlsmResult.total_allocated_hosts} hosts</p>
                 </div>
                 <div className="bg-slate-900/70 border border-slate-800 p-3 rounded-xl">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Wasted Addresses</span>
+                  <span className="text-[10px] text-slate-400 font-semibold">Wasted Addresses</span>
                   <p className="text-base font-bold text-amber-400">{vlsmResult.total_wasted_hosts} hosts</p>
                 </div>
                 <div className="bg-slate-900/70 border border-slate-800 p-3 rounded-xl">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Address Utilization</span>
+                  <span className="text-[10px] text-slate-400 font-semibold">Address Utilization</span>
                   <p className="text-base font-bold text-brand-300">{vlsmResult.utilization_percent}%</p>
                 </div>
               </div>
@@ -636,12 +638,12 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
         <div className="space-y-4">
           <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl flex items-center justify-between">
             <div>
-              <h4 className="text-xs font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+              <h4 className="text-xs font-semibold text-slate-200 tracking-wider flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-400" />
                 Topology Interface IPv4 Duplicate Auditor
               </h4>
               <p className="text-xs text-slate-400">
-                Authoritatively verifies that every interface in the network topology has a unique IPv4 address
+                Verifies that every interface in the network topology has a unique IPv4 address
               </p>
             </div>
             <button
@@ -701,7 +703,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
         <div className="space-y-6">
           <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl space-y-4">
             <div>
-              <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+              <label className="block text-[11px] font-semibold text-slate-400 tracking-wider mb-1">
                 IPv6 Address with Prefix Length
               </label>
               <div className="flex items-center space-x-2">
@@ -714,7 +716,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                 />
                 <button
                   onClick={handleValidateIpv6}
-                  className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium rounded-lg transition"
+                  className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium rounded-lg transition"
                 >
                   Inspect IPv6
                 </button>
@@ -725,7 +727,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               <div className="space-y-4 pt-2">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="bg-slate-950/80 p-3 rounded-lg border border-slate-800 space-y-1">
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase">
+                    <span className="text-[10px] text-slate-400 font-semibold">
                       RFC 5952 Canonical Compressed
                     </span>
                     <p className="text-sm font-bold font-mono text-emerald-400">
@@ -733,7 +735,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                     </p>
                   </div>
                   <div className="bg-slate-950/80 p-3 rounded-lg border border-slate-800 space-y-1">
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase">
+                    <span className="text-[10px] text-slate-400 font-semibold">
                       Address Scope & Classification
                     </span>
                     <p className="text-sm font-bold text-slate-200">{ipv6Info.scope}</p>
@@ -741,7 +743,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                 </div>
 
                 <div className="bg-slate-950/80 p-3 rounded-lg border border-slate-800 space-y-1">
-                  <span className="text-[10px] text-slate-400 font-semibold uppercase">
+                  <span className="text-[10px] text-slate-400 font-semibold">
                     Full Expanded 8-Hextet Representation
                   </span>
                   <p className="text-xs font-mono text-slate-300 break-all">{ipv6Info.expanded_address}</p>
@@ -749,11 +751,11 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-xs">
                   <div className="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
-                    <span className="text-[10px] text-slate-400 font-sans uppercase">Network /64 Prefix:</span>
+                    <span className="text-[10px] text-slate-400 font-sans">Network /64 Prefix:</span>
                     <p className="text-brand-300 font-semibold mt-0.5">{ipv6Info.network_prefix}</p>
                   </div>
                   <div className="p-3 bg-slate-950/60 rounded-lg border border-slate-800">
-                    <span className="text-[10px] text-slate-400 font-sans uppercase">Interface ID (IID):</span>
+                    <span className="text-[10px] text-slate-400 font-sans">Interface ID (IID):</span>
                     <p className="text-slate-300 font-semibold mt-0.5">{ipv6Info.interface_identifier}</p>
                   </div>
                 </div>
@@ -769,7 +771,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
           {/* Top Router & Setup bar */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-900/60 border border-slate-800 p-4 rounded-xl">
             <div>
-              <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+              <label className="block text-[11px] font-semibold text-slate-400 tracking-wider mb-1">
                 NAT Gateway Router
               </label>
               <select aria-label="NAT Gateway Router"
@@ -785,7 +787,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               </select>
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+              <label className="block text-[11px] font-semibold text-slate-400 tracking-wider mb-1">
                 Router Public IPv4 (WAN IP)
               </label>
               <input aria-label="Router Public IPv4 (WAN IP)"
@@ -807,13 +809,13 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
 
           {/* Static DNAT / Port Forwarding Rules Configuration */}
           <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl space-y-3">
-            <h4 className="text-xs font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+            <h4 className="text-xs font-semibold text-slate-200 tracking-wider flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
               Add Static DNAT (Port Forwarding) Rule
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 items-end">
               <div>
-                <label className="block text-[10px] text-slate-400 uppercase">Protocol</label>
+                <label className="block text-[10px] text-slate-400">Protocol</label>
                 <select aria-label="Protocol"
                   value={natProtocol}
                   onChange={(e) => setNatProtocol(e.target.value as NatProtocol)}
@@ -825,7 +827,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                 </select>
               </div>
               <div>
-                <label className="block text-[10px] text-slate-400 uppercase">Public WAN Port</label>
+                <label className="block text-[10px] text-slate-400">Public WAN Port</label>
                 <input aria-label="Public WAN Port"
                   type="number"
                   value={dnatPort}
@@ -834,7 +836,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                 />
               </div>
               <div>
-                <label className="block text-[10px] text-slate-400 uppercase">Private LAN IP</label>
+                <label className="block text-[10px] text-slate-400">Private LAN IP</label>
                 <input aria-label="Private LAN IP"
                   type="text"
                   value={dnatPrivateIp}
@@ -843,7 +845,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                 />
               </div>
               <div>
-                <label className="block text-[10px] text-slate-400 uppercase">Private Port</label>
+                <label className="block text-[10px] text-slate-400">Private Port</label>
                 <input aria-label="Private Port"
                   type="number"
                   value={dnatPrivatePort}
@@ -852,7 +854,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                 />
               </div>
               <div>
-                <label className="block text-[10px] text-slate-400 uppercase">Description</label>
+                <label className="block text-[10px] text-slate-400">Description</label>
                 <input aria-label="Description"
                   type="text"
                   value={dnatDesc}
@@ -863,7 +865,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               <div>
                 <button
                   onClick={handleAddDnatRule}
-                  className="w-full py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium rounded-lg transition"
+                  className="w-full py-1 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium rounded-lg transition"
                 >
                   Add Rule
                 </button>
@@ -875,7 +877,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Outbound Test */}
             <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl space-y-3">
-              <h4 className="text-xs font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+              <h4 className="text-xs font-semibold text-slate-200 tracking-wider flex items-center gap-1.5">
                 <ArrowRight className="w-3.5 h-3.5 text-brand-400" />
                 Test Outbound SNAT (LAN &rarr; WAN)
               </h4>
@@ -941,7 +943,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
 
             {/* Inbound Test */}
             <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl space-y-3">
-              <h4 className="text-xs font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+              <h4 className="text-xs font-semibold text-slate-200 tracking-wider flex items-center gap-1.5">
                 <ArrowRight className="w-3.5 h-3.5 text-emerald-400" />
                 Test Inbound DNAT (WAN &rarr; LAN)
               </h4>
@@ -950,7 +952,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
               </p>
               <button
                 onClick={handleTestInbound}
-                className="w-full py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium rounded-lg transition mt-8"
+                className="w-full py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium rounded-lg transition mt-8"
               >
                 Transmit Inbound Reply
               </button>
@@ -970,7 +972,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
             <div className="px-4 py-3 bg-slate-850/80 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Activity className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+                <h3 className="text-xs font-semibold text-slate-200 tracking-wider">
                   Stateful NAT Table ({natTable?.entries.length || 0} Dynamic, {natTable?.static_rules.length || 0} Static)
                 </h3>
               </div>

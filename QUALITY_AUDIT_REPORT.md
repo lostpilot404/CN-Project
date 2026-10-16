@@ -4,6 +4,13 @@
 **Scope:** audit only — no features added, no redesign. Every defect listed as FIXED was reproduced
 before the change and re-verified after it.
 
+> **Historical record (read this first).** This report documents the state of the repository at
+> the date and branch above and is preserved verbatim as evidence. Later work on the branch
+> `arena/541edc3e-cn-project` closed several of the defects recorded here (see
+> `NETSIM_PROJECT_HANDOFF.md` §14 for the per-defect rollup with commit references). Where this
+> document and the current code disagree, the code and the handoff rollup win; this report is not
+> silently rewritten to match them.
+
 > **How to read this report.** `PASS` means a command was executed in this environment and the
 > output is quoted. `FIXED AND RETESTED` means a failing reproduction exists, a change was made,
 > and the suite was re-run. `NOT VERIFIED` means the check could not be executed here — these

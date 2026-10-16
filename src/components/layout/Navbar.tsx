@@ -1,13 +1,16 @@
-import { Activity, Cpu, FileDown, FolderPlus, RotateCcw, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Activity, Cpu, FileDown, FileUp, FolderPlus, RotateCcw, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { Project } from '../../types/project';
 import { formatTimeUs } from '../../lib/utils';
 import type { BackendStatus } from '../../lib/apiClient';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 interface NavbarProps {
   project: Project | null;
   currentTimeUs: number;
   onNewProject: () => void;
   onSaveProject: () => void;
+  onLoadProject: (jsonContent: string) => Promise<void>;
   onResetProject: () => void;
   backendStatus?: BackendStatus;
 }
@@ -17,17 +20,42 @@ export const Navbar = ({
   currentTimeUs,
   onNewProject,
   onSaveProject,
+  onLoadProject,
   onResetProject,
   backendStatus = 'unknown',
 }: NavbarProps) => {
   const connected = backendStatus === 'online';
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingImport, setPendingImport] = useState<string | null>(null);
+  const [importFileName, setImportFileName] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    setImportError(null);
+    const file = event.target.files?.[0];
+    // Allow re-selecting the same file after a cancelled import.
+    event.target.value = '';
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setImportError(`File “${file.name}” is larger than 5 MB and was not read.`);
+      return;
+    }
+    try {
+      const text = await file.text();
+      setImportFileName(file.name);
+      setPendingImport(text);
+    } catch {
+      setImportError(`File “${file.name}” could not be read.`);
+    }
+  };
+
   return (
     <header className="h-14 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 select-none z-20">
       {/* Brand & Project Info */}
       <div className="flex items-center space-x-4">
         <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-brand-500/20">
-            <Activity className="w-5 h-5 text-white" />
+          <div className="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center">
+            <Activity className="w-5 h-5 text-white" aria-hidden="true" />
           </div>
           <div>
             <div className="flex items-center space-x-2">
@@ -82,6 +110,25 @@ export const Navbar = ({
         </button>
 
         <button
+          onClick={() => fileInputRef.current?.click()}
+          className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md transition-colors"
+          title="Import Project JSON (.netsim)"
+          data-testid="import-project"
+        >
+          <FileUp className="w-3.5 h-3.5" />
+          <span>Import JSON</span>
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".netsim,application/json,.json"
+          className="hidden"
+          aria-label="Import project file"
+          onChange={handleFileSelected}
+          data-testid="import-project-file"
+        />
+
+        <button
           onClick={onResetProject}
           className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-rose-300 hover:text-rose-200 bg-rose-950/40 hover:bg-rose-950/60 border border-rose-900/50 rounded-md transition-colors"
           title="Reset Simulation State"
@@ -113,6 +160,31 @@ export const Navbar = ({
           <span>{connected ? 'Python Authoritative' : 'Backend Offline'}</span>
         </div>
       </div>
+
+      {importError && (
+        <div
+          role="alert"
+          className="absolute top-14 right-4 z-30 mt-1 max-w-sm rounded-md border border-rose-700/60 bg-rose-950/95 px-3 py-2 text-xs text-rose-200"
+        >
+          {importError}
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={pendingImport !== null}
+        title="Import project"
+        message={`Importing “${importFileName}” replaces the current project, including its topology and simulation state. This cannot be undone from the file itself. Continue?`}
+        confirmLabel="Import and replace"
+        destructive
+        onCancel={() => setPendingImport(null)}
+        onConfirm={() => {
+          const content = pendingImport;
+          setPendingImport(null);
+          if (content !== null) {
+            void onLoadProject(content);
+          }
+        }}
+      />
     </header>
   );
 };

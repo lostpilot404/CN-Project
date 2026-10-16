@@ -41,7 +41,7 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
             placeholder="Search events, packet ID, description..."
             value={filter.searchQuery}
             onChange={(e) => onChange({ ...filter, searchQuery: e.target.value })}
-            className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-cyan-500 font-mono"
+            className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-brand-500 font-mono"
           />
         </div>
 
@@ -56,16 +56,16 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
       </div>
 
       {/* Multi-Dimensional Dropdown Selectors */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 text-xs">
+      <div className="grid grid-cols-2 gap-2 text-xs">
         {/* Layer Filter */}
         <div>
-          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
+          <label className="text-[10px] text-slate-400 font-semibold block mb-0.5">
             Layer
           </label>
           <select aria-label="Layer"
             value={filter.layer}
             onChange={(e) => onChange({ ...filter, layer: e.target.value })}
-            className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
+            className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-brand-500 font-mono text-[11px]"
           >
             <option value="all">All Layers</option>
             <option value="Application">Application</option>
@@ -78,13 +78,13 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
 
         {/* Protocol Filter */}
         <div>
-          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
+          <label className="text-[10px] text-slate-400 font-semibold block mb-0.5">
             Protocol
           </label>
           <select aria-label="Protocol"
             value={filter.protocol}
             onChange={(e) => onChange({ ...filter, protocol: e.target.value })}
-            className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
+            className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-brand-500 font-mono text-[11px]"
           >
             <option value="all">All Protocols</option>
             <option value="TCP">TCP</option>
@@ -98,13 +98,13 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
 
         {/* Event Type Filter */}
         <div>
-          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
+          <label className="text-[10px] text-slate-400 font-semibold block mb-0.5">
             Event Type
           </label>
           <select aria-label="Event Type"
             value={filter.eventType}
             onChange={(e) => onChange({ ...filter, eventType: e.target.value })}
-            className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
+            className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-brand-500 font-mono text-[11px]"
           >
             <option value="all">All Events</option>
             <option value="packet_created">Packet Created</option>
@@ -122,13 +122,13 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
 
         {/* Status Filter */}
         <div>
-          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
+          <label className="text-[10px] text-slate-400 font-semibold block mb-0.5">
             Status
           </label>
           <select aria-label="Status"
             value={filter.status}
             onChange={(e) => onChange({ ...filter, status: e.target.value as EventFilter['status'] })}
-            className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
+            className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-brand-500 font-mono text-[11px]"
           >
             <option value="all">All Statuses</option>
             <option value="success">Success / Delivered</option>
@@ -140,13 +140,13 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
 
         {/* Node Filter */}
         <div>
-          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
+          <label className="text-[10px] text-slate-400 font-semibold block mb-0.5">
             Node
           </label>
           <select aria-label="Node"
             value={filter.nodeId}
             onChange={(e) => onChange({ ...filter, nodeId: e.target.value })}
-            className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
+            className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-brand-500 font-mono text-[11px]"
           >
             <option value="all">All Nodes</option>
             {availableNodes.map((n) => (
@@ -159,13 +159,13 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
 
         {/* Link Filter */}
         <div>
-          <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
+          <label className="text-[10px] text-slate-400 font-semibold block mb-0.5">
             Link
           </label>
           <select aria-label="Link"
             value={filter.linkId}
             onChange={(e) => onChange({ ...filter, linkId: e.target.value })}
-            className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
+            className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1 text-slate-200 focus:outline-none focus:border-brand-500 font-mono text-[11px]"
           >
             <option value="all">All Links</option>
             {availableLinks.map((l) => (

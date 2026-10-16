@@ -137,7 +137,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   const layerColorBadge: Record<string, string> = {
     Application: 'bg-amber-950/70 text-amber-300 border-amber-800',
     Transport: 'bg-cyan-950/70 text-cyan-300 border-cyan-800',
-    Network: 'bg-indigo-950/70 text-indigo-300 border-indigo-800',
+    Network: 'bg-brand-950/70 text-brand-300 border-brand-800',
     'Data Link': 'bg-emerald-950/70 text-emerald-300 border-emerald-800',
     Physical: 'bg-slate-800 text-slate-300 border-slate-700',
     Other: 'bg-slate-900 text-slate-400 border-slate-800',
@@ -160,7 +160,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       className="flex-1 overflow-y-auto px-4 py-2 font-mono text-xs select-none space-y-1.5"
     >
       {filteredEvents.length === 0 ? (
-        <div className="h-40 flex flex-col items-center justify-center text-slate-400 text-xs italic">
+        <div className="h-40 flex flex-col items-center justify-center text-slate-400 text-xs">
           <span>No events matching the active filter criteria.</span>
           <span className="text-[10px] mt-1">Run a simulation burst or adjust filters.</span>
         </div>
@@ -192,7 +192,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
 
               {/* Layer Badge */}
               <span
-                className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border ${
+                className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
                   layerColorBadge[ev.layer || 'Other'] || layerColorBadge.Other
                 }`}
               >
@@ -218,7 +218,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                 </span>
               )}
               {ev.linkId && (
-                <span className="text-[10px] text-indigo-400 flex items-center space-x-0.5">
+                <span className="text-[10px] text-brand-400 flex items-center space-x-0.5">
                   <Network className="w-2.5 h-2.5" />
                   <span>{ev.linkId}</span>
                 </span>

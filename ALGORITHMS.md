@@ -10,6 +10,12 @@ in `python/tests/test_independent_validation.py` were derived from them by hand.
 > Rust core. The Rust engine has been removed; `python/netsim/` is the sole implementation. The
 > formulas themselves are unchanged and remain authoritative.
 
+> **Reading this document.** Sections list the algorithm requirements NetSim was designed to.
+> Each section that involves modelling scope carries a **Status** line stating what the current
+> Python implementation actually does — *Implemented*, *Partial* (real behaviour with documented
+> boundaries), or *Illustrative* (model output that does not claim production protocol behaviour).
+> The consolidated scope table lives in `README.md` (§ Implementation scope).
+
 ## 2. Routing
 
 ### 2.1 Dijkstra / Link State
@@ -69,7 +75,10 @@ Provide basic:
 -   address formatting
 -   header visualization
 
-Do not claim complete IPv6 routing unless implemented.
+**Status — Partial.** Validation, RFC 5952 canonical formatting, expansion/compression and
+scope classification are implemented (`python/netsim/addressing/ipv6.py`). Header visualisation
+exists in the packet inspector. IPv6 addresses are text labels only: the forwarding engine uses
+IPv4-style headers, so there is no IPv6 routing, neighbour discovery or dual-stack behaviour.
 
 ## 5. NAT
 
@@ -80,6 +89,11 @@ private address:port
 →
 public address:port
 ```
+
+**Status — Partial.** The model is implemented (`python/netsim/addressing/nat.py`): dynamic SNAT
+with per-router port pools, static DNAT rules, timeout tracking, and strict isolation between
+routers and projects. Packet translation is shown in the address inspector. Not modelled: ALGs,
+ICMP error rewriting, and port-preservation heuristics beyond the pool.
 
 Visualize packet translation.
 
@@ -131,6 +145,12 @@ Track:
 -   timeout
 -   retransmission
 -   window movement
+
+**Status — Partial (applies to §9–§11).** All three protocols are implemented as a receding-window
+time-step model (`python/netsim/datalink/flow_control.py`) with real window/sequence/ACK/timeout
+bookkeeping: in-order delivery for the base sliding window, cumulative ACK rewind for Go-Back-N,
+and per-sequence buffering for Selective Repeat. Simplifications: discrete rounds, simplified ACK
+timing, no delayed ACKs and no ACK loss.
 
 ## 10. Go-Back-N
 
@@ -206,6 +226,24 @@ teardown
 
 Measure setup and transmission effects.
 
+**Status — Partial (educational admission-control model).** Implemented in
+`python/netsim/switching/circuit.py` and exposed as `request_circuit` / `teardown_circuit` /
+`get_circuit_state` plus the dedicated Circuit Switching workspace:
+
+-   **setup** resolves the path with the same authoritative routing graph used for live packet
+    forwarding (hop-count shortest path) and validates the requested rate on **every** link of
+    the path before reserving anything — all-or-nothing admission;
+-   **blocking** is a first-class outcome: an unsatisfiable request is rejected with a precise
+    reason (insufficient capacity on a named link, or no path) and leaves no partial reservations;
+-   **teardown** releases every reservation on the circuit's links; capacity is reusable;
+-   **resource accounting** reports per-link reserved/available bps and utilisation, plus
+    acceptance and blocking rates;
+-   topology mutations (link removal, bandwidth/status changes, node removal) release affected
+    circuits; project create/import clears all circuit state.
+
+Not modelled: call signalling protocols, holding-time traffic patterns, or cross-connect
+hardware behaviour.
+
 ## 17. Packet Switching
 
 Packets may experience:
@@ -215,6 +253,12 @@ Packets may experience:
 -   delay
 -   loss
 -   independent delivery
+
+**Status — Implemented.** Forwarding is table-driven per hop (Dijkstra/Bellman-Ford next hop) with
+an enforced TTL/hop limit, a loop guard, and exactly-once drop accounting. **Related scope note
+(MAC/Ethernet):** interface MAC addresses are generated identifiers and the L2 header view shows
+Ethernet II fields, but there is no MAC learning, bridging or ARP — MACs are display identifiers,
+not forwarding state.
 
 ## 18. TCP Educational Model
 
@@ -229,6 +273,12 @@ Implement only the behavior required by NetSim experiments:
 -   simplified congestion response
 
 This is not a complete production TCP implementation.
+
+**Status — Partial.** Implemented in `python/netsim/transport/tcp.py` over the real routed
+topology: three-way handshake, slow start, congestion avoidance, fast retransmit, timeout
+recovery, and Jacobson-style RTT estimation. Simplifications: no SACK, no window scaling, no
+delayed ACKs, simplified congestion response, and the receive window is not modelled as a
+bottleneck.
 
 ## 19. UDP Educational Model
 
@@ -252,6 +302,10 @@ Provide an educational model of:
 -   congestion-window changes
 
 Display cwnd over simulation time.
+
+**Status — Implemented (educational).** `python/netsim/congestion/cwnd.py` drives the slow-start
+and congestion-avoidance phases shown in the Transport workspace's congestion timeline; the
+response to loss is the simplified AIMD behaviour described above.
 
 ## 21. Queueing
 

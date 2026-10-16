@@ -13,6 +13,7 @@ import {
   Interface,
 } from '../types/topology';
 import { SimulationStateSnapshot, SimEvent, Packet } from '../types/simulation';
+import { Circuit } from '../types/switching';
 import {
 } from '../types/routing';
 import {
@@ -269,6 +270,25 @@ let mockPackets: Packet[] = createDefaultMockPackets();
 
 let mockUndoStack: Project[] = [];
 let mockRedoStack: Project[] = [];
+let mockCircuits: Circuit[] = [];
+let mockCircuitCount = 0;
+const mockCircuitMetrics = {
+  requests_total: 0,
+  requests_accepted: 0,
+  requests_blocked: 0,
+  circuits_released: 0,
+  circuits_active: 0,
+  acceptance_rate: 0,
+  blocking_rate: 0,
+};
+function circuitMetricsWithRates() {
+  const total = mockCircuitMetrics.requests_total || 0;
+  return {
+    ...mockCircuitMetrics,
+    acceptance_rate: total ? mockCircuitMetrics.requests_accepted / total : 0,
+    blocking_rate: total ? mockCircuitMetrics.requests_blocked / total : 0,
+  };
+}
 
 function pushMockUndo() {
   mockUndoStack.push(JSON.parse(JSON.stringify(mockProject)));
@@ -290,6 +310,74 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
         nodes: [],
         links: [],
       };
+      // Project-level state is isolated per project (matches the Python service).
+      mockCircuits = [];
+      mockCircuitCount = 0;
+      Object.assign(mockCircuitMetrics, {
+        requests_total: 0,
+        requests_accepted: 0,
+        requests_blocked: 0,
+        circuits_released: 0,
+        circuits_active: 0,
+        acceptance_rate: 0,
+        blocking_rate: 0,
+      });
+      return Promise.resolve(mockProject as unknown as T);
+    }
+
+    case 'save_project_json': {
+      return Promise.resolve(JSON.stringify(mockProject, null, 2) as unknown as T);
+    }
+
+    case 'load_project_json': {
+      const raw = args?.jsonContent as string | undefined;
+      if (raw === undefined || raw === null || raw === '') {
+        return Promise.reject(new Error('No project JSON supplied'));
+      }
+      let data: unknown;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        return Promise.reject(new Error('Project JSON is not valid JSON'));
+      }
+      if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+        return Promise.reject(new Error('Project JSON must decode to an object'));
+      }
+      const candidate = data as Partial<Project> & { schemaVersion?: number; schema_version?: number };
+      const version = candidate.schemaVersion ?? candidate.schema_version ?? 1;
+      if (version !== 1) {
+        return Promise.reject(
+          new Error(`Unsupported project schema version ${version}: this build supports version 1`)
+        );
+      }
+      if (!Array.isArray(candidate.nodes) || !Array.isArray(candidate.links)) {
+        return Promise.reject(new Error("Project JSON is not a valid NetSim project: missing 'nodes' or 'links'"));
+      }
+      const nodeIds = candidate.nodes.map((n) => n.id);
+      if (new Set(nodeIds).size !== nodeIds.length) {
+        return Promise.reject(new Error('Project contains duplicate node identifiers'));
+      }
+      pushMockUndo();
+      mockProject = {
+        ...mockProject,
+        metadata: candidate.metadata ?? mockProject.metadata,
+        nodes: candidate.nodes as Project['nodes'],
+        links: candidate.links as Project['links'],
+      };
+      // Imported projects carry their own state: engine and per-project registries reset.
+      mockSimTimeUs = 0;
+      mockEvents = [];
+      mockCircuits = [];
+      mockCircuitCount = 0;
+      Object.assign(mockCircuitMetrics, {
+        requests_total: 0,
+        requests_accepted: 0,
+        requests_blocked: 0,
+        circuits_released: 0,
+        circuits_active: 0,
+        acceptance_rate: 0,
+        blocking_rate: 0,
+      });
       return Promise.resolve(mockProject as unknown as T);
     }
 
@@ -567,6 +655,8 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
           packets_dropped_loss: 0,
           packets_dropped_error: 0,
           packets_dropped_link_down: 0,
+          packets_dropped_ttl: 0,
+          packets_dropped_no_route: 0,
           bytes_transmitted: mockEvents.length * 1000,
           bytes_delivered: Math.max(0, mockEvents.length - 1) * 1000,
           total_latency_us: 5800,
@@ -582,6 +672,7 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
           total_dropped_overflow: 0,
         })),
         packets: mockPackets,
+        forwarding_policy: { algorithm: 'dijkstra', metric_type: 'hop_count', default_ttl: 64 },
       };
       return Promise.resolve(snapshot as unknown as T);
     }
@@ -627,6 +718,8 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
           packets_dropped_loss: 0,
           packets_dropped_error: 0,
           packets_dropped_link_down: 0,
+          packets_dropped_ttl: 0,
+          packets_dropped_no_route: 0,
           bytes_transmitted: mockEvents.length * 1000,
           bytes_delivered: mockEvents.length * 1000,
           total_latency_us: 0,
@@ -635,6 +728,7 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
         },
         queues: [],
         packets: mockPackets,
+        forwarding_policy: { algorithm: 'dijkstra', metric_type: 'hop_count', default_ttl: 64 },
       };
       return Promise.resolve(snap as unknown as T);
     }
@@ -656,6 +750,8 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
           packets_dropped_loss: 0,
           packets_dropped_error: 0,
           packets_dropped_link_down: 0,
+          packets_dropped_ttl: 0,
+          packets_dropped_no_route: 0,
           bytes_transmitted: 0,
           bytes_delivered: 0,
           total_latency_us: 0,
@@ -664,6 +760,7 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
         },
         queues: [],
         packets: mockPackets,
+        forwarding_policy: { algorithm: 'dijkstra', metric_type: 'hop_count', default_ttl: 64 },
       };
       return Promise.resolve(snapshot as unknown as T);
     }
@@ -1610,9 +1707,12 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
           average_rtt_us: 40000,
           smoothed_rtt_us: 40000,
           final_rto_us: 120000,
-          throughput_bits_per_sec: (cfg.payload_bytes * 8 * 1000000) / 120000,
-          throughput_bytes_per_sec: (cfg.payload_bytes * 1000000) / 120000,
+          throughput_bits_per_sec: ((cfg.payload_bytes + 160) * 8 * 1000000) / 120000,
+          throughput_bytes_per_sec: ((cfg.payload_bytes + 160) * 1000000) / 120000,
           goodput_bits_per_sec: (cfg.payload_bytes * 8 * 1000000) / 120000,
+          retransmitted_payload_bytes: 0,
+          header_bytes_sent: 160,
+          wire_bytes_sent: cfg.payload_bytes + 160,
           packet_loss_rate: 0.0,
           sender_window_occupancy_avg: 0.5,
           receiver_window_occupancy_max: 0,
@@ -1691,9 +1791,12 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
           average_rtt_us: 0,
           smoothed_rtt_us: 0,
           final_rto_us: 0,
-          throughput_bits_per_sec: (cfg.payload_bytes * 8 * 1000000) / 35000,
-          throughput_bytes_per_sec: (cfg.payload_bytes * 1000000) / 35000,
+          throughput_bits_per_sec: ((cfg.payload_bytes + 112) * 8 * 1000000) / 35000,
+          throughput_bytes_per_sec: ((cfg.payload_bytes + 112) * 1000000) / 35000,
           goodput_bits_per_sec: (cfg.payload_bytes * 8 * 1000000) / 35000,
+          retransmitted_payload_bytes: 0,
+          header_bytes_sent: 112,
+          wire_bytes_sent: cfg.payload_bytes + 112,
           packet_loss_rate: 0.0,
           sender_window_occupancy_avg: 0.0,
           receiver_window_occupancy_max: 0,
@@ -2744,6 +2847,8 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
         throughput_bits_per_sec: 8000000,
         throughput_bytes_per_sec: 1000000,
         goodput_bits_per_sec: 7600000,
+        throughput_bytes_counted: 1000000,
+        goodput_payload_bytes: 950000,
         end_to_end_latencies_us: [1000, 1050, 1020, 1080],
         average_latency_us: 1037.5,
         min_latency_us: 1000,
@@ -2759,6 +2864,8 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
           link_down: 1,
           bit_error: 0,
           stochastic_loss: 0,
+          ttl_expired: 0,
+          no_route: 0,
         },
         retransmissions: 1,
         link_utilization: [
@@ -2773,6 +2880,130 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
         queue_occupancy_max: 3,
         queue_drops: 0,
         average_rtt_us: 2100,
+      } as unknown as T);
+    }
+
+    case 'request_circuit': {
+      const src = (args?.sourceNodeId as string) || 'node-1';
+      const dst = (args?.targetNodeId as string) || 'node-3';
+      const bandwidthBps = (args?.bandwidthBps as number) || 1_000_000;
+      const requestedId = args?.circuitId as string | undefined;
+      mockCircuitCount += 1;
+      mockCircuitMetrics.requests_total += 1;
+      if (requestedId && mockCircuits.some((c) => c.circuit_id === requestedId)) {
+        return Promise.reject(new Error(`Circuit identifier '${requestedId}' is already in use`));
+      }
+      // Simple hop-count path over the mock topology (test double only).
+      const path: string[] = [src];
+      const linkIds: string[] = [];
+      const visited = new Set<string>([src]);
+      let cursor = src;
+      while (cursor !== dst && path.length < 8) {
+        const link = mockProject.links.find(
+          (l) =>
+            (l.source.node_id === cursor && !visited.has(l.target.node_id)) ||
+            (l.target.node_id === cursor && !visited.has(l.source.node_id))
+        );
+        if (!link) break;
+        linkIds.push(link.id);
+        cursor = link.source.node_id === cursor ? link.target.node_id : link.source.node_id;
+        visited.add(cursor);
+        path.push(cursor);
+      }
+      const blockedByCapacity = mockCircuits.some(
+        (c) => c.state === 'active' && c.link_ids.some((id) => linkIds.includes(id)) && c.bandwidth_bps + bandwidthBps > 100_000_000
+      );
+      if (cursor !== dst || blockedByCapacity) {
+        mockCircuitMetrics.requests_blocked += 1;
+        return Promise.resolve({
+          accepted: false,
+          circuit_id: null,
+          source_node_id: src,
+          target_node_id: dst,
+          bandwidth_bps: bandwidthBps,
+          path: [],
+          link_ids: [],
+          reason: cursor !== dst ? 'No path exists between the endpoints in the current topology' : 'Insufficient capacity on the routed path',
+          metrics: circuitMetricsWithRates(),
+        } as unknown as T);
+      }
+      const circuitId = requestedId || `circuit-${mockCircuitCount}`;
+      const circuit: Circuit = {
+        circuit_id: circuitId,
+        source_node_id: src,
+        target_node_id: dst,
+        path,
+        link_ids: linkIds,
+        bandwidth_bps: bandwidthBps,
+        state: 'active',
+        request_index: mockCircuitCount,
+        released_reason: null,
+      };
+      mockCircuits.push(circuit);
+      mockCircuitMetrics.requests_accepted += 1;
+      mockCircuitMetrics.circuits_active += 1;
+      return Promise.resolve({
+        accepted: true,
+        circuit_id: circuitId,
+        source_node_id: src,
+        target_node_id: dst,
+        bandwidth_bps: bandwidthBps,
+        path,
+        link_ids: linkIds,
+        reason: '',
+        metrics: circuitMetricsWithRates(),
+      } as unknown as T);
+    }
+
+    case 'teardown_circuit': {
+      const circuitId = (args?.circuitId as string) || '';
+      const circuit = mockCircuits.find((c) => c.circuit_id === circuitId);
+      if (!circuit) return Promise.reject(new Error(`Circuit '${circuitId}' does not exist`));
+      if (circuit.state !== 'active') return Promise.reject(new Error(`Circuit '${circuitId}' has already been released`));
+      circuit.state = 'released';
+      circuit.released_reason = 'Released by teardown';
+      mockCircuitMetrics.circuits_released += 1;
+      mockCircuitMetrics.circuits_active -= 1;
+      return Promise.resolve(circuit as unknown as T);
+    }
+
+    case 'get_circuit_state': {
+      const reserved: Record<string, number> = {};
+      for (const c of mockCircuits) {
+        if (c.state !== 'active') continue;
+        for (const id of c.link_ids) reserved[id] = (reserved[id] || 0) + c.bandwidth_bps;
+      }
+      return Promise.resolve({
+        circuits: [...mockCircuits],
+        links: mockProject.links.map((l) => {
+          const res = reserved[l.id] || 0;
+          return {
+            link_id: l.id,
+            capacity_bps: l.bandwidth_bps,
+            reserved_bps: res,
+            available_bps: Math.max(0, l.bandwidth_bps - res),
+            utilization: l.bandwidth_bps > 0 ? res / l.bandwidth_bps : 0,
+          };
+        }),
+        metrics: circuitMetricsWithRates(),
+      } as unknown as T);
+    }
+
+    case 'set_forwarding_policy': {
+      const algorithm = ((args?.algorithm as string) || 'dijkstra').toLowerCase().replace(/-/g, '_');
+      if (algorithm !== 'dijkstra' && algorithm !== 'bellman_ford') {
+        return Promise.reject(
+          new Error(`Unsupported forwarding algorithm '${args?.algorithm}'. Expected 'dijkstra' or 'bellman_ford'`)
+        );
+      }
+      const metricType = (args?.metricType as string) || 'hop_count';
+      if (!['hop_count', 'propagation_delay', 'inverse_bandwidth'].includes(metricType)) {
+        return Promise.reject(new Error(`Unsupported routing metric '${metricType}'`));
+      }
+      return Promise.resolve({
+        algorithm,
+        metric_type: metricType,
+        default_ttl: 64,
       } as unknown as T);
     }
 
@@ -2806,6 +3037,8 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
             throughput_bits_per_sec: Math.min(v, 8000000),
             throughput_bytes_per_sec: Math.min(v / 8, 1000000),
             goodput_bits_per_sec: Math.min(v * 0.95, 7600000),
+            throughput_bytes_counted: Math.min(v / 8, 1000000),
+            goodput_payload_bytes: Math.min(v * 0.95 / 8, 950000),
             end_to_end_latencies_us: [1000, 1020],
             average_latency_us: Math.max(200, 2000000 / v),
             min_latency_us: Math.max(150, 1800000 / v),
@@ -2816,7 +3049,7 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
             packets_delivered: 5,
             packets_lost: 0,
             packet_loss_rate: 0.0,
-            loss_by_category: { queue_overflow: 0, link_down: 0, bit_error: 0, stochastic_loss: 0 },
+            loss_by_category: { queue_overflow: 0, link_down: 0, bit_error: 0, stochastic_loss: 0, ttl_expired: 0, no_route: 0 },
             retransmissions: 0,
             link_utilization: [],
             queue_occupancy_average: 1.0,

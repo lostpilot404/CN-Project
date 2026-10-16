@@ -60,6 +60,8 @@ Two modules carry the integration:
 |---|---|
 | `src/lib/apiClient.ts` | Endpoint resolution, `/health` probing, retry, and the two error types (`BackendUnavailableError`, `BackendCommandError`). Contains no simulation logic. |
 | `src/lib/api.ts` | The typed command surface: one method per backend command, all dispatched through `callCommand`. |
+| `src/lib/exportResults.ts` | Experiment result exports: JSON (the verbatim backend result consumed by `python-tools`) and tidy CSV with units in the column names; filename generation and browser download. No simulation logic. |
+| `src/components/ui/ConfirmDialog.tsx` | The shared accessible confirmation dialog (role=dialog, focus management, Escape) used before any destructive/replace action such as project import. |
 
 Endpoint resolution order: `VITE_NETSIM_API_URL` → `http://127.0.0.1:8765` → same-origin
 `/netsim-api`. The dev server proxies the same-origin prefix to the Python service, so a proxied or
@@ -127,8 +129,9 @@ fault instead of a client error.
 | `core/metrics.py` | Metric accumulation |
 | `core/schema.py` | Payload validation helpers |
 | `models/` | `node`, `interface`, `link`, `packet`, `project`, `history` |
-| `routing/` | `graph`, `dijkstra`, `bellman_ford`, `table` |
+| `routing/` | `graph` (path search dispatches on the engine forwarding algorithm — Dijkstra or Bellman-Ford, one shared deterministic tie-break), `dijkstra`, `bellman_ford`, `table` |
 | `addressing/` | `ipv4`, `ipv6`, `vlsm`, `nat` |
+| `switching/` | `circuit` — educational circuit-switching admission model |
 | `datalink/` | `hamming`, `crc`, `checksum`, `flow_control`, `mac` |
 | `transport/` | `tcp`, `udp`, congestion control |
 | `application/` | `dns`, `http`, `ftp`, `smtp`, `snmp` |

@@ -136,7 +136,7 @@ def run_single_simulation(params: SingleRunParams) -> tuple[QosMetrics, list[Rou
         )
 
     engine = SimulationEngine(seed=params.seed)
-    engine.update_links(project.links)
+    engine.update_topology(project.nodes, project.links)
 
     for fault in sorted_faults:
         engine.schedule_fault(fault.fault_id, fault.timestamp_us, fault.fault_type)

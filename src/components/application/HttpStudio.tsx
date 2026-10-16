@@ -167,12 +167,21 @@ export const HttpStudio: React.FC<HttpStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Web Server Node</label>
-          <input aria-label="Web Server Node"
-            type="text"
+          <select aria-label="Web Server Node"
             value={serverNode}
             onChange={(e) => setServerNode(e.target.value)}
             className="w-full px-2.5 py-1.5 bg-slate-950 rounded border border-slate-800 text-xs text-slate-200 font-mono"
-          />
+          >
+            {(project?.nodes ?? []).length > 0 ? (
+              (project?.nodes ?? []).map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.label} ({n.id})
+                </option>
+              ))
+            ) : (
+              <option value={serverNode}>{serverNode}</option>
+            )}
+          </select>
         </div>
 
         <div>
@@ -183,7 +192,7 @@ export const HttpStudio: React.FC<HttpStudioProps> = ({
               onClick={() => setMethod('GET')}
               className={`flex-1 py-1.5 text-xs font-semibold rounded border transition-colors ${
                 method === 'GET'
-                  ? 'bg-emerald-600/30 border-emerald-500 text-emerald-200'
+                  ? 'bg-brand-600/30 border-brand-500 text-brand-200'
                   : 'bg-slate-950 border-slate-800 text-slate-400'
               }`}
             >
@@ -194,7 +203,7 @@ export const HttpStudio: React.FC<HttpStudioProps> = ({
               onClick={() => setMethod('POST')}
               className={`flex-1 py-1.5 text-xs font-semibold rounded border transition-colors ${
                 method === 'POST'
-                  ? 'bg-emerald-600/30 border-emerald-500 text-emerald-200'
+                  ? 'bg-brand-600/30 border-brand-500 text-brand-200'
                   : 'bg-slate-950 border-slate-800 text-slate-400'
               }`}
             >
@@ -244,7 +253,7 @@ export const HttpStudio: React.FC<HttpStudioProps> = ({
             type="button"
             onClick={runSimulation}
             disabled={isRunning}
-            className="flex items-center gap-1.5 py-2 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-xs rounded-lg shadow transition-colors disabled:bg-slate-700 disabled:text-slate-300"
+            className="flex items-center gap-1.5 py-2 px-4 bg-brand-600 hover:bg-brand-700 text-white font-medium text-xs rounded-lg shadow transition-colors disabled:bg-slate-700 disabled:text-slate-300"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
             {isRunning ? 'Executing HTTP Transaction...' : 'Send HTTP Request (Over TCP)'}
@@ -283,7 +292,7 @@ export const HttpStudio: React.FC<HttpStudioProps> = ({
 
               {/* Response Headers */}
               <div>
-                <span className="text-[10px] text-slate-400 font-semibold uppercase block mb-1">Response Headers</span>
+                <span className="text-[10px] text-slate-400 font-semibold block mb-1">Response Headers</span>
                 <div className="p-2 bg-slate-950 rounded-lg border border-slate-800 font-mono text-[11px] space-y-0.5 max-h-24 overflow-y-auto">
                   {Object.entries(result.response.headers).map(([k, v]) => (
                     <div key={k} className="text-slate-400">
@@ -295,7 +304,7 @@ export const HttpStudio: React.FC<HttpStudioProps> = ({
 
               {/* Response Body Preview */}
               <div>
-                <span className="text-[10px] text-slate-400 font-semibold uppercase block mb-1">Response Body</span>
+                <span className="text-[10px] text-slate-400 font-semibold block mb-1">Response Body</span>
                 <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 font-mono text-xs text-slate-300 max-h-48 overflow-y-auto whitespace-pre-wrap break-all">
                   {result.response.body}
                 </div>

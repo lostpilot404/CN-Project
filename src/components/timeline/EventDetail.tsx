@@ -21,7 +21,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
       <div className="h-full flex items-center justify-center p-4 text-center text-slate-400 bg-slate-900/60 rounded-xl border border-slate-800">
         <div className="flex items-center space-x-2 text-xs">
           <Info className="w-4 h-4 text-slate-400" />
-          <span>Select an event from the timeline to inspect authoritative protocol details.</span>
+          <span>Select an event from the timeline to inspect protocol details.</span>
         </div>
       </div>
     );
@@ -60,8 +60,8 @@ export const EventDetail: React.FC<EventDetailProps> = ({
 
       {/* Description */}
       <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/80 text-slate-200">
-        <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">
-          Authoritative Simulation Description:
+        <span className="text-[10px] text-slate-400 font-semibold block mb-0.5">
+          Simulation description:
         </span>
         <p className="text-xs leading-relaxed">{event.description}</p>
       </div>
@@ -73,7 +73,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
             onClick={() => onSelectPacket?.(event.packetId!)}
             className="bg-slate-950/80 p-2 rounded-lg border border-slate-800 hover:border-cyan-500/50 cursor-pointer transition-colors"
           >
-            <span className="text-[10px] text-slate-400 uppercase flex items-center space-x-1">
+            <span className="text-[10px] text-slate-400 flex items-center space-x-1">
               <Package className="w-3 h-3 text-cyan-400" />
               <span>Packet ID</span>
             </span>
@@ -86,7 +86,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
             onClick={() => onSelectNode?.(event.nodeId!)}
             className="bg-slate-950/80 p-2 rounded-lg border border-slate-800 hover:border-emerald-500/50 cursor-pointer transition-colors"
           >
-            <span className="text-[10px] text-slate-400 uppercase flex items-center space-x-1">
+            <span className="text-[10px] text-slate-400 flex items-center space-x-1">
               <Cpu className="w-3 h-3 text-emerald-400" />
               <span>Node</span>
             </span>
@@ -97,19 +97,19 @@ export const EventDetail: React.FC<EventDetailProps> = ({
         {event.linkId && (
           <div
             onClick={() => onSelectLink?.(event.linkId!)}
-            className="bg-slate-950/80 p-2 rounded-lg border border-slate-800 hover:border-indigo-500/50 cursor-pointer transition-colors"
+            className="bg-slate-950/80 p-2 rounded-lg border border-slate-800 hover:border-brand-500/50 cursor-pointer transition-colors"
           >
-            <span className="text-[10px] text-slate-400 uppercase flex items-center space-x-1">
-              <Network className="w-3 h-3 text-indigo-400" />
+            <span className="text-[10px] text-slate-400 flex items-center space-x-1">
+              <Network className="w-3 h-3 text-brand-400" />
               <span>Link</span>
             </span>
-            <span className="font-bold text-indigo-300 block mt-0.5 truncate">{event.linkId}</span>
+            <span className="font-bold text-brand-300 block mt-0.5 truncate">{event.linkId}</span>
           </div>
         )}
 
         {event.protocol && (
           <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
-            <span className="text-[10px] text-slate-400 uppercase flex items-center space-x-1">
+            <span className="text-[10px] text-slate-400 flex items-center space-x-1">
               <Layers className="w-3 h-3 text-amber-400" />
               <span>Protocol</span>
             </span>
@@ -121,8 +121,8 @@ export const EventDetail: React.FC<EventDetailProps> = ({
       {/* Raw Event Data Attributes if available */}
       {rawData && Object.keys(rawData).length > 0 && (
         <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
-          <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
-            Authoritative Event Fields:
+          <span className="text-[10px] text-slate-400 font-semibold block mb-1">
+            Event fields:
           </span>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px]">
             {Object.entries(rawData).map(([k, v]) => (

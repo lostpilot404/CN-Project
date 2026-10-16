@@ -24,7 +24,7 @@ Utility tests                engine→script schema drift, bad input     python-
         ↓
       static typing          mypy over the engine and the utilities    pyproject.toml
         ↓
-Front-end unit/component     rendering, state, error and empty states  src/*.test.ts
+Front-end unit/component     rendering, state, error and empty states  src/*.test.tsx?
         ↓
 Front-end ↔ service          real HTTP against a running service       src/integration/
         ↓
@@ -35,6 +35,16 @@ Accessibility audit          axe-core over every workspace + sub-view e2e/a11y.s
 
 Each layer is independent of the one above it. A lower layer failing is never masked by a higher
 layer passing.
+
+Continuous integration (`.github/workflows/ci.yml`) runs this same ladder on every push and pull
+request: the Python tests and utility tests with ruff and mypy; the front-end typecheck, unit
+tests and a production build (plus a check that the bundle contains only the inert test-double
+stub); and both browser suites from a cold start — Playwright's `webServer` starts the Python
+service and the dev server itself, which is exactly the cold-start path that must stay green.
+CI pins **Node 22.22.2** and `package.json` declares `^22.22.2` (22.x LTS, 22.22.2+ within the
+22.x line — verified on 22.22.2/22.22.3; other majors are untested and Node 23.x/25.x are
+excluded by dependency engine ranges). The jsdom 30 / jest-dom 7 test stack cannot initialise
+on Node 20 (`webidl.util.markAsUncloneable is not a function` before any test body runs).
 
 ## 3. Python tests
 
@@ -49,6 +59,11 @@ layer passing.
 | `test_api_contract.py` | Requests through the **real HTTP service**: malformed payloads, nested-object validation, 400 vs 404 vs 500 mapping, state leakage between projects. Each test names the defect it guards |
 | `test_parity_golden.py` | Golden values across protocols and application-layer simulations (DNS, HTTP, FTP, SMTP, SNMP) |
 | `test_server.py` | Server lifecycle: readiness, port binding, one request per command |
+| `test_forwarding.py` | Table-driven per-hop forwarding: direct/multi-hop paths, deterministic tie-breaks, mid-flight link-down reroute, loop-guard protection, TTL and no-route drops, restore; Bellman-Ford/Dijkstra all-pairs path parity under every metric (incl. equal-cost tie-break), forwarding-policy round-trip for both algorithms, identical live delivery under both policies |
+| `test_qos_definitions.py` | Hand-calculated throughput vs goodput anchors (TCP/UDP headers, retransmission overhead, delivered/dropped cases, 0-length intervals) |
+| `test_circuit_switching.py` | Circuit admission model: setup/reservation, all-or-nothing blocking, competing requests, teardown/reuse, link-down and topology-mutation releases, project resets, malformed requests |
+| `test_project_io.py` | Import/export contract: save/load round trips, schema-version rejection, duplicate/dangling identifiers, state resets, rejected imports leave the project intact |
+| `test_request_limits.py` | HTTP hardening: request-body cap (413), malformed/negative Content-Length, malformed JSON, non-object bodies, invalid UTF-8 — all structured, no tracebacks |
 
 The API-contract and server tests start the real HTTP service in-process on a loopback port, so
 routing, JSON parsing and error mapping are exercised exactly as a browser client would exercise
@@ -65,14 +80,21 @@ them — not by calling `dispatch_command` directly.
 ## 4. Utility tests (`python-tools/`)
 
 ```bash
+.venv/bin/pip install -r python-tools/requirements.txt   # matplotlib: needed by plot_metrics.py
 .venv/bin/pytest python-tools/tests -q
 ```
+
+`python-tools/requirements.txt` is part of the supported test gate, not an optional extra: both the
+utility test suite and `mypy` import `plot_metrics.py`, which imports matplotlib. In an environment
+without it, ~21 utility tests fail on `ModuleNotFoundError: matplotlib` and mypy reports two errors —
+that shape of failure is a setup problem, not a code regression.
 
 | File | Focus |
 |---|---|
 | `test_analyze_results.py` | sweep-document parsing, missing/extra keys, `n/a` for unmeasurable values, exit codes |
 | `test_plot_metrics.py` | strict value handling, PNG output (chunks walked, not offset-guessed), missing-matplotlib path |
 | `test_engine_schema.py` | **drift guard** — runs a real sweep through the engine and feeds the result to both tools |
+| `test_ui_export_schema.py` | **drift guard** — the UI's JSON export shape is parsed by both tools (including the analyze CLI) |
 | `test_cli.py` | both scripts as subprocesses: malformed JSON, wrong types, bad paths, exit codes |
 
 The scripts live in a hyphenated directory, so `conftest.py` loads them by path with
@@ -111,6 +133,10 @@ npm run build           # production bundle
 | `src/lib/apiClient.test.ts` | Endpoint resolution order, health probing, retry, `BackendUnavailableError` vs `BackendCommandError` |
 | `src/App.test.ts` | Application shell, sidebar/navbar state, backend status reporting |
 | `src/Phase*Acceptance.test.ts` | Per-phase acceptance of the workspaces (topology, addressing, datalink, transport, application, experiments) |
+| `src/CircuitSwitching.test.tsx` | Circuit Switching workspace: empty states, accepted/blocked results from the service, client-side validation, teardown |
+| `src/ProjectImport.test.tsx` | Import workflow: confirmation dialog, oversized files, contract rejections, save/load round trip |
+| `src/ExperimentExport.test.tsx` | Result exports: filenames, python-tools JSON schema, CSV columns/units/empty cells, comparison deltas, download feedback |
+| `src/ConnectWorkflow.test.tsx` | Keyboard connect workflow: modal semantics, focus management and restoration, validation before any request, inline backend errors, Escape/Cancel cancellation |
 
 Component tests drive real user interactions (clicks, typing) through the component tree and assert
 on rendered output. They run against an in-memory test double, which is aliased away in every
@@ -166,7 +192,7 @@ against the API:
 - packet inspector: five protocol layers compared against `get_packet_details`
 - routing tables, subnet/VLSM, Hamming/CRC/checksum, GBN, MAC protocols
 - TCP, UDP, congestion window, DNS, QoS counts, sweep reproducibility, A/B delta
-- layout: no horizontal overflow across 9 workspaces × 3 viewport widths
+- layout: no horizontal overflow across the workspaces at the supported viewport widths
 
 Tests that assert rendered topology call `resetProject()` first so runs are order-independent.
 Selectors are scoped by `data-testid`; where a label also appears in the minimap, the scope is the
@@ -187,8 +213,8 @@ npx playwright test e2e/a11y.spec.ts
 ```
 
 `e2e/a11y.spec.ts` runs axe-core (via `@axe-core/playwright`) over the real UI and the real
-service, tagged `wcag2a`, `wcag2aa`, `wcag21a` and `wcag21aa`. It audits all nine workspaces and 23
-sub-views, and **fails on a violation of any impact level** — the assertion collects every view's
+service, tagged `wcag2a`, `wcag2aa`, `wcag21a` and `wcag21aa`. It audits every workspace in the
+spec's `WORKSPACES` list and every sub-view in `SUB_VIEWS`, and **fails on a violation of any impact level** — the assertion collects every view's
 findings first, so one broken workspace does not hide the others.
 
 What it does *not* establish, and what is therefore still unverified in the report:
