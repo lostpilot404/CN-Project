@@ -10,6 +10,17 @@ on branch `arena/83075673-cn-project` (`origin/main`), repository `lostpilot404/
 > feature inventory, 7–11 are the technical reference, 12–13 are the history and Git state, 14–15
 > are the honest limits and the academic framing, and 16–18 are the operating instructions for you.
 
+> **Status (2026-10-16, later than the body below).** The body is preserved as written against
+> `d213648`; the "Verified" snapshots in it are dated historical evidence and are deliberately
+> not rewritten. Work landed afterwards on `arena/541edc3e-cn-project` (Phases A–I, then the
+> residual pass) changed several things the body describes: live forwarding now dispatches
+> Dijkstra **and** Bellman-Ford under the active `set_forwarding_policy`, keyboard connect
+> exists on the topology canvas, 9 workspace interiors were individually refreshed, and the
+> test counts moved on (final: 217 Python / 83 tools / 123+11 frontend / 11 live / 24+3
+> Playwright). **For current behaviour and the final verified counts, read
+> `FINAL_ENGINEERING_REPORT.md` (incl. §9 addendum) first** — it supersedes this document where
+> they disagree; this document remains the deepest technical reference.
+
 ## Evidence labels used throughout
 
 | Label | Meaning |

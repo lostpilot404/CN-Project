@@ -41,6 +41,9 @@ request: the Python tests and utility tests with ruff and mypy; the front-end ty
 tests and a production build (plus a check that the bundle contains only the inert test-double
 stub); and both browser suites from a cold start — Playwright's `webServer` starts the Python
 service and the dev server itself, which is exactly the cold-start path that must stay green.
+CI pins **Node 22.22.2** (declared in `package.json` engines): the jsdom 30 / jest-dom 7 test
+stack cannot initialise on Node 20 (`webidl.util.markAsUncloneable is not a function` before
+any test body runs), so a green local run requires Node 22.22.2 or newer.
 
 ## 3. Python tests
 
@@ -132,6 +135,7 @@ npm run build           # production bundle
 | `src/CircuitSwitching.test.tsx` | Circuit Switching workspace: empty states, accepted/blocked results from the service, client-side validation, teardown |
 | `src/ProjectImport.test.tsx` | Import workflow: confirmation dialog, oversized files, contract rejections, save/load round trip |
 | `src/ExperimentExport.test.tsx` | Result exports: filenames, python-tools JSON schema, CSV columns/units/empty cells, comparison deltas, download feedback |
+| `src/ConnectWorkflow.test.tsx` | Keyboard connect workflow: modal semantics, focus management and restoration, validation before any request, inline backend errors, Escape/Cancel cancellation |
 
 Component tests drive real user interactions (clicks, typing) through the component tree and assert
 on rendered output. They run against an in-memory test double, which is aliased away in every

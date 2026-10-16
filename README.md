@@ -92,16 +92,16 @@ of checks that could not be executed in earlier audit environments.
 
 | Suite | Command | Result |
 |---|---|---|
-| Python tests | `.venv/bin/python -m pytest python/tests -q` | **211 passed** |
+| Python tests | `.venv/bin/python -m pytest python/tests -q` | **217 passed** |
 | Utility tests (`python-tools/`) | `.venv/bin/pytest python-tools/tests -q` | **83 passed** |
 | Python lint + format | `.venv/bin/ruff check . && .venv/bin/ruff format --check python/ python-tools/` | clean (80 files) |
 | Python static types | `.venv/bin/mypy` | **clean** (67 files, no `# type: ignore`) |
 | Front-end typecheck | `npx tsc --noEmit` | clean |
-| Front-end unit/component tests | `npx vitest run` | **115 passed, 11 skipped** (live suite opt-in) |
+| Front-end unit/component tests | `npx vitest run` | **123 passed, 11 skipped** (live suite opt-in) |
 | Front-end ↔ service integration | `NETSIM_LIVE_API=1 npx vitest run src/integration` | **11 passed** (real service) |
-| Production build | `npm run build` | succeeds; split chunks (largest 370 kB, was 1115 kB); bundle contains only the inert test-double stub |
-| Browser end-to-end (cold start) | `npx playwright test` | **25 passed** in a real Chromium (22 functional + 3 axe-core accessibility, both servers started by the suite itself) |
-| Accessibility audit alone | `npx playwright test e2e/a11y.spec.ts` | **3 passed** — 10 workspaces, 24 sub-views audited with axe-core (WCAG 2.0/2.1 A+AA); dialogs and transient states are outside the automated audit (see `e2e/a11y.spec.ts` scope notes) |
+| Production build | `npm run build` | succeeds; split chunks (largest ≈ 375 kB, was 1115 kB); the bundle contains only the inert test-double stub, never the full double |
+| Browser end-to-end (cold start) | `npx playwright test` | **27 passed** in a real Chromium (24 functional + 3 axe-core accessibility, both servers started by the suite itself) |
+| Accessibility audit alone | `npx playwright test e2e/a11y.spec.ts` | **3 passed** — 10 workspaces, 24 sub-views, plus dialogs and transient states (keyboard help, Connect dialog, import confirmation, error toast) audited with axe-core (WCAG 2.0/2.1 A+AA) |
 
 ### Running the tests
 
