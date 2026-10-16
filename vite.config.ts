@@ -64,6 +64,24 @@ export default defineConfig({
     target: 'es2020',
     minify: 'esbuild',
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        // Split the heavy frameworks so the initial download is not one megabyte-plus
+        // chunk: app code, React runtime, the canvas (xyflow) and the charts stack
+        // (recharts/d3) load as separate cacheable files.
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return undefined;
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'vendor-react';
+          if (/[\\/]node_modules[\\/]@xyflow[\\/]/.test(id)) return 'vendor-flow';
+          if (
+            /[\\/]node_modules[\\/](recharts|victory-|d3-[^\\/]+|internmap|react-smooth)[\\/]/.test(id)
+          ) {
+            return 'vendor-charts';
+          }
+          return 'vendor';
+        },
+      },
+    },
   },
   test: {
     exclude: ['**/e2e/**', '**/node_modules/**'],

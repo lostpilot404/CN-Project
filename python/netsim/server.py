@@ -190,6 +190,9 @@ class SessionState:
 SESSION = SessionState()
 
 SERVER_VERSION = "0.9.0"
+# Hard request-body cap (bytes). Project documents are small JSON; anything larger is
+# refused with a structured 413 before it is read into memory.
+MAX_REQUEST_BYTES = 5 * 1024 * 1024
 
 
 class CommandError(ValueError):
@@ -1151,7 +1154,45 @@ class NetSimRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self) -> None:
-        content_length = int(self.headers.get("Content-Length", 0))
+        raw_length = self.headers.get("Content-Length", "0")
+        try:
+            content_length = int(raw_length)
+        except ValueError:
+            self._send_json(
+                400,
+                {
+                    "status": "error",
+                    "code": "invalid_request",
+                    "message": f"Malformed Content-Length header: {raw_length!r}",
+                },
+            )
+            return
+        if content_length < 0:
+            self._send_json(
+                400,
+                {"status": "error", "code": "invalid_request", "message": "Negative Content-Length"},
+            )
+            return
+        if content_length > MAX_REQUEST_BYTES:
+            # Refuse before buffering: projects are small JSON documents, so a body this
+            # large is either a client bug or abuse. Structured response, no traceback.
+            self._send_json(
+                413,
+                {
+                    "status": "error",
+                    "code": "request_too_large",
+                    "message": f"Request body exceeds the {MAX_REQUEST_BYTES} byte limit",
+                },
+            )
+            # Drain a bounded prefix so the client is not cut off mid-write (and never
+            # buffer more than the cap regardless of what was declared).
+            remaining = min(content_length, MAX_REQUEST_BYTES + 1)
+            while remaining > 0:
+                chunk = self.rfile.read(min(remaining, 65536))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+            return
         body = self.rfile.read(content_length) if content_length > 0 else b"{}"
 
         # URL path: /api/<cmd> or /<cmd>
