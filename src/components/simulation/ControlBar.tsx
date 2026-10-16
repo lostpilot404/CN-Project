@@ -31,7 +31,9 @@ export const ControlBar = ({
     (metrics?.packets_dropped_overflow ?? 0) +
     (metrics?.packets_dropped_loss ?? 0) +
     (metrics?.packets_dropped_error ?? 0) +
-    (metrics?.packets_dropped_link_down ?? 0);
+    (metrics?.packets_dropped_link_down ?? 0) +
+    (metrics?.packets_dropped_ttl ?? 0) +
+    (metrics?.packets_dropped_no_route ?? 0);
 
   return (
     <div className="h-12 bg-slate-900 border-t border-slate-800 flex items-center justify-between px-4 select-none z-10">

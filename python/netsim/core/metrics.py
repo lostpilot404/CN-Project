@@ -12,6 +12,8 @@ class SimulationMetrics:
     packets_dropped_loss: int = 0
     packets_dropped_error: int = 0
     packets_dropped_link_down: int = 0
+    packets_dropped_ttl: int = 0
+    packets_dropped_no_route: int = 0
     bytes_transmitted: int = 0
     bytes_delivered: int = 0
     total_latency_us: int = 0
@@ -51,12 +53,20 @@ class SimulationMetrics:
     def record_dropped_link_down(self) -> None:
         self.packets_dropped_link_down += 1
 
+    def record_dropped_ttl(self) -> None:
+        self.packets_dropped_ttl += 1
+
+    def record_dropped_no_route(self) -> None:
+        self.packets_dropped_no_route += 1
+
     def total_dropped(self) -> int:
         return (
             self.packets_dropped_overflow
             + self.packets_dropped_loss
             + self.packets_dropped_error
             + self.packets_dropped_link_down
+            + self.packets_dropped_ttl
+            + self.packets_dropped_no_route
         )
 
     def delivery_ratio(self) -> float:
@@ -86,6 +96,8 @@ class SimulationMetrics:
         self.packets_dropped_loss = 0
         self.packets_dropped_error = 0
         self.packets_dropped_link_down = 0
+        self.packets_dropped_ttl = 0
+        self.packets_dropped_no_route = 0
         self.bytes_transmitted = 0
         self.bytes_delivered = 0
         self.total_latency_us = 0
@@ -100,6 +112,8 @@ class SimulationMetrics:
             "packets_dropped_loss": self.packets_dropped_loss,
             "packets_dropped_error": self.packets_dropped_error,
             "packets_dropped_link_down": self.packets_dropped_link_down,
+            "packets_dropped_ttl": self.packets_dropped_ttl,
+            "packets_dropped_no_route": self.packets_dropped_no_route,
             "bytes_transmitted": self.bytes_transmitted,
             "bytes_delivered": self.bytes_delivered,
             "total_latency_us": self.total_latency_us,

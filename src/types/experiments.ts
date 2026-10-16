@@ -3,6 +3,8 @@ export interface LossCategoryBreakdown {
   link_down: number;
   bit_error: number;
   stochastic_loss: number;
+  ttl_expired: number;
+  no_route: number;
 }
 
 export interface LinkUtilizationRecord {

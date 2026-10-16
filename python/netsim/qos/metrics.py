@@ -17,6 +17,8 @@ class LossCategoryBreakdown:
     link_down: int = 0
     bit_error: int = 0
     stochastic_loss: int = 0
+    ttl_expired: int = 0
+    no_route: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -24,6 +26,8 @@ class LossCategoryBreakdown:
             "link_down": self.link_down,
             "bit_error": self.bit_error,
             "stochastic_loss": self.stochastic_loss,
+            "ttl_expired": self.ttl_expired,
+            "no_route": self.no_route,
         }
 
 
@@ -122,6 +126,8 @@ def compute_network_qos(
         link_down=sim_metrics.packets_dropped_link_down,
         bit_error=sim_metrics.packets_dropped_error,
         stochastic_loss=sim_metrics.packets_dropped_loss,
+        ttl_expired=sim_metrics.packets_dropped_ttl,
+        no_route=sim_metrics.packets_dropped_no_route,
     )
 
     latencies: list[int] = []

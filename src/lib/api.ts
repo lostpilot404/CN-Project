@@ -19,7 +19,12 @@ import {
   Interface,
   HistoryStatus,
 } from '../types/topology';
-import { SimulationStateSnapshot, SimEvent, Packet } from '../types/simulation';
+import {
+  SimulationStateSnapshot,
+  SimEvent,
+  Packet,
+  ForwardingPolicy,
+} from '../types/simulation';
 import {
   MetricType,
   RoutingAlgorithm,
@@ -209,7 +214,8 @@ export const api = {
     dstNodeId: string,
     sizeBytes?: number,
     appProtocol?: string,
-    transportProtocol?: string
+    transportProtocol?: string,
+    ttl?: number
   ) =>
     callCommand<string>('inject_packet', {
       srcNodeId,
@@ -217,6 +223,7 @@ export const api = {
       sizeBytes,
       appProtocol,
       transportProtocol,
+      ttl,
     }),
   getPacketDetails: (packetId: string) =>
     callCommand<Packet | null>('get_packet_details', { packetId }),
@@ -341,6 +348,8 @@ export const api = {
   // Phase 7: QoS Performance & Experiments
   getCurrentQosMetrics: () =>
     callCommand<QosMetrics>('get_current_qos_metrics'),
+  setForwardingPolicy: (algorithm: string, metricType: string) =>
+    callCommand<ForwardingPolicy>('set_forwarding_policy', { algorithm, metricType }),
   scheduleFault: (entry: FaultScheduleEntry) =>
     callCommand<void>('schedule_fault_command', { entry }),
   runParameterSweep: (config: SweepConfig) =>

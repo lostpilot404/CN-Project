@@ -285,7 +285,10 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                 className={`font-bold ${
                   (metrics?.packets_dropped_overflow ?? 0) +
                     (metrics?.packets_dropped_loss ?? 0) +
-                    (metrics?.packets_dropped_error ?? 0) >
+                    (metrics?.packets_dropped_error ?? 0) +
+                    (metrics?.packets_dropped_link_down ?? 0) +
+                    (metrics?.packets_dropped_ttl ?? 0) +
+                    (metrics?.packets_dropped_no_route ?? 0) >
                   0
                     ? 'text-rose-400'
                     : 'text-slate-400'
@@ -294,7 +297,9 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                 {(metrics?.packets_dropped_overflow ?? 0) +
                   (metrics?.packets_dropped_loss ?? 0) +
                   (metrics?.packets_dropped_error ?? 0) +
-                  (metrics?.packets_dropped_link_down ?? 0)}
+                  (metrics?.packets_dropped_link_down ?? 0) +
+                  (metrics?.packets_dropped_ttl ?? 0) +
+                  (metrics?.packets_dropped_no_route ?? 0)}
               </span>
             </div>
             <div>

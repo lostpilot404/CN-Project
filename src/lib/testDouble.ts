@@ -567,6 +567,8 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
           packets_dropped_loss: 0,
           packets_dropped_error: 0,
           packets_dropped_link_down: 0,
+          packets_dropped_ttl: 0,
+          packets_dropped_no_route: 0,
           bytes_transmitted: mockEvents.length * 1000,
           bytes_delivered: Math.max(0, mockEvents.length - 1) * 1000,
           total_latency_us: 5800,
@@ -582,6 +584,7 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
           total_dropped_overflow: 0,
         })),
         packets: mockPackets,
+        forwarding_policy: { algorithm: 'dijkstra', metric_type: 'hop_count', default_ttl: 64 },
       };
       return Promise.resolve(snapshot as unknown as T);
     }
@@ -627,6 +630,8 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
           packets_dropped_loss: 0,
           packets_dropped_error: 0,
           packets_dropped_link_down: 0,
+          packets_dropped_ttl: 0,
+          packets_dropped_no_route: 0,
           bytes_transmitted: mockEvents.length * 1000,
           bytes_delivered: mockEvents.length * 1000,
           total_latency_us: 0,
@@ -635,6 +640,7 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
         },
         queues: [],
         packets: mockPackets,
+        forwarding_policy: { algorithm: 'dijkstra', metric_type: 'hop_count', default_ttl: 64 },
       };
       return Promise.resolve(snap as unknown as T);
     }
@@ -656,6 +662,8 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
           packets_dropped_loss: 0,
           packets_dropped_error: 0,
           packets_dropped_link_down: 0,
+          packets_dropped_ttl: 0,
+          packets_dropped_no_route: 0,
           bytes_transmitted: 0,
           bytes_delivered: 0,
           total_latency_us: 0,
@@ -664,6 +672,7 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
         },
         queues: [],
         packets: mockPackets,
+        forwarding_policy: { algorithm: 'dijkstra', metric_type: 'hop_count', default_ttl: 64 },
       };
       return Promise.resolve(snapshot as unknown as T);
     }
@@ -2759,6 +2768,8 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
           link_down: 1,
           bit_error: 0,
           stochastic_loss: 0,
+          ttl_expired: 0,
+          no_route: 0,
         },
         retransmissions: 1,
         link_utilization: [
@@ -2773,6 +2784,14 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
         queue_occupancy_max: 3,
         queue_drops: 0,
         average_rtt_us: 2100,
+      } as unknown as T);
+    }
+
+    case 'set_forwarding_policy': {
+      return Promise.resolve({
+        algorithm: 'dijkstra',
+        metric_type: (args?.metricType as string) || 'hop_count',
+        default_ttl: 64,
       } as unknown as T);
     }
 
@@ -2816,7 +2835,7 @@ export function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
             packets_delivered: 5,
             packets_lost: 0,
             packet_loss_rate: 0.0,
-            loss_by_category: { queue_overflow: 0, link_down: 0, bit_error: 0, stochastic_loss: 0 },
+            loss_by_category: { queue_overflow: 0, link_down: 0, bit_error: 0, stochastic_loss: 0, ttl_expired: 0, no_route: 0 },
             retransmissions: 0,
             link_utilization: [],
             queue_occupancy_average: 1.0,

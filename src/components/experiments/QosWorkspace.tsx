@@ -264,81 +264,35 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
             </div>
 
             <div className="space-y-3">
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-300">Queue Buffer Overflow</span>
-                  <span className="font-mono text-slate-200">{metrics?.loss_by_category.queue_overflow || 0} pkts</span>
+              {(
+                [
+                  ['Queue Buffer Overflow', 'queue_overflow', 'bg-amber-500'],
+                  ['Link Administratively Down', 'link_down', 'bg-rose-500'],
+                  ['Physical Bit Error Corruption', 'bit_error', 'bg-purple-500'],
+                  ['Stochastic Link Drop Probability', 'stochastic_loss', 'bg-blue-500'],
+                  ['TTL / Hop Limit Expired', 'ttl_expired', 'bg-cyan-500'],
+                  ['No Route to Destination', 'no_route', 'bg-slate-500'],
+                ] as const
+              ).map(([label, key, barColor]) => (
+                <div key={key}>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-slate-300">{label}</span>
+                    <span className="font-mono text-slate-200">{metrics?.loss_by_category[key] || 0} pkts</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div
+                      className={`h-full ${barColor} transition-all`}
+                      style={{
+                        width: `${
+                          metrics && metrics.packets_lost > 0
+                            ? ((metrics.loss_by_category[key] / metrics.packets_lost) * 100).toFixed(1)
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                  <div
-                    className="h-full bg-amber-500 transition-all"
-                    style={{
-                      width: `${
-                        metrics && metrics.packets_lost > 0
-                          ? ((metrics.loss_by_category.queue_overflow / metrics.packets_lost) * 100).toFixed(1)
-                          : 0
-                      }%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-300">Link Administratively Down</span>
-                  <span className="font-mono text-slate-200">{metrics?.loss_by_category.link_down || 0} pkts</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                  <div
-                    className="h-full bg-rose-500 transition-all"
-                    style={{
-                      width: `${
-                        metrics && metrics.packets_lost > 0
-                          ? ((metrics.loss_by_category.link_down / metrics.packets_lost) * 100).toFixed(1)
-                          : 0
-                      }%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-300">Physical Bit Error Corruption</span>
-                  <span className="font-mono text-slate-200">{metrics?.loss_by_category.bit_error || 0} pkts</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                  <div
-                    className="h-full bg-purple-500 transition-all"
-                    style={{
-                      width: `${
-                        metrics && metrics.packets_lost > 0
-                          ? ((metrics.loss_by_category.bit_error / metrics.packets_lost) * 100).toFixed(1)
-                          : 0
-                      }%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-300">Stochastic Link Drop Probability</span>
-                  <span className="font-mono text-slate-200">{metrics?.loss_by_category.stochastic_loss || 0} pkts</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                  <div
-                    className="h-full bg-blue-500 transition-all"
-                    style={{
-                      width: `${
-                        metrics && metrics.packets_lost > 0
-                          ? ((metrics.loss_by_category.stochastic_loss / metrics.packets_lost) * 100).toFixed(1)
-                          : 0
-                      }%`,
-                    }}
-                  />
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 

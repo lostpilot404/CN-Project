@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from ..models.link import LinkStatus
+from ..models.link import Link, LinkStatus
 from ..models.node import Node, NodeType
 from ..models.project import Project
 
@@ -63,13 +63,30 @@ class RoutingGraph:
 
     @classmethod
     def from_project(cls, project: Project, metric_type: MetricType) -> RoutingGraph:
-        nodes: dict[str, Node] = {node.id: node for node in project.nodes}
-        adjacency: dict[str, list[GraphEdge]] = {node.id: [] for node in project.nodes}
+        return cls.from_topology(project.nodes, project.links, metric_type)
 
-        for link in project.links:
-            if link.status == LinkStatus.DOWN:
+    @classmethod
+    def from_topology(
+        cls,
+        nodes: list[Node],
+        links: list[Link],
+        metric_type: MetricType,
+        include_unavailable: bool = False,
+    ) -> RoutingGraph:
+        """Build the authoritative routing graph from a node/link topology.
+
+        ``include_unavailable=False`` (the default, used for real route computation) omits links
+        that are administratively or operationally DOWN and penalises DEGRADED links, so routes
+        follow the topology as it currently stands. ``include_unavailable=True`` treats every link
+        as usable and is reserved for fault diagnosis (was a path *possible* before the fault?).
+        """
+        node_map: dict[str, Node] = {node.id: node for node in nodes}
+        adjacency: dict[str, list[GraphEdge]] = {node.id: [] for node in nodes}
+
+        for link in links:
+            if link.status == LinkStatus.DOWN and not include_unavailable:
                 continue
-            if link.source.node_id not in nodes or link.target.node_id not in nodes:
+            if link.source.node_id not in node_map or link.target.node_id not in node_map:
                 continue
 
             if metric_type == MetricType.HOP_COUNT:
@@ -86,6 +103,9 @@ class RoutingGraph:
                 effective_metric = base_metric
             elif link.status == LinkStatus.DEGRADED:
                 effective_metric = max(base_metric * 3, base_metric + 50)
+            elif include_unavailable:
+                # DOWN links are only present in the diagnostic graph.
+                effective_metric = base_metric
             else:
                 continue
 
@@ -119,7 +139,7 @@ class RoutingGraph:
                 )
             )
 
-        return cls(nodes=nodes, adjacency=adjacency, metric_type=metric_type)
+        return cls(nodes=node_map, adjacency=adjacency, metric_type=metric_type)
 
     def is_l3_transit_capable(self, node_id: str) -> bool:
         node = self.nodes.get(node_id)
@@ -140,7 +160,9 @@ class RoutingGraph:
         node = self.nodes.get(node_id)
         if not node:
             return False
-        return node.node_type == NodeType.SWITCH
+        # Switches and wireless access points bridge frames at layer 2 and are therefore
+        # transparent forwarders in the physical path (stripped from L3 route displays).
+        return node.node_type in (NodeType.SWITCH, NodeType.ACCESS_POINT)
 
     def can_forward_traffic(self, node_id: str) -> bool:
         return self.is_l3_transit_capable(node_id) or self.is_l2_transparent_forwarder(node_id)

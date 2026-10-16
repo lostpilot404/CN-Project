@@ -33,7 +33,7 @@ from netsim.application.ftp import FtpConfig, simulate_ftp
 from netsim.application.http import HttpConfig, simulate_http
 from netsim.application.smtp import SmtpConfig, simulate_smtp
 from netsim.application.snmp import SnmpConfig, simulate_snmp
-from netsim.core.engine import SimulationEngine
+from netsim.core.engine import DEFAULT_PACKET_TTL, MAX_PACKET_TTL, SimulationEngine
 from netsim.core.schema import require_int, require_non_empty
 from netsim.datalink.checksum import internet_checksum, verify_checksum
 from netsim.datalink.crc import calculate_crc, verify_crc
@@ -169,7 +169,7 @@ class SessionState:
     def __init__(self) -> None:
         self.project = create_default_project()
         self.engine = SimulationEngine(seed=42)
-        self.engine.update_links(self.project.links)
+        self.engine.update_topology(self.project.nodes, self.project.links)
         self.undo_stack: list[Project] = []
         self.redo_stack: list[Project] = []
         self.nat_tables: dict[str, NatTable] = {}
@@ -182,7 +182,7 @@ class SessionState:
 
     def reset_engine(self) -> None:
         self.engine.reset()
-        self.engine.update_links(self.project.links)
+        self.engine.update_topology(self.project.nodes, self.project.links)
 
 
 SESSION = SessionState()
@@ -536,7 +536,7 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         src_node.attach_link(src_if.id, link_id)
         dst_node.attach_link(dst_if.id, link_id)
         SESSION.project.links.append(new_link)
-        SESSION.engine.update_links(SESSION.project.links)
+        SESSION.engine.update_topology(SESSION.project.nodes, SESSION.project.links)
         return new_link.to_dict()
 
     elif cmd in ("update_link", "updateLink"):
@@ -560,7 +560,7 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         SESSION.push_undo()
         # An explicit reconfiguration supersedes any captured pre-fault value.
         SESSION.engine.clear_fault_snapshot(link.id)
-        SESSION.engine.update_links(SESSION.project.links)
+        SESSION.engine.update_topology(SESSION.project.nodes, SESSION.project.links)
         return link.to_dict()
 
     elif cmd in ("remove_link", "removeLink"):
@@ -569,7 +569,7 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         SESSION.project.links = [lnk for lnk in SESSION.project.links if lnk.id != link_id]
         for node in SESSION.project.nodes:
             node.detach_link(link_id)
-        SESSION.engine.update_links(SESSION.project.links)
+        SESSION.engine.update_topology(SESSION.project.nodes, SESSION.project.links)
         return None
 
     elif cmd in ("update_interface", "updateInterface"):
@@ -636,6 +636,26 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
     elif cmd in ("get_simulation_state", "getSimulationState"):
         return SESSION.engine.get_state_snapshot()
 
+    elif cmd in ("set_forwarding_policy", "setForwardingPolicy"):
+        """Configure the routing model that governs live packet forwarding.
+
+        The policy is explicit and shared with the routing graph: 'dijkstra' (shortest
+        path) over one of the supported metrics. Default: dijkstra + hop_count.
+        """
+        algo_raw = arg(args, "algorithm", default=SESSION.engine.forwarding_algorithm)
+        algo_str = str(algo_raw).strip().lower().replace("-", "_")
+        if algo_str not in ("dijkstra",):
+            raise CommandError(f"Unsupported forwarding algorithm '{algo_raw}'. Expected 'dijkstra'")
+        metric_raw = arg(args, "metric_type", "metricType", default=SESSION.engine.forwarding_metric.value)
+        metric = parse_enum(MetricType, metric_raw, "routing metric")
+        SESSION.engine.forwarding_algorithm = algo_str
+        SESSION.engine.forwarding_metric = metric
+        return {
+            "algorithm": SESSION.engine.forwarding_algorithm,
+            "metric_type": SESSION.engine.forwarding_metric.value,
+            "default_ttl": DEFAULT_PACKET_TTL,
+        }
+
     elif cmd in ("step_simulation", "stepSimulation"):
         evt = SESSION.engine.step()
         return evt.to_dict() if evt else None
@@ -678,7 +698,17 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
             raise CommandError("Packet size must not exceed 9,000,000 bytes")
         app = str(arg(args, "app_protocol", "appProtocol", default="HTTP"))
         trans = str(arg(args, "transport_protocol", "transportProtocol", default="TCP"))
-        pkt_id = SESSION.engine.inject_packet(str(src), str(dst), size, app, trans)
+        raw_ttl = arg(args, "ttl", "packet_ttl", default=DEFAULT_PACKET_TTL)
+        try:
+            ttl = int(raw_ttl)
+        except (TypeError, ValueError) as exc:
+            raise CommandError(f"TTL must be an integer between 1 and 255 (received {raw_ttl!r})") from exc
+        if ttl < 1 or ttl > MAX_PACKET_TTL:
+            raise CommandError(f"TTL must be between 1 and 255 (received {ttl})")
+        try:
+            pkt_id = SESSION.engine.inject_packet(str(src), str(dst), size, app, trans, ttl=ttl)
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
         return pkt_id
 
     elif cmd in ("get_packet_details", "getPacketDetails"):
