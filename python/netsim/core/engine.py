@@ -25,6 +25,7 @@ from .clock import SimTime
 from .delays import calculate_arrival_time_us, calculate_tx_delay_us
 from .events import SimEvent
 from .metrics import SimulationMetrics
+from .overhead import payload_bytes_for
 from .queue import LinkQueue
 from .rng import DeterministicRng
 
@@ -254,6 +255,10 @@ class SimulationEngine:
         if ttl < 1 or ttl > MAX_PACKET_TTL:
             raise ValueError(f"TTL must be between 1 and {MAX_PACKET_TTL} (received {ttl})")
 
+        # ``size_bytes`` is the total on-the-wire packet size; the useful payload is
+        # what remains after the documented network + transport headers (overhead.py).
+        payload_bytes = payload_bytes_for(size_bytes, transport_protocol)
+
         decision = self.resolve_forwarding(src_node_id, dst_node_id)
         planned_route = list(decision.path) if decision.path else []
 
@@ -278,7 +283,7 @@ class SimulationEngine:
             headers=EncapsulationStack(
                 application=AppHeader(
                     protocol=app_protocol,
-                    payload_preview=f"Data payload ({size_bytes} bytes)",
+                    payload_preview=f"Data payload ({payload_bytes} bytes)",
                     message_type=f"{app_protocol} Data",
                     session_id=None,
                     transaction_id=None,
@@ -293,7 +298,7 @@ class SimulationEngine:
                     ack_num=None,
                     window_size=65535,
                     flags=["ACK"] if transport_protocol == "TCP" else [],
-                    payload_length=size_bytes,
+                    payload_length=payload_bytes,
                     is_retransmission=False,
                     connection_state="ESTABLISHED" if transport_protocol == "TCP" else None,
                 ),
@@ -590,7 +595,11 @@ class SimulationEngine:
             if is_final:
                 if pkt:
                     pkt.state = PacketState.DELIVERED
-                self.metrics.record_delivered(size_bytes, latency_us)
+                # Throughput counts the delivered wire bytes (headers + payload);
+                # goodput counts only the useful payload inside them.
+                transport_proto = pkt.headers.transport.protocol if pkt and pkt.headers.transport else "TCP"
+                payload_bytes = payload_bytes_for(size_bytes, transport_proto)
+                self.metrics.record_delivered(size_bytes, latency_us, payload_bytes)
             else:
                 # Table-driven forwarding: resolve the next hop from the current
                 # topology at every transit node. A missing route is an explicit drop,

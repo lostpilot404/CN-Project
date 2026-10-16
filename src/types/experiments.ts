@@ -16,9 +16,14 @@ export interface LinkUtilizationRecord {
 
 export interface QosMetrics {
   measurement_interval_us: number;
+  /** Gross wire rate at the model's documented boundary (headers + payload, incl. retransmissions). */
   throughput_bits_per_sec: number;
   throughput_bytes_per_sec: number;
+  /** Net useful payload rate: unique delivered payload, headers and retransmissions excluded. */
   goodput_bits_per_sec: number;
+  /** Byte totals behind the two rates (wire bytes vs unique delivered payload bytes). */
+  throughput_bytes_counted: number;
+  goodput_payload_bytes: number;
   end_to_end_latencies_us: number[];
   average_latency_us: number;
   min_latency_us: number | null;

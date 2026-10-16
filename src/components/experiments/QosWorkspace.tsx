@@ -189,14 +189,14 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
           <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 hover:border-slate-700/80 transition relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl group-hover:bg-indigo-700/10 transition" />
             <div className="flex items-center justify-between text-slate-400 text-xs font-medium mb-1">
-              <span>Throughput</span>
+              <span title="Gross delivered wire rate: packet/segment headers and payload together">Throughput (wire)</span>
               <Zap className="w-4 h-4 text-indigo-400" />
             </div>
             <div className="text-xl font-bold text-slate-100">
               {metrics ? formatBps(metrics.throughput_bits_per_sec) : '0 bps'}
             </div>
             <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
-              <span>Goodput: <strong className="text-emerald-400">{metrics ? formatBps(metrics.goodput_bits_per_sec) : '0 bps'}</strong></span>
+              <span title="Net useful payload rate: unique delivered payload only">Goodput (payload): <strong className="text-emerald-400">{metrics ? formatBps(metrics.goodput_bits_per_sec) : '0 bps'}</strong></span>
               <span>{metrics ? formatBytes(metrics.throughput_bytes_per_sec) : '0 B/s'}</span>
             </div>
           </div>

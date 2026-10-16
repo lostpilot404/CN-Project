@@ -680,14 +680,14 @@ const TcpStudioView: React.FC<{
           </div>
 
           <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
-            <span className="text-[10px] text-slate-400">Throughput (Wire)</span>
+            <span className="text-[10px] text-slate-400" title="All wire bits transmitted: payload + per-segment headers, including retransmissions">Throughput (Wire)</span>
             <div className="text-sm font-bold text-indigo-400 font-mono mt-0.5">
               {(metrics.throughput_bits_per_sec / 1_000_000).toFixed(2)} Mbps
             </div>
           </div>
 
           <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
-            <span className="text-[10px] text-slate-400">Goodput (Application)</span>
+            <span className="text-[10px] text-slate-400" title="Unique application payload delivered: headers and retransmitted data excluded">Goodput (Application)</span>
             <div className="text-sm font-bold text-emerald-400 font-mono mt-0.5">
               {(metrics.goodput_bits_per_sec / 1_000_000).toFixed(2)} Mbps
             </div>
