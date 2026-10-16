@@ -387,7 +387,7 @@ test.describe('NetSim full-stack end-to-end', () => {
   test('11. Algorithm studio: Hamming, CRC and checksum computed through the UI', async ({ page }) => {
     await resetProject(page, 'datalink');
     await page.getByRole('button', { name: 'Algorithm Studio' }).click();
-    await expect(page.locator('h1', { hasText: 'Data Link Layer Protocol & Algorithm Studio' })).toBeVisible();
+    await expect(page.locator('h1', { hasText: 'Algorithm Studio' })).toBeVisible();
 
     // --- Hamming: encode 1011 through the UI and read the rendered codeword -------------
     await page.getByRole('button', { name: 'Encode into Hamming Codeword' }).click();
@@ -595,7 +595,7 @@ test.describe('NetSim full-stack end-to-end', () => {
     await command(page, 'run_simulation_until_empty');
 
     await page.getByRole('button', { name: 'QoS Performance' }).click();
-    await expect(page.locator('h2', { hasText: 'QoS Performance & Fault Studio' })).toBeVisible();
+    await expect(page.locator('h2', { hasText: 'QoS Performance' })).toBeVisible();
     await expect(page.locator('text=Average Latency')).toBeVisible();
 
     const metrics = await command<{ packets_sent: number; packets_delivered: number; average_latency_us: number }>(
@@ -716,6 +716,8 @@ test.describe('NetSim full-stack end-to-end', () => {
     const before = await command<{ links: unknown[] }>(page, 'get_project');
     expect(before.links).toHaveLength(2);
 
+    // Wait for the canvas toolbar (and its keyboard handler) to be mounted before pressing keys.
+    await expect(page.getByTestId('connect-nodes')).toBeVisible();
     // The 'c' shortcut opens the dialog without touching the pointer.
     await page.keyboard.press('c');
     const dialog = page.getByTestId('connect-dialog');

@@ -11,14 +11,15 @@
  *     here; those shades were checked arithmetically against the WCAG contrast formula instead.
  *   - Automated rules cannot detect every WCAG criterion; passing this suite is necessary, not
  *     sufficient, for conformance.
- *   - Dialogs and transient states are not opened by the audit.
+ *   - Dialogs and transient states (keyboard help overlay, connect dialog, import confirmation
+ *     dialog, error toast) are opened and audited by test 3.
  */
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 const API = process.env.VITE_NETSIM_API_URL ?? process.env.NETSIM_API_URL ?? 'http://127.0.0.1:8765';
 
-/** The nine top-level workspaces, in sidebar order. */
+/** The ten top-level workspaces, in sidebar order. */
 const WORKSPACES = [
   'Topology Canvas',
   'Routing Studio',
@@ -151,6 +152,14 @@ test('3. dialogs and transient states pass the WCAG A/AA audit', async ({ page }
   findings.push(...(await audit(page, 'Keyboard help overlay')));
   await page.keyboard.press('Escape');
   await expect(help).toBeHidden();
+
+  // Keyboard connect dialog on the topology canvas.
+  await page.getByTestId('connect-nodes').click();
+  const connectDialog = page.getByTestId('connect-dialog');
+  await expect(connectDialog).toBeVisible();
+  findings.push(...(await audit(page, 'Connect nodes dialog')));
+  await page.keyboard.press('Escape');
+  await expect(connectDialog).toBeHidden();
 
   // Import confirmation dialog (confirmation is required before replacing a project).
   await page.getByTestId('import-project-file').setInputFiles({

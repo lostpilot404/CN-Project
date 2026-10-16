@@ -40,8 +40,8 @@ The sidebar lists ten workspaces. Each is a view onto the same project and the s
 
 | Workspace | What it is for |
 |---|---|
-| **Topology Canvas** | Build the network: add nodes, drag to reposition, connect them |
-| **Routing Studio** | Routing tables, link-state vs distance-vector convergence |
+| **Topology Canvas** | Build the network: add nodes, reposition them, connect them (drag handles, or the keyboard Connect dialog) |
+| **Routing Studio** | Routing tables, link-state vs distance-vector convergence, and the live forwarding policy (algorithm + metric) shared by tables and packet delivery |
 | **Addressing & NAT** | IPv4 subnetting, VLSM, IPv6 validation, static/dynamic NAT |
 | **Simulation & Events** | Inject packets, step the clock, run to completion, read the timeline |
 | **Algorithm Studio** | Error control: Hamming, CRC, internet checksum, flow control, MAC |
@@ -58,11 +58,19 @@ time.
 ## 3. Building a topology
 
 1. Open **Topology Canvas**.
-2. Add nodes with the palette (host, router, switch).
-3. Move a node by dragging its body.
-4. **Connect two nodes by dragging from a node's connection handle to another node's handle.** The
-   drop target must be a handle, not the node body.
-5. Select a node to edit its label, state and interfaces in the inspector.
+2. Add nodes with the palette at the bottom of the canvas (host, router, switch, server, AP).
+3. Move a node by dragging its body. With the keyboard: focus a node with Tab, press Enter or
+   Space to select it, then use the arrow keys to nudge it.
+4. **Connect two nodes** in either of two ways:
+   - Pointer: drag from a node's connection handle to another node's handle. The drop target must
+     be a handle, not the node body.
+   - Keyboard: press **C** (or the **Connect** button in the canvas toolbar), pick the source and
+     target nodes in the dialog, and confirm. The dialog validates the choices before anything is
+     sent, shows backend errors inline, and closes with Escape or Cancel.
+   Both paths call the same authoritative `add_link` API; the dialog is not a second model of the
+   topology.
+5. Select a node to edit its label, state and interfaces in the inspector. The inspector's delete
+   button (or the Delete key) removes the selected node or link.
 
 Links carry bandwidth, propagation delay, loss probability, bit error rate and queue capacity.
 `add_link` provisions a new interface when all existing ports are occupied; naming a port that is

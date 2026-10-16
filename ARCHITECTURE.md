@@ -129,7 +129,7 @@ fault instead of a client error.
 | `core/metrics.py` | Metric accumulation |
 | `core/schema.py` | Payload validation helpers |
 | `models/` | `node`, `interface`, `link`, `packet`, `project`, `history` |
-| `routing/` | `graph`, `dijkstra`, `bellman_ford`, `table` |
+| `routing/` | `graph` (path search dispatches on the engine forwarding algorithm — Dijkstra or Bellman-Ford, one shared deterministic tie-break), `dijkstra`, `bellman_ford`, `table` |
 | `addressing/` | `ipv4`, `ipv6`, `vlsm`, `nat` |
 | `switching/` | `circuit` — educational circuit-switching admission model |
 | `datalink/` | `hamming`, `crc`, `checksum`, `flow_control`, `mac` |

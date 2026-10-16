@@ -4,7 +4,9 @@
 **Repository:** https://github.com/lostpilot404/CN-Project
 **Branch:** `arena/541edc3e-cn-project` (never merged into `main`; all work confined to this branch)
 **Report date:** 2026-10-16 (Asia/Calcutta)
-**Baseline:** `d213648f3679b9c94b1326cc065d84640f1d5b9d` (start) → **`42092dd`** (final, pushed)
+**Baseline:** `d213648f3679b9c94b1326cc065d84640f1d5b9d` (start) → `42092dd` (Phases A–I final) →
+**`9d31c85`** (this report, delivered) → `e04054a`… (residual pass — see Addendum, which records the
+actual branch tip at its own delivery)
 
 ---
 
@@ -43,10 +45,15 @@ cold-start Playwright path.
 
 | Item | Value |
 |---|---|
-| Branch | `arena/541edc3e-cn-project` (pushed to `origin`, clean tree) |
-| Commits authored this effort | **10** (`786abb6` … `42092dd`), linear on top of the docs baseline |
+| Branch | `arena/541edc3e-cn-project` (pushed to `origin`, clean tree at delivery) |
+| Commits authored this effort | **11** (`786abb6` … `9d31c85`), linear on top of the docs baseline |
 | `main` | untouched at `d213648`; obsolete `arena/5d41fe31-cn-project` never used |
 | Large artifacts | none committed; all test output ephemeral |
+
+**Correction to this report's first edition:** the header originally claimed `42092dd` as the
+"final, pushed" commit. That was the last *implementation* commit of Phases A–I; this report was
+delivered **as** commit `9d31c85` (the child of `42092dd`). A later residual pass added further
+commits; its state is recorded in the Addendum so the git history is never restated inaccurately.
 
 | SHA | Subject |
 |---|---|
@@ -60,6 +67,8 @@ cold-start Playwright path.
 | `6f5265e` | feat: canvas keyboard editing, reduced-motion support, extended a11y/responsive audits (F, G) |
 | `70e3425` | feat: request-body hardening, bundle code splitting, and a full CI gate (H) |
 | `42092dd` | docs: reconcile every document with the shipped code (Phase I) |
+| `9d31c85` | docs: final engineering report with full verification matrix (this document's delivery commit) |
+| `e04054a` | residual: dual-algorithm live forwarding, keyboard connect workflow, per-workspace UI redesign |
 
 ---
 
@@ -80,10 +89,15 @@ cold-start Playwright path.
   overflow/loss accounting 14 passed · experiment validation 31 passed · export schema
   10 passed · backend-offline handling (apiClient 9 passed + Playwright tests 2 and 2b).
 
-### C — real packet routing (closed, `5209d8c`)
+### C — real packet routing (closed, `5209d8c`; policy widened in the residual pass)
 The first-available-link heuristic is gone. Each hop resolves the next hop from the routing
 graph computed by the **selected algorithm/metric** (Dijkstra link-state or Bellman-Ford DV;
-default hop count, also `latency`/`bandwidth` via `set_forwarding_policy`). Enforced TTL/hop
+default hop count, also `latency`/`bandwidth` via `set_forwarding_policy`). *Residual-pass note:
+at `5209d8c` the live path resolved with Dijkstra only while `set_forwarding_policy` accepted only
+`dijkstra` — the Bellman-Ford half of this claim applied to the routing-table APIs. As of `e04054a`
+`find_path` dispatches on the active algorithm with an identical deterministic tie-break and
+`set_forwarding_policy` accepts `dijkstra` and `bellman_ford`, so the claim is true for the live
+path as written.* Enforced TTL/hop
 limit (explicit drop `dropped_ttl_expired`), loop guard, unreachable = drop (`dropped_no_route`),
 deterministic tie-break per seed, exactly-once drop accounting, and alternate-path delivery
 after a link-down fault. Pinned by `python/tests/test_forwarding.py` (direct route, intermediate
@@ -285,6 +299,8 @@ CI runs the same gate automatically (`.github/workflows/ci.yml`).
 
 ---
 
-*Report authored 2026-10-16 on `arena/541edc3e-cn-project` at `42092dd`. Every number above is
-from a command executed in this workspace; nothing is inferred from code inspection unless
-explicitly labelled as such.*
+*Report authored 2026-10-16 on `arena/541edc3e-cn-project`. Sections 1–10 record the Phases A–I
+effort whose last implementation commit is `42092dd`; the report itself was delivered as `9d31c85`.
+Every number above is from a command executed in this workspace; nothing is inferred from code
+inspection unless explicitly labelled as such. The residual pass that followed is documented in
+the Addendum below.*

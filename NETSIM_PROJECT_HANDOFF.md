@@ -73,7 +73,7 @@ analysis scripts:
    UDP, congestion control), application protocols (DNS, HTTP, FTP, SMTP, SNMP), QoS metrics,
    fault injection and experiment sweeps. Served by a standard-library `HTTPServer` on
    `127.0.0.1:8765`.
-2. **Presentation layer — `src/` (React 18 + TypeScript + Tailwind + `@xyflow/react`).** Nine
+2. **Presentation layer — `src/` (React 18 + TypeScript + Tailwind + `@xyflow/react`).** Ten
    workspaces that collect parameters, issue `POST /api/<command>` calls and render exactly what
    comes back. It contains **no** networking algorithms and **no** fallback engine.
 3. **Optional tooling — `python-tools/`.** Two standalone scripts that read an exported sweep JSON
@@ -1065,6 +1065,7 @@ Argument notation: **required**, *optional (default)*. "Result" names the serial
 |---|---|---|---|
 | `calculate_routing_table` | *algorithm (`dijkstra`), metric_type (`hop_count`), node_id* | `RoutingTable`: `node_id, node_label, algorithm, metric_type, entries[]` where each entry is `{destination, destination_label, next_hop, interface_id, metric, path[], is_reachable, protocol}` | Algorithm must be `dijkstra` or `bellman_ford`; unknown metric → 400 listing values; **non-router node → 400** ("not an L3 routing device") — verified |
 | `simulate_routing_convergence` | *source_node_id/node_id, metric_type* | `ConvergenceTelemetry` (rounds with per-destination distances) | Non-router → 400 |
+| `set_forwarding_policy` | *algorithm (`dijkstra`), metric_type (`hop_count`)* | `{algorithm, metric_type, default_ttl}` | Algorithm must be `dijkstra` or `bellman_ford` (hyphenated spelling normalised); anything else (including `ospf`) → 400; unknown metric → 400 listing values. The policy governs live per-hop forwarding and is reported in `get_simulation_state.forwarding_policy` |
 | `calculate_ipv4_subnet` | **input** (alias `cidr`) | `Ipv4SubnetInfo` (15 fields incl. `network_address`, `broadcast_address`, `first_usable_ip`, `last_usable_ip`, `usable_hosts`, `ip_class`, `scope`, binary forms) | Empty → 400; unparseable → 400 (`calculate_subnet` raises `ValueError`) |
 | `split_ipv4_subnet` | *base_cidr (`192.168.1.0/24`), new_prefix (`26`)* | `SubnetSplitResult` with the full subnet list | `new_prefix ≤ base prefix` → 400; `> 32` → 400 |
 | `allocate_vlsm_subnets` | *base_cidr (`192.168.0.0/24`), requirements[{name, needed_hosts}]* | `VlsmAllocationResult` (`subnets[]` with `allocated_prefix`, `subnet_info`, `wasted_hosts`; totals; `utilization_percent`; `free_address_space[]`) | Empty requirement list → 400; a requirement that cannot fit → 400 |
@@ -1199,7 +1200,7 @@ Behaviours worth knowing:
 | Component | Responsibility |
 |---|---|
 | `src/components/layout/Navbar.tsx` | Title, backend **authority badge** (`data-testid="authority-badge"`, text `Python Authoritative` / `Backend Offline`, `title` naming the start command), New Project, **Export JSON**, Reset |
-| `src/components/layout/Sidebar.tsx` | The nine workspace buttons and the engine status line (`data-testid="engine-status"` → `ONLINE`/`CHECKING`/`OFFLINE`/`UNKNOWN`, plus `Python core v<version>` from the health payload) |
+| `src/components/layout/Sidebar.tsx` | The ten workspace buttons and the engine status line (`data-testid="engine-status"` → `ONLINE`/`CHECKING`/`OFFLINE`/`UNKNOWN`, plus `Python core v<version>` from the health payload) |
 | `src/components/simulation/ControlBar.tsx` | Pause, Run 50ms, Run All, Step Event, Reset, Inject Packet |
 | `src/components/timeline/TimelineDrawer.tsx` | Collapsible timeline over the canvas |
 
@@ -1207,8 +1208,8 @@ Behaviours worth knowing:
 
 | Workspace (sidebar) | Component | Sub-views | Backend commands used |
 |---|---|---|---|
-| Topology Canvas | `topology/TopologyCanvas.tsx` (+ `DevicePalette`, `PropertyEditor`, `CustomNode`) | — | `get_project`, `add_node`, `update_node`, `remove_node`, `add_link`, `update_link`, `remove_link`, `update_interface`, `undo_topology`, `redo_topology`, `get_topology_history_status`, `inject_packet`, `schedule_demo_packet`, `step_simulation`, `run_simulation_micros`, `run_simulation_until_empty`, `pause_simulation`, `reset_simulation`, `save_project_json` |
-| Routing Studio | `routing/RoutingWorkspace.tsx` | Dijkstra (Link-State), Bellman-Ford (DV) | `calculate_routing_table`, `simulate_routing_convergence` |
+| Topology Canvas | `topology/TopologyCanvas.tsx` (+ `DevicePalette`, `PropertyEditor`, `CustomNode`, `ConnectDialog`) | — | `get_project`, `add_node`, `update_node`, `remove_node`, `add_link`, `update_link`, `remove_link`, `update_interface`, `undo_topology`, `redo_topology`, `get_topology_history_status`, `inject_packet`, `schedule_demo_packet`, `step_simulation`, `run_simulation_micros`, `run_simulation_until_empty`, `pause_simulation`, `reset_simulation`, `save_project_json` |
+| Routing Studio | `routing/RoutingWorkspace.tsx` | Dijkstra (Link-State), Bellman-Ford (DV) | `calculate_routing_table`, `simulate_routing_convergence`, `set_forwarding_policy`, `get_simulation_state` |
 | Addressing & NAT | `addressing/AddressingWorkspace.tsx` | IPv4 & CIDR Subnetting, True VLSM Allocator, Topology IP Auditor, IPv6 Inspector, NAT / NAPT Translation | `calculate_ipv4_subnet`, `split_ipv4_subnet`, `allocate_vlsm_subnets`, `detect_duplicate_ips_command`, `validate_ipv6_address`, `get_or_create_nat_table`, `add_static_dnat_rule`, `simulate_nat_outbound`, `simulate_nat_inbound` |
 | Simulation & Events | `simulation/SimulationStudio.tsx` | Packet Injection, Event Timeline, Packet Inspector | `inject_packet`, `step_simulation`, `run_simulation_micros`, `run_simulation_until_empty`, `reset_simulation`, `get_packet_details`, `get_simulation_state` |
 | Algorithm Studio | `datalink/DataLinkWorkspace.tsx` | Error Control (Hamming Code, CRC Polynomial, Internet Checksum), Flow Control, Multiple Access | `calculate_hamming_encode`, `verify_and_correct_hamming`, `calculate_crc`, `verify_crc`, `calculate_internet_checksum`, `verify_internet_checksum`, `simulate_sliding_window`, `simulate_go_back_n`, `simulate_selective_repeat`, `simulate_pure_aloha`, `simulate_slotted_aloha`, `simulate_csma`, `simulate_csma_cd` |
@@ -1336,7 +1337,7 @@ by the subprocess CLI tests but cannot be attributed back to the imported module
   failover, topology add/connect, inject/step/run to completion, packet inspector (five layers vs
   `get_packet_details`), routing + convergence, CIDR/VLSM, Hamming/CRC/checksum, flow control,
   all four MAC protocols, TCP/UDP/congestion, DNS (valid and invalid), QoS counts, sweep
-  reproducibility, A/B delta, and **layout overflow at 1440/1280/1024 px across all nine
+  reproducibility, A/B delta, and **layout overflow at 1440/1280/1024/768/375/320 px across all ten
   workspaces**. Tests that render topology call `resetProject()` first so runs are order-independent.
 
 ### 10.6 Accessibility coverage and its limits
@@ -1494,7 +1495,7 @@ enumerate modules and grep for the *behaviour*, not the wrapper.
 | 7 | Medium | The timeline read `Object.keys(event_type)[0]`, so every event was named `"type"` | Filters, layer grouping and status colouring all collapsed | `EventTimeline` reads the `{type, data}` envelope; `src/types/events.ts` declares `SimEventEnvelope` | **Code-inspected** + `EventContract.test.tsx` (5 tests) pass |
 | 8 | Medium | Simulation-studio failures were swallowed by `console.error` | A failed run left the UI unchanged and silent | Errors surface through the studio's error panel (`data-testid="simulation-error"`) and the toast | **Re-verified:** Playwright test 17 asserts a server rejection is displayed |
 | 9 | Medium | The header **virtual clock froze** while the engine advanced (studios call the API directly; nothing refreshed `App`) | The user saw `0 µs` after stepping to 5.80 ms | 1 s polling of `get_simulation_state` while online (plus `visibilitychange`) | **Code-inspected** in `App.tsx` |
-| 10 | Medium | The inspector's "Journey" tab fell outside the window at exactly 1024 px (right edge x = 1027) | Content unreachable at a supported width | Layout reflow | **Verified today:** Playwright test 21 checks all nine workspaces at 1440/1280/1024 px with ≤1 px overflow |
+| 10 | Medium | The inspector's "Journey" tab fell outside the window at exactly 1024 px (right edge x = 1027) | Content unreachable at a supported width | Layout reflow | **Verified today:** Playwright test 21 checks all ten workspaces at 1440/1280/1024/768/375/320 px with ≤1 px overflow |
 | 11 | Low | The "NXDOMAIN" DNS preset was clipped to "NX…" | Unreadable preset | Non-wrapping header row fixed | **Verified today** by the same layout test |
 | 12 | Low | Empty states omitted their `data-testid` | "No result yet" was indistinguishable from "component missing" | Test ids added to empty states | **Code-inspected** |
 | 14 | High | Vite watched the Python virtualenv, so installing a package or running the test suite reloaded the browser mid-edit | Lost work / confusing HMR | `server.watch.ignored` covers `.venv`, `venv`, `__pycache__`, `.pytest_cache`, `.ruff_cache`, `.git` | **Code-inspected** in `vite.config.ts` (the ignore list is present) |
@@ -1686,6 +1687,14 @@ topology as it stands".
 > (Dijkstra or Bellman-Ford), with an enforced TTL/hop limit, a loop guard, explicit per-packet
 > drop causes, and alternate-path delivery after a link-down fault. Pinned by
 > `python/tests/test_forwarding.py` and the golden parity suites.
+>
+> **Extended 2026-10-16 (residual pass).** At `5209d8c` the live path still ran Dijkstra only
+> while `set_forwarding_policy` accepted only `dijkstra` — the "(Dijkstra or Bellman-Ford)" claim
+> above was accurate for the routing-table APIs but overstated for live forwarding. The residual
+> pass wired `SimulationEngine.resolve_forwarding` to the active `forwarding_algorithm`, taught
+> `RoutingGraph.find_path` to dispatch Dijkstra/Bellman-Ford with an identical deterministic
+> tie-break (parity and live-delivery tests), and widened `set_forwarding_policy` to accept
+> `dijkstra` and `bellman_ford` (everything else, including `ospf`, is still rejected with 400).
 
 ### 14.4 Goodput is identical to throughput
 
@@ -1820,7 +1829,7 @@ attribution, add it deliberately rather than assuming the repository records it.
 | IPv4 addressing, CIDR, subnetting, VLSM | **Implemented + verified** | `addressing/ipv4.py`, `vlsm.py` |
 | NAT / NAPT and port forwarding | **Implemented + verified** (table model) | `addressing/nat.py` |
 | IPv6 addressing | **Partial** — validation/canonicalisation/scope only; **no IPv6 routing or header simulation** | `addressing/ipv6.py` |
-| Routing: link-state (Dijkstra) and distance-vector (Bellman-Ford), metrics, convergence | **Implemented + verified** for routing tables and convergence telemetry; **not** applied to live packet forwarding (§14.3) | `routing/*`, `experiments/runner.py` |
+| Routing: link-state (Dijkstra) and distance-vector (Bellman-Ford), metrics, convergence | **Implemented + verified** for routing tables, convergence telemetry **and** live packet forwarding (residual pass: `find_path` dispatches on the active `forwarding_algorithm`, both algorithms share the same deterministic tie-break; policy via `set_forwarding_policy`) | `routing/*`, `core/engine.py`, `server.py` |
 | Circuit switching | **Absent** (documented in `ALGORITHMS.md` §16 but not implemented) | — |
 | Packet switching, queueing, drop-tail, loss | **Implemented + verified** | `core/engine.py`, `core/queue.py` |
 | TCP (handshake, seq/ACK, retransmission, RTT estimation) | **Implemented + verified** (educational model) | `transport/tcp.py`, `transport/__init__.py` |

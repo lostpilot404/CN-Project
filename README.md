@@ -101,7 +101,7 @@ of checks that could not be executed in earlier audit environments.
 | Front-end ↔ service integration | `NETSIM_LIVE_API=1 npx vitest run src/integration` | **11 passed** (real service) |
 | Production build | `npm run build` | succeeds; split chunks (largest 370 kB, was 1115 kB); bundle contains only the inert test-double stub |
 | Browser end-to-end (cold start) | `npx playwright test` | **25 passed** in a real Chromium (22 functional + 3 axe-core accessibility, both servers started by the suite itself) |
-| Accessibility audit alone | `npx playwright test e2e/a11y.spec.ts` | **3 passed** — 10 workspaces, 24 sub-views, dialogs/transient states (WCAG 2.0/2.1 A+AA) |
+| Accessibility audit alone | `npx playwright test e2e/a11y.spec.ts` | **3 passed** — 10 workspaces, 24 sub-views audited with axe-core (WCAG 2.0/2.1 A+AA); dialogs and transient states are outside the automated audit (see `e2e/a11y.spec.ts` scope notes) |
 
 ### Running the tests
 

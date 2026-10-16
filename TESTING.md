@@ -24,7 +24,7 @@ Utility tests                engine→script schema drift, bad input     python-
         ↓
       static typing          mypy over the engine and the utilities    pyproject.toml
         ↓
-Front-end unit/component     rendering, state, error and empty states  src/*.test.ts
+Front-end unit/component     rendering, state, error and empty states  src/*.test.tsx?
         ↓
 Front-end ↔ service          real HTTP against a running service       src/integration/
         ↓
@@ -55,7 +55,7 @@ service and the dev server itself, which is exactly the cold-start path that mus
 | `test_api_contract.py` | Requests through the **real HTTP service**: malformed payloads, nested-object validation, 400 vs 404 vs 500 mapping, state leakage between projects. Each test names the defect it guards |
 | `test_parity_golden.py` | Golden values across protocols and application-layer simulations (DNS, HTTP, FTP, SMTP, SNMP) |
 | `test_server.py` | Server lifecycle: readiness, port binding, one request per command |
-| `test_forwarding.py` | Table-driven per-hop forwarding: direct/multi-hop paths, deterministic tie-breaks, mid-flight link-down reroute, loop-guard protection, TTL and no-route drops, restore |
+| `test_forwarding.py` | Table-driven per-hop forwarding: direct/multi-hop paths, deterministic tie-breaks, mid-flight link-down reroute, loop-guard protection, TTL and no-route drops, restore; Bellman-Ford/Dijkstra all-pairs path parity under every metric (incl. equal-cost tie-break), forwarding-policy round-trip for both algorithms, identical live delivery under both policies |
 | `test_qos_definitions.py` | Hand-calculated throughput vs goodput anchors (TCP/UDP headers, retransmission overhead, delivered/dropped cases, 0-length intervals) |
 | `test_circuit_switching.py` | Circuit admission model: setup/reservation, all-or-nothing blocking, competing requests, teardown/reuse, link-down and topology-mutation releases, project resets, malformed requests |
 | `test_project_io.py` | Import/export contract: save/load round trips, schema-version rejection, duplicate/dangling identifiers, state resets, rejected imports leave the project intact |
