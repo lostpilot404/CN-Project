@@ -1876,9 +1876,9 @@ generated directories (both git-ignored).
 # 0. Know where you are (mutable state — never assume from a document)
 cd /path/to/CN-Project        # the repository root, wherever you cloned it
 git status                      # expect: clean working tree on arena/83075673-cn-project
-git log --oneline -5            # expect: d213648 (root commit)
+git log --oneline -5            # expect: d213648 at the root, with the commit that added this file on top
 git rev-parse HEAD              # expect: d213648f3679b9c94b1326cc065d84640f1d5b9d
-git ls-remote origin            # expect: HEAD + refs/heads/main at d213648…, plus refs/pull/1/head
+git ls-remote origin            # expect: refs/heads/main at d213648…, refs/pull/1/head, and this branch once pushed
 
 # 1. Environments
 python3 -m venv .venv
