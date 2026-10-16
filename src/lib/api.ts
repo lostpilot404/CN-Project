@@ -26,6 +26,11 @@ import {
   ForwardingPolicy,
 } from '../types/simulation';
 import {
+  Circuit,
+  CircuitRequestResult,
+  CircuitState,
+} from '../types/switching';
+import {
   MetricType,
   RoutingAlgorithm,
   RoutingTable,
@@ -350,6 +355,17 @@ export const api = {
     callCommand<QosMetrics>('get_current_qos_metrics'),
   setForwardingPolicy: (algorithm: string, metricType: string) =>
     callCommand<ForwardingPolicy>('set_forwarding_policy', { algorithm, metricType }),
+  // Circuit switching (educational admission-control model)
+  requestCircuit: (sourceNodeId: string, targetNodeId: string, bandwidthBps: number, circuitId?: string) =>
+    callCommand<CircuitRequestResult>('request_circuit', {
+      sourceNodeId,
+      targetNodeId,
+      bandwidthBps,
+      circuitId,
+    }),
+  teardownCircuit: (circuitId: string) =>
+    callCommand<Circuit>('teardown_circuit', { circuitId }),
+  getCircuitState: () => callCommand<CircuitState>('get_circuit_state'),
   scheduleFault: (entry: FaultScheduleEntry) =>
     callCommand<void>('schedule_fault_command', { entry }),
   runParameterSweep: (config: SweepConfig) =>

@@ -8,6 +8,7 @@ import {
   BarChart3,
   FlaskConical,
   Globe,
+  Cable,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { BackendStatus } from '../../lib/apiClient';
@@ -20,6 +21,7 @@ export type ActiveTab =
   | 'algorithms'
   | 'transport'
   | 'application'
+  | 'switching'
   | 'qos'
   | 'experiments';
 
@@ -46,6 +48,7 @@ export const Sidebar = ({
     { id: 'algorithms', label: 'Algorithm Studio', icon: Binary },
     { id: 'transport', label: 'Transport Layer', icon: ArrowLeftRight },
     { id: 'application', label: 'Application Layer', icon: Globe },
+    { id: 'switching', label: 'Circuit Switching', icon: Cable },
     { id: 'qos', label: 'QoS Performance', icon: BarChart3 },
     { id: 'experiments', label: 'Batch Experiments', icon: FlaskConical },
   ];

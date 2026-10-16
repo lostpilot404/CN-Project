@@ -10,6 +10,7 @@ import { ApplicationWorkspace } from './components/application/ApplicationWorksp
 import { SimulationStudio } from './components/simulation/SimulationStudio';
 import { QosWorkspace } from './components/experiments/QosWorkspace';
 import { ExperimentsWorkspace } from './components/experiments/ExperimentsWorkspace';
+import { SwitchingWorkspace } from './components/switching/SwitchingWorkspace';
 import { ControlBar } from './components/simulation/ControlBar';
 import { TimelineDrawer } from './components/timeline/TimelineDrawer';
 import { api, subscribeBackendStatus, checkBackendHealth } from './lib/api';
@@ -391,6 +392,8 @@ export function App() {
             <TransportWorkspace project={project} />
           ) : activeTab === 'application' ? (
             <ApplicationWorkspace project={project} />
+          ) : activeTab === 'switching' ? (
+            <SwitchingWorkspace project={project} />
           ) : activeTab === 'qos' ? (
             <QosWorkspace project={project} />
           ) : activeTab === 'experiments' ? (

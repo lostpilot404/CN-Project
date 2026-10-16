@@ -59,6 +59,7 @@ from netsim.routing.bellman_ford import (
 )
 from netsim.routing.dijkstra import compute_dijkstra_shortest_paths
 from netsim.routing.graph import MetricType, RoutingGraph
+from netsim.switching.circuit import CircuitManager
 from netsim.transport import TransportConfig
 from netsim.transport.tcp import simulate_tcp
 from netsim.transport.udp import simulate_udp
@@ -173,6 +174,7 @@ class SessionState:
         self.undo_stack: list[Project] = []
         self.redo_stack: list[Project] = []
         self.nat_tables: dict[str, NatTable] = {}
+        self.circuit_manager = CircuitManager()
 
     def push_undo(self) -> None:
         self.undo_stack.append(copy.deepcopy(self.project))
@@ -407,6 +409,7 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         # NAT tables are per-project configuration: a brand new project must not inherit the
         # dynamic mappings and static port forwards of the project it replaced.
         SESSION.nat_tables.clear()
+        SESSION.circuit_manager.clear()
         SESSION.reset_engine()
         return SESSION.project.to_dict()
 
@@ -436,6 +439,7 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         # Loaded projects carry their own NAT configuration (if any) and never inherit another
         # project's tables; unknown router ids are recreated on first use.
         SESSION.nat_tables.clear()
+        SESSION.circuit_manager.clear()
         SESSION.reset_engine()
         return SESSION.project.to_dict()
 
@@ -489,6 +493,8 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
             lnk.id for lnk in SESSION.project.links if lnk.source.node_id == node_id or lnk.target.node_id == node_id
         }
         SESSION.push_undo()
+        for link_id in removed_link_ids:
+            SESSION.circuit_manager.release_circuits_for_link(link_id, f"Link {link_id} removed with node {node_id}")
         SESSION.project.nodes = [n for n in SESSION.project.nodes if n.id != node_id]
         SESSION.project.links = [lnk for lnk in SESSION.project.links if lnk.id not in removed_link_ids]
         for node in SESSION.project.nodes:
@@ -558,6 +564,9 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
             link.status = parse_enum(LinkStatus, args["status"], "link status")
         link.validate()
         SESSION.push_undo()
+        # Capacity or status changes invalidate circuit reservations on this link.
+        if any(k in args for k in ("bandwidth_bps", "bandwidthBps", "status")):
+            SESSION.circuit_manager.release_circuits_for_link(link.id, f"Link {link.id} capacity or status changed")
         # An explicit reconfiguration supersedes any captured pre-fault value.
         SESSION.engine.clear_fault_snapshot(link.id)
         SESSION.engine.update_topology(SESSION.project.nodes, SESSION.project.links)
@@ -566,6 +575,8 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
     elif cmd in ("remove_link", "removeLink"):
         link_id = str(arg(args, "link_id", "linkId"))
         SESSION.push_undo()
+        # Circuits reserve capacity on this link: release them before it disappears.
+        SESSION.circuit_manager.release_circuits_for_link(link_id, f"Link {link_id} was removed")
         SESSION.project.links = [lnk for lnk in SESSION.project.links if lnk.id != link_id]
         for node in SESSION.project.nodes:
             node.detach_link(link_id)
@@ -735,6 +746,57 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         if src == dst:
             raise CommandError("A demo packet must have different source and destination nodes")
         return SESSION.engine.inject_packet(src, dst, 1000, "HTTP", "TCP")
+
+    # 3b. Circuit Switching (educational model: setup / reservation / blocking / teardown)
+    elif cmd in ("request_circuit", "requestCircuit"):
+        src = arg(args, "source_node_id", "sourceNodeId")
+        dst = arg(args, "target_node_id", "targetNodeId", "destination_node_id", "destinationNodeId")
+        if not src or not dst:
+            raise CommandError("Both source and target node identifiers are required for a circuit")
+        find_node(str(src))
+        find_node(str(dst))
+        if str(src) == str(dst):
+            raise CommandError("A circuit must connect two distinct nodes")
+        raw_bw = arg(args, "bandwidth_bps", "bandwidthBps")
+        try:
+            bw = int(raw_bw)
+        except (TypeError, ValueError) as exc:
+            raise CommandError(f"Circuit bandwidth must be an integer number of bps (received {raw_bw!r})") from exc
+        if bw < 1:
+            raise CommandError("Circuit bandwidth must be at least 1 bps")
+        if bw > 100_000_000_000:
+            raise CommandError("Circuit bandwidth must not exceed 100,000,000,000 bps")
+        cid = arg(args, "circuit_id", "circuitId", default=None)
+        cid_str = str(cid).strip() if cid is not None else None
+        if cid_str == "":
+            raise CommandError("Circuit identifier must not be empty when supplied")
+        try:
+            circuit_result = SESSION.circuit_manager.request_circuit(
+                SESSION.project.nodes,
+                SESSION.project.links,
+                str(src),
+                str(dst),
+                bw,
+                circuit_id=cid_str,
+            )
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
+        return circuit_result.to_dict()
+
+    elif cmd in ("teardown_circuit", "teardownCircuit"):
+        cid = arg(args, "circuit_id", "circuitId")
+        if not cid or not str(cid).strip():
+            raise CommandError("A circuit identifier is required to tear down a circuit")
+        try:
+            circuit = SESSION.circuit_manager.teardown_circuit(str(cid))
+        except KeyError as exc:
+            raise CommandError(str(exc).strip("'")) from exc
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
+        return circuit.to_dict()
+
+    elif cmd in ("get_circuit_state", "getCircuitState"):
+        return SESSION.circuit_manager.get_state(SESSION.project.nodes, SESSION.project.links)
 
     # 4. Algorithms & Addressing
     elif cmd in ("calculate_simple_checksum", "calculateSimpleChecksum"):
