@@ -55,8 +55,9 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
         </button>
       </div>
 
-      {/* Multi-Dimensional Dropdown Selectors */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 text-xs">
+      {/* Multi-Dimensional Dropdown Selectors (this panel always lives in the narrow
+          timeline column, so viewport breakpoints only ever squeezed it: keep 2 columns). */}
+      <div className="grid grid-cols-2 gap-2 text-xs">
         {/* Layer Filter */}
         <div>
           <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">

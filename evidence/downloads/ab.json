@@ -1,0 +1,79 @@
+{
+  "experiment_name": "Capacity & Congestion A/B Test",
+  "scenario_a_name": "High Bandwidth Baseline",
+  "scenario_b_name": "Constrained Bandwidth Link",
+  "qos_a": {
+    "run_count": 2,
+    "mean_throughput_bps": 800000,
+    "mean_goodput_bps": 800000,
+    "mean_latency_us": 5085,
+    "min_latency_us": 5085,
+    "max_latency_us": 5085,
+    "mean_jitter_us": 0,
+    "mean_loss_rate": 0,
+    "mean_retransmissions": 0,
+    "stddev_latency_us": 0,
+    "stddev_throughput_bps": 0
+  },
+  "qos_b": {
+    "run_count": 2,
+    "mean_throughput_bps": 800000,
+    "mean_goodput_bps": 800000,
+    "mean_latency_us": 13005,
+    "min_latency_us": 13005,
+    "max_latency_us": 13005,
+    "mean_jitter_us": 0,
+    "mean_loss_rate": 0,
+    "mean_retransmissions": 0,
+    "stddev_latency_us": 0,
+    "stddev_throughput_bps": 0
+  },
+  "deltas": [
+    {
+      "metric_name": "throughput_bps",
+      "val_a": 800000,
+      "val_b": 800000,
+      "diff": 0,
+      "percent_change": 0
+    },
+    {
+      "metric_name": "goodput_bps",
+      "val_a": 800000,
+      "val_b": 800000,
+      "diff": 0,
+      "percent_change": 0
+    },
+    {
+      "metric_name": "latency_us",
+      "val_a": 5085,
+      "val_b": 13005,
+      "diff": 7920,
+      "percent_change": 155.75221238938053
+    },
+    {
+      "metric_name": "jitter_us",
+      "val_a": 0,
+      "val_b": 0,
+      "diff": 0,
+      "percent_change": null
+    },
+    {
+      "metric_name": "loss_rate",
+      "val_a": 0,
+      "val_b": 0,
+      "diff": 0,
+      "percent_change": null
+    },
+    {
+      "metric_name": "retransmissions",
+      "val_a": 0,
+      "val_b": 0,
+      "diff": 0,
+      "percent_change": null
+    }
+  ],
+  "route_changes_a": [],
+  "route_changes_b": [],
+  "runs_count_per_scenario": 2,
+  "execution_time_ms": 3
+}

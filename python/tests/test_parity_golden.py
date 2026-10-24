@@ -346,6 +346,37 @@ def test_parity_12_aloha():
     assert res.frames_transmitted >= 1
 
 
+# 12b. MAC offered load must affect contention (regression: G was parsed and validated
+# but never used, so the studio's load control and G sweep were decorative).
+def test_mac_offered_load_drives_contention_deterministically():
+    def run(proto, g):
+        cfg = MacConfig(
+            protocol=proto,
+            num_stations=4,
+            total_frames_to_send=10,
+            frame_duration_us=10_000,
+            prop_delay_us=50,
+            frame_size_bits=8_000,
+            seed=12345,
+            max_retries=16,
+            offered_load_g=g,
+        )
+        return simulate_mac(cfg)
+
+    for proto in MacProtocol:
+        low = run(proto, 0.3)
+        high = run(proto, 2.5)
+        repeat = run(proto, 0.3)
+        assert low.completed_successfully and high.completed_successfully
+        # Same seed and load reproduce the run exactly.
+        assert (repeat.metrics.collisions, repeat.metrics.channel_utilization) == (
+            low.metrics.collisions,
+            low.metrics.channel_utilization,
+        )
+        # Heavier offered load produces strictly more contention.
+        assert high.metrics.collisions > low.metrics.collisions, proto
+
+
 # 13. CSMA
 def test_parity_13_csma():
     cfg = MacConfig(

@@ -245,6 +245,26 @@ def validate_mac_config(config: MacConfig) -> None:
         raise ValueError(f"offered_load_g cannot be negative (received {config.offered_load_g})")
 
 
+def _mean_gap_frames(config: MacConfig) -> float:
+    """Mean per-station inter-arrival gap, in frame times, for the offered load G."""
+    # G = 0 still completes its frame quota (mostly idle) instead of dividing by zero.
+    return config.num_stations / max(config.offered_load_g, 1e-3)
+
+
+def _sample_gap_frames(rng: DeterministicRng, config: MacConfig) -> float:
+    """Sample one per-station inter-arrival gap from the Poisson arrival process.
+
+    The textbook ALOHA/CSMA analysis assumes Poisson frame arrivals with a total
+    offered load of G frames per frame time. Sampling the exponential gap with mean
+    ``num_stations / G`` is what makes the studio's "Offered Load (G)" control (and
+    the G sweep) meaningful: at low G stations rarely overlap, at high G they
+    constantly collide. Previously the respawn used a fixed uniform range, so G had
+    no effect on any result.
+    """
+    u = min(max(rng.gen_float(), 1e-12), 1.0 - 1e-12)
+    return -_mean_gap_frames(config) * math.log(1.0 - u)
+
+
 def simulate_pure_aloha(config: MacConfig) -> MacSimResult:
     validate_mac_config(config)
 
@@ -257,7 +277,7 @@ def simulate_pure_aloha(config: MacConfig) -> MacSimResult:
         _StationQueue(
             station_id=i,
             pending_frames=frames_per_station,
-            next_attempt_us=int(rng.gen_range_f64(0.0, 2.0) * config.frame_duration_us),
+            next_attempt_us=int(rng.gen_float() * _mean_gap_frames(config) * config.frame_duration_us),
             active_frame_id=1,
             collision_count=0,
         )
@@ -326,7 +346,7 @@ def simulate_pure_aloha(config: MacConfig) -> MacSimResult:
             st.pending_frames -= 1
             st.active_frame_id += 1
             st.collision_count = 0
-            st.next_attempt_us = current_time_us + int(rng.gen_range_f64(0.5, 2.5) * config.frame_duration_us)
+            st.next_attempt_us = current_time_us + int(_sample_gap_frames(rng, config) * config.frame_duration_us)
         else:
             colliding_ids = [stations[i].station_id for i in transmitting_indices]
             collision_count += len(transmitting_indices)
@@ -418,7 +438,7 @@ def simulate_slotted_aloha(config: MacConfig) -> MacSimResult:
         _StationQueue(
             station_id=i,
             pending_frames=frames_per_station,
-            next_attempt_us=rng.gen_range_u32(0, 2) * slot_duration,
+            next_attempt_us=rng.gen_range_u32(0, max(1, int(round(_mean_gap_frames(config))))) * slot_duration,
             active_frame_id=1,
             collision_count=0,
         )
@@ -501,7 +521,8 @@ def simulate_slotted_aloha(config: MacConfig) -> MacSimResult:
             st.pending_frames -= 1
             st.active_frame_id += 1
             st.collision_count = 0
-            st.next_attempt_us = (current_slot + 1 + rng.gen_range_u32(1, 3)) * slot_duration
+            gap_slots = max(1, int(math.ceil(_sample_gap_frames(rng, config))))
+            st.next_attempt_us = (current_slot + 1 + gap_slots) * slot_duration
         else:
             colliding_ids = [stations[i].station_id for i in ready_indices]
             collision_count += len(ready_indices)
@@ -587,7 +608,7 @@ def simulate_csma(config: MacConfig) -> MacSimResult:
         _StationQueue(
             station_id=i,
             pending_frames=frames_per_station,
-            next_attempt_us=int(rng.gen_range_f64(0.0, 1.5) * config.frame_duration_us),
+            next_attempt_us=int(rng.gen_float() * _mean_gap_frames(config) * config.frame_duration_us),
             active_frame_id=1,
             collision_count=0,
         )
@@ -701,7 +722,7 @@ def simulate_csma(config: MacConfig) -> MacSimResult:
 
                 st.pending_frames -= 1
                 st.active_frame_id += 1
-                st.next_attempt_us = current_time_us + int(rng.gen_range_f64(1.0, 3.0) * config.frame_duration_us)
+                st.next_attempt_us = current_time_us + int(_sample_gap_frames(rng, config) * config.frame_duration_us)
             else:
                 collision_count += len(ready_indices)
                 total_attempts += len(ready_indices)
@@ -802,7 +823,7 @@ def simulate_csma_cd(config: MacConfig) -> MacSimResult:
         _StationQueue(
             station_id=i,
             pending_frames=frames_per_station,
-            next_attempt_us=int(rng.gen_range_f64(0.0, 1.2) * config.frame_duration_us),
+            next_attempt_us=int(rng.gen_float() * _mean_gap_frames(config) * config.frame_duration_us),
             active_frame_id=1,
             collision_count=0,
         )
@@ -899,7 +920,7 @@ def simulate_csma_cd(config: MacConfig) -> MacSimResult:
             st.pending_frames -= 1
             st.active_frame_id += 1
             st.collision_count = 0
-            st.next_attempt_us = current_time_us + int(rng.gen_range_f64(1.0, 2.5) * config.frame_duration_us)
+            st.next_attempt_us = current_time_us + int(_sample_gap_frames(rng, config) * config.frame_duration_us)
         else:
             colliding_ids = [stations[i].station_id for i in ready_indices]
             collision_count += len(ready_indices)

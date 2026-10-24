@@ -87,6 +87,8 @@ export const MacStudio: React.FC = () => {
       }
       setSimResult(res);
     } catch (err: unknown) {
+      // A failed run must not leave the previous successful result on screen.
+      setSimResult(null);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);

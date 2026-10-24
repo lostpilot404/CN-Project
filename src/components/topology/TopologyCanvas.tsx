@@ -267,8 +267,9 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
       {/* Device Palette */}
       <DevicePalette onAddDevice={onAddNode} />
 
-      {/* Top Topology Canvas Action Bar */}
-      <div className="absolute top-4 left-64 z-10 flex items-center space-x-2 bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl px-2 py-1.5 shadow-xl select-none">
+      {/* Top Topology Canvas Action Bar (docked bottom-center on narrow screens where the
+          device palette would otherwise cover it). */}
+      <div className="absolute z-10 flex items-center space-x-2 bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl px-2 py-1.5 shadow-xl select-none top-auto bottom-4 left-1/2 -translate-x-1/2 lg:top-4 lg:bottom-auto lg:left-64 lg:translate-x-0">
         {/* Undo Button */}
         <button
           onClick={onUndo}
@@ -299,10 +300,10 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
           <span>Redo</span>
         </button>
 
-        <div className="w-[1px] h-4 bg-slate-800" />
+        <div className="hidden sm:block w-[1px] h-4 bg-slate-800" />
 
         {/* Topology Summary Counts */}
-        <div className="flex items-center space-x-3 px-2 text-[11px] font-mono text-slate-400">
+        <div className="hidden sm:flex items-center space-x-3 px-2 text-[11px] font-mono text-slate-400">
           <span className="flex items-center space-x-1">
             <Cpu className="w-3 h-3 text-brand-400" />
             <span>{project?.nodes.length || 0} Nodes</span>
@@ -334,7 +335,7 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
         <MiniMap
           nodeColor="#38aaf6"
           maskColor="rgba(6, 10, 18, 0.7)"
-          className="!bg-slate-900/80 !border-slate-800 !rounded-lg"
+          className="!bg-slate-900/80 !border-slate-800 !rounded-lg max-sm:!hidden"
         />
       </ReactFlow>
 

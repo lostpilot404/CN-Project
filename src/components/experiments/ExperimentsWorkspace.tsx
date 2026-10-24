@@ -7,6 +7,7 @@ import {
   TrendingUp,
   Activity,
   AlertCircle,
+  Download,
 } from 'lucide-react';
 import {
   LineChart,
@@ -149,7 +150,8 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
       const res = await api.runParameterSweep(cfg);
       setSweepResult(res);
     } catch (err) {
-      setErrorMsg(String(err));
+      setSweepResult(null);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsRunning(false);
     }
@@ -192,7 +194,8 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
       const res = await api.runComparativeExperiment(cfg);
       setCompResult(res);
     } catch (err) {
-      setErrorMsg(String(err));
+      setCompResult(null);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsRunning(false);
     }
@@ -209,6 +212,78 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
     if (us >= 1_000_000) return `${(us / 1_000_000).toFixed(2)} s`;
     if (us >= 1_000) return `${(us / 1_000).toFixed(2)} ms`;
     return `${us.toFixed(1)} µs`;
+  };
+
+  // --- Result exports (D14): the sweep JSON is exactly what python-tools/ consumes. ---
+  const downloadFile = (filename: string, content: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const safeName = (name: string) => name.replace(/\s+/g, '_');
+
+  const csvCell = (v: number | null) => (v === null || v === undefined ? '' : String(v));
+
+  const handleDownloadSweepJson = () => {
+    if (!sweepResult) return;
+    downloadFile(`${safeName(sweepResult.experiment_name)}_sweep.json`, JSON.stringify(sweepResult, null, 2), 'application/json');
+  };
+
+  const handleDownloadSweepCsv = () => {
+    if (!sweepResult) return;
+    const header = [
+      'parameter_name',
+      'parameter_value',
+      'run_count',
+      'mean_throughput_bps',
+      'mean_goodput_bps',
+      'mean_latency_us',
+      'min_latency_us',
+      'max_latency_us',
+      'mean_jitter_us',
+      'mean_loss_rate',
+      'mean_retransmissions',
+      'stddev_latency_us',
+      'stddev_throughput_bps',
+    ];
+    const rows = sweepResult.points.map((pt) => {
+      const q = pt.aggregated_qos;
+      return [
+        sweepResult.parameter_name,
+        String(pt.parameter_value),
+        String(q.run_count),
+        csvCell(q.mean_throughput_bps),
+        csvCell(q.mean_goodput_bps),
+        csvCell(q.mean_latency_us),
+        csvCell(q.min_latency_us),
+        csvCell(q.max_latency_us),
+        csvCell(q.mean_jitter_us),
+        csvCell(q.mean_loss_rate),
+        csvCell(q.mean_retransmissions),
+        csvCell(q.stddev_latency_us),
+        csvCell(q.stddev_throughput_bps),
+      ].join(',');
+    });
+    downloadFile(`${safeName(sweepResult.experiment_name)}_sweep.csv`, [header.join(','), ...rows].join('\n'), 'text/csv');
+  };
+
+  const handleDownloadComparativeJson = () => {
+    if (!compResult) return;
+    downloadFile(`${safeName(compResult.experiment_name)}_ab.json`, JSON.stringify(compResult, null, 2), 'application/json');
+  };
+
+  const handleDownloadComparativeCsv = () => {
+    if (!compResult) return;
+    const header = ['metric', 'scenario_a', 'scenario_b', 'absolute_delta', 'percent_change'];
+    const rows = compResult.deltas.map((d) =>
+      [d.metric_name, csvCell(d.val_a), csvCell(d.val_b), csvCell(d.diff), csvCell(d.percent_change)].join(',')
+    );
+    downloadFile(`${safeName(compResult.experiment_name)}_ab.csv`, [header.join(','), ...rows].join('\n'), 'text/csv');
   };
 
   // Prepare chart data for Sweep
@@ -240,7 +315,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex p-1 bg-slate-950 border border-slate-800 rounded-xl space-x-1 text-xs font-semibold">
+        <div className="flex flex-wrap gap-1 p-1 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold max-w-full">
           <button
             onClick={() => setActiveTab('sweep')}
             className={`px-3 py-1.5 rounded-lg transition flex items-center space-x-1.5 ${
@@ -431,6 +506,26 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
             {/* Sweep Results Visualizer */}
             {sweepResult && (
               <div className="space-y-6 animate-in fade-in">
+                {/* Result Exports */}
+                <div className="flex items-center justify-end gap-2">
+                  <span className="text-[11px] text-slate-400">Export results for python-tools / spreadsheets:</span>
+                  <button
+                    onClick={handleDownloadSweepJson}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
+                    title="Download sweep result JSON (readable by python-tools/analyze_results.py)"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>JSON</span>
+                  </button>
+                  <button
+                    onClick={handleDownloadSweepCsv}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
+                    title="Download per-point aggregated metrics CSV"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>CSV</span>
+                  </button>
+                </div>
                 {/* Result Highlights */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
@@ -702,6 +797,26 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
             {/* Comparative Results */}
             {compResult && (
               <div className="space-y-6 animate-in fade-in">
+                {/* Result Exports */}
+                <div className="flex items-center justify-end gap-2">
+                  <span className="text-[11px] text-slate-400">Export comparison:</span>
+                  <button
+                    onClick={handleDownloadComparativeJson}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
+                    title="Download A/B comparison result JSON"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>JSON</span>
+                  </button>
+                  <button
+                    onClick={handleDownloadComparativeCsv}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
+                    title="Download metric deltas CSV"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>CSV</span>
+                  </button>
+                </div>
                 {/* Deltas Table */}
                 <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3">

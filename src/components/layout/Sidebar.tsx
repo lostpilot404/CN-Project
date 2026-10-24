@@ -61,9 +61,9 @@ export const Sidebar = ({
           : { label: 'UNKNOWN', className: 'text-slate-400', dot: 'bg-slate-500' };
 
   return (
-    <aside className="w-56 bg-slate-900/90 border-r border-slate-800 flex flex-col justify-between select-none py-3">
+    <aside className="w-14 lg:w-56 shrink-0 bg-slate-900/90 border-r border-slate-800 flex flex-col justify-between select-none py-3">
       <div className="space-y-1 px-2">
-        <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+        <div className="hidden lg:block px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
           Workspaces
         </div>
         {navItems.map((item) => {
@@ -73,29 +73,31 @@ export const Sidebar = ({
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
+              title={item.label}
+              aria-label={item.label}
               className={cn(
-                'w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all text-left',
+                'w-full flex items-center justify-center lg:justify-start lg:space-x-2.5 px-0 lg:px-3 py-2 rounded-lg text-xs font-medium transition-all lg:text-left',
                 isActive
                   ? 'bg-brand-600/20 text-brand-300 border border-brand-500/30 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent'
               )}
             >
-              <Icon className={cn('w-4 h-4', isActive ? 'text-brand-400' : 'text-slate-400')} />
-              <span>{item.label}</span>
+              <Icon className={cn('w-4 h-4 shrink-0', isActive ? 'text-brand-400' : 'text-slate-400')} />
+              <span className="hidden lg:inline">{item.label}</span>
             </button>
           );
         })}
       </div>
 
-      <div className="px-4 py-2 border-t border-slate-800/60 text-[11px] text-slate-400">
-        <div className="flex items-center justify-between">
-          <span>Simulation Engine:</span>
+      <div className="px-2 lg:px-4 py-2 border-t border-slate-800/60 text-[11px] text-slate-400">
+        <div className="flex items-center justify-center lg:justify-between" title={`Simulation Engine: ${engineStatus.label}`}>
+          <span className="hidden lg:inline">Simulation Engine:</span>
           <span className={cn('font-mono font-semibold flex items-center space-x-1.5', engineStatus.className)}>
             <span className={cn('w-1.5 h-1.5 rounded-full', engineStatus.dot)} aria-hidden="true" />
-            <span data-testid="engine-status">{engineStatus.label}</span>
+            <span data-testid="engine-status" className="hidden lg:inline">{engineStatus.label}</span>
           </span>
         </div>
-        <div className="mt-1 text-[10px] text-slate-400">
+        <div className="hidden lg:block mt-1 text-[10px] text-slate-400">
           {backendVersion ? `Python core v${backendVersion}` : 'Python core • HTTP JSON-RPC'}
         </div>
       </div>

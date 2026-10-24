@@ -191,6 +191,13 @@ def test_regression_self_loop_error_is_a_structured_client_error(api):
     assert "to itself" in api.error("add_link", {"sourceNodeId": "node-1", "targetNodeId": "node-1"})
 
 
+def test_regression_omitted_node_type_still_defaults_to_pc(api):
+    """The lookalike-key rejection must not break the documented default: a request that
+    simply omits the device kind still creates a PC."""
+    node = api.result("add_node", {"label": "Bare"})
+    assert node["node_type"] == "pc"
+
+
 # ---------------------------------------------------------------------------
 # Validation coverage across the command surface
 # ---------------------------------------------------------------------------
@@ -202,6 +209,9 @@ def test_regression_self_loop_error_is_a_structured_client_error(api):
         ("add_node", {"label": "X", "nodeType": "quantum"}, "Invalid node type"),
         ("add_node", {"label": "X", "x": "abc"}, "could not convert string to float"),
         ("add_node", {"label": "X", "id": "node-1"}, "already exists"),
+        ("add_node", {"label": "X", "type": "router"}, "Unknown node-type field 'type'"),
+        ("add_node", {"label": "X", "device_type": "router"}, "Unknown node-type field 'device_type'"),
+        ("add_node", {"label": "X", "kind": "router"}, "Unknown node-type field 'kind'"),
         ("update_node", {"nodeId": "ghost"}, "not found"),
         ("update_node", {"nodeId": "node-1", "nodeState": "exploded"}, "Invalid node state"),
         ("add_link", {}, "Both source and target node identifiers are required"),
@@ -348,6 +358,8 @@ def test_regression_nat_outbound_and_inbound_translate(api):
         ({"fault_type": {"type": "bit_error", "link_id": "link-1", "error_rate": 2.0}}, "error_rate"),
         ({"fault_type": {"type": "link_down", "link_id": "link-1"}, "timestamp_us": "later"}, "must be an integer"),
         ({"fault_type": {"type": "link_down", "link_id": "link-1"}, "timestamp_us": -5}, "must be >= 0"),
+        ({"fault_type": "link_down", "target_id": "link-1"}, "must be an object"),
+        ({"fault_type": ["link_down"]}, "must be an object"),
         ({}, "requires a 'fault_type'"),
     ],
 )

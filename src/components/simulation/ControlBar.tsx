@@ -34,9 +34,9 @@ export const ControlBar = ({
     (metrics?.packets_dropped_link_down ?? 0);
 
   return (
-    <div className="h-12 bg-slate-900 border-t border-slate-800 flex items-center justify-between px-4 select-none z-10">
+    <div className="min-h-12 bg-slate-900 border-t border-slate-800 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-2 sm:px-4 py-1.5 select-none z-10">
       {/* Playback Controls */}
-      <div className="flex items-center space-x-2">
+      <div className="flex flex-wrap items-center gap-2">
         {isRunning ? (
           <button
             onClick={onPause}
@@ -83,7 +83,7 @@ export const ControlBar = ({
           <span>Reset</span>
         </button>
 
-        <div className="h-4 w-px bg-slate-800 mx-1" />
+        <div className="hidden lg:block h-4 w-px bg-slate-800 mx-1" />
 
         <button
           onClick={onSendDemoPacket}
@@ -96,7 +96,7 @@ export const ControlBar = ({
       </div>
 
       {/* Authoritative Metrics & Stats */}
-      <div className="flex items-center space-x-4 text-xs text-slate-400">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
         <div className="flex items-center space-x-1.5">
           <Activity className="w-3.5 h-3.5 text-cyan-400" />
           <span>Delivered:</span>

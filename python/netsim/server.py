@@ -442,6 +442,17 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
     # 2. Topology Mutation
     elif cmd in ("add_node", "addNode"):
         label = str(arg(args, "label", default="Node"))
+        if "node_type" not in args and "nodeType" not in args:
+            # A request that names the device kind under any other key (for example
+            # {"type": "router"}) used to fall through to the "pc" default and create an
+            # unintended device. Omitting the key still defaults to a PC; a lookalike key
+            # is almost certainly a malformed request, so reject it with guidance.
+            for lookalike in ("type", "device_type", "deviceType", "kind", "node_kind", "nodeKind"):
+                if lookalike in args:
+                    raise CommandError(
+                        f"Unknown node-type field '{lookalike}'. "
+                        "Use 'node_type' (or 'nodeType') with one of: " + ", ".join(sorted(m.value for m in NodeType))
+                    )
         raw_nt = arg(args, "node_type", "nodeType", default="pc")
         nt = parse_enum(NodeType, raw_nt, "node type")
         pos = arg(args, "position", default=None)
@@ -506,6 +517,10 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
             raise CommandError(f"Cannot connect node '{src_node_id}' to itself")
         src_node = find_node(str(src_node_id))
         dst_node = find_node(str(dst_node_id))
+        # NOTE: parallel links between the same pair are intentionally allowed (covered by
+        # test_regression_a_link_can_be_added_even_when_every_port_is_in_use): each new
+        # cable provisions fresh interfaces. They render overlapped on the canvas, which is
+        # a known cosmetic limitation, not a modeling error.
 
         src_if = resolve_link_endpoint(src_node, arg(args, "source_interface_id", "sourceInterfaceId"))
         dst_if = resolve_link_endpoint(dst_node, arg(args, "target_interface_id", "targetInterfaceId"))

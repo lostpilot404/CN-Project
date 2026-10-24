@@ -59,6 +59,9 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
         setConvergence(null);
       }
     } catch (err: unknown) {
+      // A failed compute must not leave a previous table/convergence trace on screen.
+      setRoutingTable(null);
+      setConvergence(null);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsLoading(false);
@@ -395,10 +398,10 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
             </h4>
             <ul className="space-y-2 list-disc list-inside text-[11px] leading-relaxed">
               <li>
-                <strong className="text-slate-200">Bidirectional Links:</strong> Canvas links automatically generate two directed graph edges ($A \to B$ and $B \to A$).
+                <strong className="text-slate-200">Bidirectional Links:</strong> Canvas links automatically generate two directed graph edges (A → B and B → A).
               </li>
               <li>
-                <strong className="text-slate-200">Degraded Penalty:</strong> Degraded links apply a deterministic metric penalty: $(base \times 3).max(base + 50)$.
+                <strong className="text-slate-200">Degraded Penalty:</strong> Degraded links apply a deterministic metric penalty: max(base × 3, base + 50).
               </li>
               <li>
                 <strong className="text-slate-200">Down Links:</strong> Down links are completely excluded from graph routing.
@@ -407,7 +410,7 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
                 <strong className="text-slate-200">Non-Transit End Hosts:</strong> PCs and Servers cannot act as intermediate transit routers.
               </li>
               <li>
-                <strong className="text-slate-200">Inverse Bandwidth:</strong> Computed as $\lceil 1,000,000,000 / bw \rceil$, minimum 1 (never zero cost).
+                <strong className="text-slate-200">Inverse Bandwidth:</strong> Computed as ceil(1,000,000,000 / bw), minimum 1 (never zero cost).
               </li>
             </ul>
           </div>

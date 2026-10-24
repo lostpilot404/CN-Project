@@ -146,6 +146,11 @@ export const FlowControlStudio: React.FC = () => {
         setCurrentStep(0);
       }
     } catch (err: unknown) {
+      // A failed run must not leave the previous successful result on screen.
+      setSimResult(null);
+      setComparisonGbnResult(null);
+      setComparisonSrResult(null);
+      setCurrentStep(0);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);

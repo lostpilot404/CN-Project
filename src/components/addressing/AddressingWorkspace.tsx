@@ -89,6 +89,9 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
       const res = await api.calculateIpv4Subnet(ipv4Input);
       setSubnetInfo(res);
     } catch (err: unknown) {
+      // A failed calculation must not leave the previous successful result on screen as
+      // if it belonged to the current input.
+      setSubnetInfo(null);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   }, [ipv4Input]);
@@ -104,6 +107,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
       const res = await api.splitIpv4Subnet(ipv4Input, splitPrefix);
       setSplitResult(res);
     } catch (err: unknown) {
+      setSplitResult(null);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   };
@@ -115,6 +119,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
       const res = await api.allocateVlsmSubnets(vlsmBaseCidr, vlsmReqs);
       setVlsmResult(res);
     } catch (err: unknown) {
+      setVlsmResult(null);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   };
@@ -126,6 +131,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
       const conflicts = await api.detectDuplicateIps();
       setDuplicateConflicts(conflicts);
     } catch (err: unknown) {
+      setDuplicateConflicts([]);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   }, []);
@@ -143,6 +149,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
       const res = await api.validateIpv6Address(ipv6Input);
       setIpv6Info(res);
     } catch (err: unknown) {
+      setIpv6Info(null);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   }, [ipv6Input]);
@@ -214,6 +221,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
       setNatOutResult(res);
       await loadNatTable();
     } catch (err: unknown) {
+      setNatOutResult(null);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   };
@@ -235,6 +243,7 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
       setNatInResult(res);
       await loadNatTable();
     } catch (err: unknown) {
+      setNatInResult(null);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     }
   };
@@ -425,11 +434,17 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
                 >
                   {Array.from({ length: 32 }, (_, i) => i + 1)
                     .filter((p) => p > (subnetInfo?.prefix_length || 0))
-                    .map((p) => (
-                      <option key={p} value={p}>
-                        /{p} ({Math.pow(2, p - (subnetInfo?.prefix_length || 0))} subnets)
-                      </option>
-                    ))}
+                    .map((p) =>
+                      subnetInfo ? (
+                        <option key={p} value={p}>
+                          /{p} ({Math.pow(2, p - subnetInfo.prefix_length)} subnets)
+                        </option>
+                      ) : (
+                        <option key={p} value={p}>
+                          /{p}
+                        </option>
+                      )
+                    )}
                 </select>
                 <button
                   onClick={handleSplitSubnet}

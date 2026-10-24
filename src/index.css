@@ -75,6 +75,30 @@
   stroke-width: 3.5;
 }
 
+/* Dark-theme XYFlow controls: the v12 defaults render light buttons that clash
+   with the studio theme, so theme them via the supported CSS variables. */
+.react-flow__controls {
+  --xy-controls-button-background-color: #0f172a;
+  --xy-controls-button-background-color-hover: #1e293b;
+  --xy-controls-button-color: #cbd5e1;
+  --xy-controls-button-color-hover: #f8fafc;
+  --xy-controls-button-border-color: #1e293b;
+  --xy-controls-box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* Keep the XYFlow attribution legible but unobtrusive on the dark canvas. */
+.react-flow__attribution {
+  background: rgba(6, 10, 18, 0.75);
+  color: #475569;
+  border-radius: 6px 0 0 0;
+  padding: 2px 6px;
+}
+.react-flow__attribution a {
+  color: #64748b;
+}
+
 /* Pulse animation for active packets */
 @keyframes packet-flow {
   0% { offset-distance: 0%; }

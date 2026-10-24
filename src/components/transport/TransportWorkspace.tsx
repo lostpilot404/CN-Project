@@ -99,6 +99,10 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
       setTcpResult(res);
       setCurrentStepIndex(res.events.length);
     } catch (err) {
+      // A failed run must not leave the previous successful result on screen as if it
+      // belonged to the current parameters.
+      setTcpResult(null);
+      setCurrentStepIndex(0);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsRunning(false);
@@ -133,6 +137,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
       const res = await api.simulateUdp(config);
       setUdpResult(res);
     } catch (err) {
+      setUdpResult(null);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsRunning(false);
@@ -154,13 +159,13 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
       className="flex-1 flex flex-col h-full bg-slate-950 text-slate-100 overflow-hidden select-none"
     >
       {/* Studio Header & Tab Navigation */}
-      <header className="h-14 border-b border-slate-800 bg-slate-900/60 px-6 flex items-center justify-between">
+      <header className="min-h-14 border-b border-slate-800 bg-slate-900/60 px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="flex items-center space-x-3">
           <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
             <ArrowLeftRight className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold tracking-wide text-slate-100 flex items-center gap-2">
+            <h2 className="text-sm font-semibold tracking-wide text-slate-100 flex flex-wrap items-center gap-2">
               Layer 4 Transport Layer Studio
               <span className="text-[10px] font-mono uppercase bg-indigo-900/60 text-indigo-300 border border-indigo-700/50 px-2 py-0.5 rounded-full">
                 Authoritative Python Core
@@ -173,7 +178,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
         </div>
 
         {/* Sub-Studio Selector */}
-        <div className="flex bg-slate-950 border border-slate-800 rounded-lg p-1 space-x-1">
+        <div className="flex flex-wrap gap-1 bg-slate-950 border border-slate-800 rounded-lg p-1 max-w-full">
           <button
             data-testid="tab-tcp-studio"
             onClick={() => setActiveStudio('tcp')}
