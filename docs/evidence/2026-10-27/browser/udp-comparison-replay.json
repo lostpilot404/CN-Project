@@ -1,0 +1,600 @@
+{
+  "experiment_name": "browser-udp-comparison",
+  "scenario_a_name": "1 Mbps baseline",
+  "scenario_b_name": "10 Mbps alternative",
+  "qos_a": {
+    "run_count": 2,
+    "mean_throughput_bps": 1600000.0,
+    "mean_goodput_bps": 1600000.0,
+    "mean_latency_us": 0.0,
+    "min_latency_us": null,
+    "max_latency_us": null,
+    "mean_jitter_us": 0.0,
+    "mean_loss_rate": 0.0,
+    "mean_retransmissions": 0.0,
+    "stddev_latency_us": 0.0,
+    "stddev_throughput_bps": 0.0
+  },
+  "qos_b": {
+    "run_count": 2,
+    "mean_throughput_bps": 1600000.0,
+    "mean_goodput_bps": 1600000.0,
+    "mean_latency_us": 0.0,
+    "min_latency_us": null,
+    "max_latency_us": null,
+    "mean_jitter_us": 0.0,
+    "mean_loss_rate": 0.0,
+    "mean_retransmissions": 0.0,
+    "stddev_latency_us": 0.0,
+    "stddev_throughput_bps": 0.0
+  },
+  "deltas": [
+    {
+      "metric_name": "throughput_bps",
+      "val_a": 1600000.0,
+      "val_b": 1600000.0,
+      "diff": 0.0,
+      "percent_change": 0.0
+    },
+    {
+      "metric_name": "goodput_bps",
+      "val_a": 1600000.0,
+      "val_b": 1600000.0,
+      "diff": 0.0,
+      "percent_change": 0.0
+    },
+    {
+      "metric_name": "latency_us",
+      "val_a": 0.0,
+      "val_b": 0.0,
+      "diff": 0.0,
+      "percent_change": null
+    },
+    {
+      "metric_name": "jitter_us",
+      "val_a": 0.0,
+      "val_b": 0.0,
+      "diff": 0.0,
+      "percent_change": null
+    },
+    {
+      "metric_name": "loss_rate",
+      "val_a": 0.0,
+      "val_b": 0.0,
+      "diff": 0.0,
+      "percent_change": null
+    },
+    {
+      "metric_name": "retransmissions",
+      "val_a": 0.0,
+      "val_b": 0.0,
+      "diff": 0.0,
+      "percent_change": null
+    }
+  ],
+  "route_changes_a": [],
+  "route_changes_b": [],
+  "runs_count_per_scenario": 2,
+  "execution_time_ms": 1,
+  "provenance": {
+    "schema_version": 1,
+    "engine": "netsim-python",
+    "model_version": "0.9.0",
+    "engine_source_sha256": "0a809aaaea8e71735c755b95c9cacae7171c3aa2c10aa6f22a7480c47fa5e388",
+    "python_version": "3.11.2",
+    "config": {
+      "experiment_name": "browser-udp-comparison",
+      "target": "udp",
+      "scenario_a": {
+        "name": "1 Mbps baseline",
+        "description": "Bandwidth configured to 1.0 Mbps",
+        "project_override": null,
+        "fault_schedule": null,
+        "parameter_overrides": [
+          [
+            {
+              "type": "link_bandwidth"
+            },
+            1000000.0
+          ]
+        ]
+      },
+      "scenario_b": {
+        "name": "10 Mbps alternative",
+        "description": "Bandwidth constrained to 10.0 Mbps",
+        "project_override": null,
+        "fault_schedule": null,
+        "parameter_overrides": [
+          [
+            {
+              "type": "link_bandwidth"
+            },
+            10000000.0
+          ]
+        ]
+      },
+      "seeds": [
+        42,
+        101
+      ],
+      "simulation_duration_us": 60000,
+      "base_project": {
+        "schemaVersion": 1,
+        "metadata": {
+          "name": "browser-udp-comparison",
+          "description": "B.Tech CSE Network Simulation Studio",
+          "created_at": "2026-10-27T11:57:13.415991+00:00",
+          "updated_at": "2026-10-27T11:57:13.415991+00:00",
+          "author": "NetSim Student"
+        },
+        "nodes": [
+          {
+            "id": "node-1",
+            "label": "Workstation PC1",
+            "node_type": "pc",
+            "position": {
+              "x": 120.0,
+              "y": 180.0
+            },
+            "interfaces": [
+              {
+                "id": "if-1",
+                "name": "eth0",
+                "node_id": "node-1",
+                "mac_address": "02:00:00:00:00:01",
+                "ipv4": "192.168.1.10",
+                "subnet_mask": "255.255.255.0",
+                "ipv6": null,
+                "link_id": "link-1",
+                "status": "up"
+              }
+            ],
+            "state": "up"
+          },
+          {
+            "id": "node-2",
+            "label": "Core Router R1",
+            "node_type": "router",
+            "position": {
+              "x": 380.0,
+              "y": 180.0
+            },
+            "interfaces": [
+              {
+                "id": "if-2a",
+                "name": "eth0",
+                "node_id": "node-2",
+                "mac_address": "02:00:00:00:00:02",
+                "ipv4": "192.168.1.1",
+                "subnet_mask": "255.255.255.0",
+                "ipv6": null,
+                "link_id": "link-1",
+                "status": "up"
+              },
+              {
+                "id": "if-2b",
+                "name": "eth1",
+                "node_id": "node-2",
+                "mac_address": "02:00:00:00:00:03",
+                "ipv4": "10.0.0.1",
+                "subnet_mask": "255.255.255.0",
+                "ipv6": null,
+                "link_id": "link-2",
+                "status": "up"
+              }
+            ],
+            "state": "up"
+          },
+          {
+            "id": "node-3",
+            "label": "Server S1",
+            "node_type": "server",
+            "position": {
+              "x": 640.0,
+              "y": 180.0
+            },
+            "interfaces": [
+              {
+                "id": "if-3",
+                "name": "eth0",
+                "node_id": "node-3",
+                "mac_address": "02:00:00:00:00:04",
+                "ipv4": "10.0.0.100",
+                "subnet_mask": "255.255.255.0",
+                "ipv6": null,
+                "link_id": "link-2",
+                "status": "up"
+              }
+            ],
+            "state": "up"
+          }
+        ],
+        "links": [
+          {
+            "id": "link-1",
+            "source": {
+              "node_id": "node-1",
+              "interface_id": "if-1"
+            },
+            "target": {
+              "node_id": "node-2",
+              "interface_id": "if-2a"
+            },
+            "bandwidth_bps": 10000000,
+            "propagation_delay_us": 5000,
+            "loss_probability": 0.0,
+            "bit_error_rate": 0.0,
+            "queue_capacity": 50,
+            "status": "up"
+          },
+          {
+            "id": "link-2",
+            "source": {
+              "node_id": "node-2",
+              "interface_id": "if-2b"
+            },
+            "target": {
+              "node_id": "node-3",
+              "interface_id": "if-3"
+            },
+            "bandwidth_bps": 10000000,
+            "propagation_delay_us": 5000,
+            "loss_probability": 0.0,
+            "bit_error_rate": 0.0,
+            "queue_capacity": 50,
+            "status": "up"
+          }
+        ],
+        "simulation_config": {
+          "seed": 42891,
+          "max_simulation_time_us": 10000000,
+          "default_bandwidth_bps": 10000000,
+          "default_propagation_delay_us": 10000
+        }
+      },
+      "traffic_src_id": null,
+      "traffic_dst_id": null,
+      "packet_size_bytes": null,
+      "traffic_interval_us": null,
+      "packet_count": null
+    },
+    "target": "udp",
+    "timing": "bulk transfer to completion; simulation_duration_us does not truncate transfer",
+    "metric_notes": "Transport: latency is TCP RTT/2 estimate; UDP latency and jitter unavailable (zero placeholders). Seeds do not introduce random loss into transport models. Effective hops include model floors.",
+    "wall_clock_field": "execution_time_ms is not deterministic"
+  },
+  "run_evidence": [
+    {
+      "scenario": "a",
+      "seed": 42,
+      "model": "udp",
+      "config": {
+        "protocol": "udp",
+        "source_node_id": "node-1",
+        "destination_node_id": "node-2",
+        "source_port": 49152,
+        "destination_port": 80,
+        "payload_bytes": 10000,
+        "segment_size_bytes": 1000,
+        "initial_sequence_number": 1000,
+        "initial_cwnd_mss": 1.0,
+        "initial_ssthresh_mss": 16.0,
+        "initial_rto_us": 100000,
+        "receive_window_bytes": 32000,
+        "seed": 42,
+        "dropped_segments": [],
+        "maximum_retries": 5
+      },
+      "effective_hops": [
+        {
+          "link_id": "link-1",
+          "source": "node-1",
+          "target": "node-2",
+          "bandwidth_bps": 1000000,
+          "delay_us": 5000,
+          "queue_capacity": 50
+        }
+      ],
+      "metrics": {
+        "segments_sent": 10,
+        "segments_delivered": 10,
+        "retransmissions": 0,
+        "segments_lost": 0,
+        "duplicate_acks": 0,
+        "bytes_sent": 10000,
+        "bytes_delivered": 10000,
+        "completion_time_us": 50000,
+        "average_rtt_us": 0,
+        "smoothed_rtt_us": 0,
+        "final_rto_us": 0,
+        "throughput_bits_per_sec": 1600000.0,
+        "throughput_bytes_per_sec": 200000.0,
+        "goodput_bits_per_sec": 1600000.0,
+        "packet_loss_rate": 0.0,
+        "sender_window_occupancy_avg": 0.0,
+        "receiver_window_occupancy_max": 0,
+        "congestion_window_final": 0.0,
+        "congestion_window_max": 0.0,
+        "timeout_count": 0,
+        "fast_retransmit_count": 0
+      },
+      "qos": {
+        "measurement_interval_us": 50000,
+        "throughput_bits_per_sec": 1600000.0,
+        "throughput_bytes_per_sec": 200000.0,
+        "goodput_bits_per_sec": 1600000.0,
+        "end_to_end_latencies_us": [],
+        "average_latency_us": 0,
+        "min_latency_us": null,
+        "max_latency_us": null,
+        "jitter_us": 0.0,
+        "jitter_samples": [],
+        "packets_sent": 10,
+        "packets_delivered": 10,
+        "packets_lost": 0,
+        "packet_loss_rate": 0.0,
+        "loss_by_category": {
+          "queue_overflow": 0,
+          "link_down": 0,
+          "bit_error": 0,
+          "stochastic_loss": 0
+        },
+        "retransmissions": 0,
+        "link_utilization": [],
+        "queue_occupancy_average": 0.0,
+        "queue_occupancy_max": 0,
+        "queue_drops": 0,
+        "average_rtt_us": null
+      }
+    },
+    {
+      "scenario": "b",
+      "seed": 42,
+      "model": "udp",
+      "config": {
+        "protocol": "udp",
+        "source_node_id": "node-1",
+        "destination_node_id": "node-2",
+        "source_port": 49152,
+        "destination_port": 80,
+        "payload_bytes": 10000,
+        "segment_size_bytes": 1000,
+        "initial_sequence_number": 1000,
+        "initial_cwnd_mss": 1.0,
+        "initial_ssthresh_mss": 16.0,
+        "initial_rto_us": 100000,
+        "receive_window_bytes": 32000,
+        "seed": 42,
+        "dropped_segments": [],
+        "maximum_retries": 5
+      },
+      "effective_hops": [
+        {
+          "link_id": "link-1",
+          "source": "node-1",
+          "target": "node-2",
+          "bandwidth_bps": 10000000,
+          "delay_us": 5000,
+          "queue_capacity": 50
+        }
+      ],
+      "metrics": {
+        "segments_sent": 10,
+        "segments_delivered": 10,
+        "retransmissions": 0,
+        "segments_lost": 0,
+        "duplicate_acks": 0,
+        "bytes_sent": 10000,
+        "bytes_delivered": 10000,
+        "completion_time_us": 50000,
+        "average_rtt_us": 0,
+        "smoothed_rtt_us": 0,
+        "final_rto_us": 0,
+        "throughput_bits_per_sec": 1600000.0,
+        "throughput_bytes_per_sec": 200000.0,
+        "goodput_bits_per_sec": 1600000.0,
+        "packet_loss_rate": 0.0,
+        "sender_window_occupancy_avg": 0.0,
+        "receiver_window_occupancy_max": 0,
+        "congestion_window_final": 0.0,
+        "congestion_window_max": 0.0,
+        "timeout_count": 0,
+        "fast_retransmit_count": 0
+      },
+      "qos": {
+        "measurement_interval_us": 50000,
+        "throughput_bits_per_sec": 1600000.0,
+        "throughput_bytes_per_sec": 200000.0,
+        "goodput_bits_per_sec": 1600000.0,
+        "end_to_end_latencies_us": [],
+        "average_latency_us": 0,
+        "min_latency_us": null,
+        "max_latency_us": null,
+        "jitter_us": 0.0,
+        "jitter_samples": [],
+        "packets_sent": 10,
+        "packets_delivered": 10,
+        "packets_lost": 0,
+        "packet_loss_rate": 0.0,
+        "loss_by_category": {
+          "queue_overflow": 0,
+          "link_down": 0,
+          "bit_error": 0,
+          "stochastic_loss": 0
+        },
+        "retransmissions": 0,
+        "link_utilization": [],
+        "queue_occupancy_average": 0.0,
+        "queue_occupancy_max": 0,
+        "queue_drops": 0,
+        "average_rtt_us": null
+      }
+    },
+    {
+      "scenario": "a",
+      "seed": 101,
+      "model": "udp",
+      "config": {
+        "protocol": "udp",
+        "source_node_id": "node-1",
+        "destination_node_id": "node-2",
+        "source_port": 49152,
+        "destination_port": 80,
+        "payload_bytes": 10000,
+        "segment_size_bytes": 1000,
+        "initial_sequence_number": 1000,
+        "initial_cwnd_mss": 1.0,
+        "initial_ssthresh_mss": 16.0,
+        "initial_rto_us": 100000,
+        "receive_window_bytes": 32000,
+        "seed": 101,
+        "dropped_segments": [],
+        "maximum_retries": 5
+      },
+      "effective_hops": [
+        {
+          "link_id": "link-1",
+          "source": "node-1",
+          "target": "node-2",
+          "bandwidth_bps": 1000000,
+          "delay_us": 5000,
+          "queue_capacity": 50
+        }
+      ],
+      "metrics": {
+        "segments_sent": 10,
+        "segments_delivered": 10,
+        "retransmissions": 0,
+        "segments_lost": 0,
+        "duplicate_acks": 0,
+        "bytes_sent": 10000,
+        "bytes_delivered": 10000,
+        "completion_time_us": 50000,
+        "average_rtt_us": 0,
+        "smoothed_rtt_us": 0,
+        "final_rto_us": 0,
+        "throughput_bits_per_sec": 1600000.0,
+        "throughput_bytes_per_sec": 200000.0,
+        "goodput_bits_per_sec": 1600000.0,
+        "packet_loss_rate": 0.0,
+        "sender_window_occupancy_avg": 0.0,
+        "receiver_window_occupancy_max": 0,
+        "congestion_window_final": 0.0,
+        "congestion_window_max": 0.0,
+        "timeout_count": 0,
+        "fast_retransmit_count": 0
+      },
+      "qos": {
+        "measurement_interval_us": 50000,
+        "throughput_bits_per_sec": 1600000.0,
+        "throughput_bytes_per_sec": 200000.0,
+        "goodput_bits_per_sec": 1600000.0,
+        "end_to_end_latencies_us": [],
+        "average_latency_us": 0,
+        "min_latency_us": null,
+        "max_latency_us": null,
+        "jitter_us": 0.0,
+        "jitter_samples": [],
+        "packets_sent": 10,
+        "packets_delivered": 10,
+        "packets_lost": 0,
+        "packet_loss_rate": 0.0,
+        "loss_by_category": {
+          "queue_overflow": 0,
+          "link_down": 0,
+          "bit_error": 0,
+          "stochastic_loss": 0
+        },
+        "retransmissions": 0,
+        "link_utilization": [],
+        "queue_occupancy_average": 0.0,
+        "queue_occupancy_max": 0,
+        "queue_drops": 0,
+        "average_rtt_us": null
+      }
+    },
+    {
+      "scenario": "b",
+      "seed": 101,
+      "model": "udp",
+      "config": {
+        "protocol": "udp",
+        "source_node_id": "node-1",
+        "destination_node_id": "node-2",
+        "source_port": 49152,
+        "destination_port": 80,
+        "payload_bytes": 10000,
+        "segment_size_bytes": 1000,
+        "initial_sequence_number": 1000,
+        "initial_cwnd_mss": 1.0,
+        "initial_ssthresh_mss": 16.0,
+        "initial_rto_us": 100000,
+        "receive_window_bytes": 32000,
+        "seed": 101,
+        "dropped_segments": [],
+        "maximum_retries": 5
+      },
+      "effective_hops": [
+        {
+          "link_id": "link-1",
+          "source": "node-1",
+          "target": "node-2",
+          "bandwidth_bps": 10000000,
+          "delay_us": 5000,
+          "queue_capacity": 50
+        }
+      ],
+      "metrics": {
+        "segments_sent": 10,
+        "segments_delivered": 10,
+        "retransmissions": 0,
+        "segments_lost": 0,
+        "duplicate_acks": 0,
+        "bytes_sent": 10000,
+        "bytes_delivered": 10000,
+        "completion_time_us": 50000,
+        "average_rtt_us": 0,
+        "smoothed_rtt_us": 0,
+        "final_rto_us": 0,
+        "throughput_bits_per_sec": 1600000.0,
+        "throughput_bytes_per_sec": 200000.0,
+        "goodput_bits_per_sec": 1600000.0,
+        "packet_loss_rate": 0.0,
+        "sender_window_occupancy_avg": 0.0,
+        "receiver_window_occupancy_max": 0,
+        "congestion_window_final": 0.0,
+        "congestion_window_max": 0.0,
+        "timeout_count": 0,
+        "fast_retransmit_count": 0
+      },
+      "qos": {
+        "measurement_interval_us": 50000,
+        "throughput_bits_per_sec": 1600000.0,
+        "throughput_bytes_per_sec": 200000.0,
+        "goodput_bits_per_sec": 1600000.0,
+        "end_to_end_latencies_us": [],
+        "average_latency_us": 0,
+        "min_latency_us": null,
+        "max_latency_us": null,
+        "jitter_us": 0.0,
+        "jitter_samples": [],
+        "packets_sent": 10,
+        "packets_delivered": 10,
+        "packets_lost": 0,
+        "packet_loss_rate": 0.0,
+        "loss_by_category": {
+          "queue_overflow": 0,
+          "link_down": 0,
+          "bit_error": 0,
+          "stochastic_loss": 0
+        },
+        "retransmissions": 0,
+        "link_utilization": [],
+        "queue_occupancy_average": 0.0,
+        "queue_occupancy_max": 0,
+        "queue_drops": 0,
+        "average_rtt_us": null
+      }
+    }
+  ]
+}

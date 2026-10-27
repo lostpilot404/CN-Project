@@ -1,5 +1,8 @@
 # NetSim Phase 7: QoS Metrics, Fault Injection & Experimentation Walkthrough
 
+> **Current verification:** this historical walkthrough is not a current release report.
+> See [final verification](docs/FINAL_VERIFICATION.md) for reconciled counts and evidence.
+
 > **Status update (quality audit, 2026-10).** This document is a historical Phase 7 record and
 > its phase statements are out of date. The project has since been ported to Python: the
 > authoritative simulation core lives in `python/netsim/` and the front-end talks to it over

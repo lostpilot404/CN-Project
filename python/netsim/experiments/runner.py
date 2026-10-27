@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import platform
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any
 
 from netsim.core.clock import SimTime
 from netsim.core.engine import SimulationEngine
 from netsim.experiments.config import (
     ComparativeExperimentConfig,
+    ExperimentTarget,
     SweepConfig,
     SweepParameterType,
 )
@@ -29,6 +34,9 @@ from netsim.models.project import Project
 from netsim.qos.aggregation import AggregatedQos, aggregate_qos
 from netsim.qos.metrics import QosMetrics, compute_network_qos
 from netsim.routing.graph import MetricType, RoutingGraph
+from netsim.transport import TransportConfig, TransportProtocol, resolve_route_and_links
+from netsim.transport.tcp import simulate_tcp
+from netsim.transport.udp import simulate_udp
 
 
 @dataclass
@@ -178,11 +186,122 @@ def run_single_simulation(params: SingleRunParams) -> tuple[QosMetrics, list[Rou
     return qos, route_changes
 
 
+def execute_run(
+    params: SingleRunParams, target: ExperimentTarget | None, evidence: list[dict[str, Any]], label: str
+) -> tuple[QosMetrics, list[RouteChangeRecord]]:
+    """Dispatch explicitly; preserve the original topology engine for legacy target=None."""
+    target = target or ExperimentTarget.NETWORK
+    if target == ExperimentTarget.NETWORK:
+        qos, routes = run_single_simulation(params)
+        evidence.append(
+            {
+                "scenario": label,
+                "seed": params.seed,
+                "model": "network",
+                "inputs": {
+                    **asdict(params),
+                    "base_project": params.base_project.to_dict(),
+                    "fault_schedule": params.fault_schedule.to_dict() if params.fault_schedule else None,
+                },
+                "qos": qos.to_dict(),
+            }
+        )
+        return qos, routes
+    if target not in (ExperimentTarget.TCP, ExperimentTarget.UDP):
+        raise ValueError(f"Unsupported experiment target '{target.value}'; use its dedicated studio")
+    if params.fault_schedule and params.fault_schedule.entries:
+        raise ValueError("Transport experiments do not support scheduled faults")
+    if any(link.loss_probability or link.bit_error_rate for link in params.base_project.links):
+        raise ValueError("Transport experiments do not model stochastic link loss or BER; use the network target")
+    config = TransportConfig(
+        protocol=TransportProtocol(target.value),
+        source_node_id=params.traffic_src,
+        destination_node_id=params.traffic_dst,
+        payload_bytes=params.packet_size * params.packet_count,
+        segment_size_bytes=params.packet_size,
+        seed=params.seed,
+    )
+    for link in params.base_project.links:
+        if link.bandwidth_bps < 1_000_000 or link.propagation_delay_us < 100:
+            raise ValueError("Transport topology requires bandwidth >= 1000000 bps and delay >= 100 us (model floors)")
+    result = (simulate_tcp if target == ExperimentTarget.TCP else simulate_udp)(config, params.base_project)
+    metrics = result.metrics
+    elapsed = max(1, metrics.completion_time_us)
+    # Only map metrics genuinely calculated by the transport model. TCP latency below is
+    # an RTT/2 estimate, not a one-way latency sample. UDP has no RTT estimate.
+    qos = QosMetrics(
+        measurement_interval_us=elapsed,
+        packets_sent=metrics.segments_sent,
+        packets_delivered=metrics.segments_delivered,
+        packets_lost=metrics.segments_lost,
+        retransmissions=metrics.retransmissions,
+        packet_loss_rate=metrics.packet_loss_rate,
+        throughput_bits_per_sec=metrics.throughput_bits_per_sec,
+        throughput_bytes_per_sec=metrics.throughput_bytes_per_sec,
+        goodput_bits_per_sec=metrics.goodput_bits_per_sec,
+        average_rtt_us=metrics.average_rtt_us if target == ExperimentTarget.TCP else None,
+        average_latency_us=metrics.average_rtt_us / 2 if target == ExperimentTarget.TCP else 0,
+    )
+    _, hops = resolve_route_and_links(config, params.base_project)
+    evidence.append(
+        {
+            "scenario": label,
+            "seed": params.seed,
+            "model": target.value,
+            "config": config.to_dict(),
+            "effective_hops": [asdict(hop) for hop in hops],
+            "metrics": metrics.to_dict(),
+            "qos": qos.to_dict(),
+        }
+    )
+    return qos, []
+
+
+def validate_execution_settings(config: SweepConfig | ComparativeExperimentConfig) -> None:
+    for name in ("packet_size_bytes", "packet_count", "traffic_interval_us"):
+        value = getattr(config, name)
+        if value is not None and (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not float(value).is_integer()
+            or value <= 0
+        ):
+            raise ValueError(f"{name} must be a positive integer")
+    if config.target in (ExperimentTarget.TCP, ExperimentTarget.UDP) and config.traffic_interval_us is not None:
+        raise ValueError("Transport experiments run a bulk transfer to completion; traffic_interval_us is unsupported")
+
+
+def provenance(config: SweepConfig | ComparativeExperimentConfig, project: Project) -> dict[str, Any]:
+    source_root = Path(__file__).resolve().parents[1]
+    source_hash = hashlib.sha256()
+    for source in sorted(source_root.rglob("*.py")):
+        source_hash.update(str(source.relative_to(source_root)).encode())
+        source_hash.update(source.read_bytes())
+    snapshot = config.to_dict()
+    snapshot["base_project"] = project.to_dict()
+    return {
+        "schema_version": 1,
+        "engine": "netsim-python",
+        "model_version": "0.9.0",
+        "engine_source_sha256": source_hash.hexdigest(),
+        "python_version": platform.python_version(),
+        "config": snapshot,
+        "target": (config.target or ExperimentTarget.NETWORK).value,
+        "timing": "duration plus 100000us drain"
+        if config.target in (None, ExperimentTarget.NETWORK)
+        else "bulk transfer to completion; simulation_duration_us does not truncate transfer",
+        "metric_notes": "Transport: latency is TCP RTT/2 estimate; UDP latency and jitter unavailable (zero placeholders). "
+        "Seeds do not introduce random loss into transport models. Effective hops include model floors.",
+        "wall_clock_field": "execution_time_ms is not deterministic",
+    }
+
+
 def run_parameter_sweep(
     config: SweepConfig,
     active_project: Project,
 ) -> SweepExperimentResult:
     validate_sweep_config(config)
+    validate_execution_settings(config)
     start_time = time.time()
 
     base_project = config.base_project or active_project
@@ -197,6 +316,7 @@ def run_parameter_sweep(
     packet_count = config.packet_count or 10
     duration_us = config.simulation_duration_us
 
+    evidence: list[dict[str, Any]] = []
     points: list[SweepPointResult] = []
     total_runs = 0
 
@@ -208,7 +328,7 @@ def run_parameter_sweep(
         apply_parameter_to_project(proj, config.parameter, val)
 
         effective_size = (
-            int(max(64.0, val)) if config.parameter.param_type == SweepParameterType.PACKET_SIZE_BYTES else packet_size
+            int(val) if config.parameter.param_type == SweepParameterType.PACKET_SIZE_BYTES else packet_size
         )
         effective_interval = (
             int(max(1.0, val)) if config.parameter.param_type == SweepParameterType.TRAFFIC_INTERVAL_US else interval_us
@@ -219,7 +339,7 @@ def run_parameter_sweep(
 
         for seed in config.seeds:
             total_runs += 1
-            qos, route_changes = run_single_simulation(
+            qos, route_changes = execute_run(
                 SingleRunParams(
                     base_project=proj,
                     seed=seed,
@@ -230,7 +350,10 @@ def run_parameter_sweep(
                     interval_us=effective_interval,
                     packet_count=effective_count,
                     fault_schedule=config.fault_schedule,
-                )
+                ),
+                config.target,
+                evidence,
+                f"parameter={val}",
             )
             qos_list.append(qos)
             runs.append(
@@ -260,6 +383,8 @@ def run_parameter_sweep(
         total_runs=total_runs,
         seeds=list(config.seeds),
         execution_time_ms=execution_time_ms,
+        provenance=provenance(config, base_project),
+        run_evidence=evidence,
     )
 
 
@@ -292,6 +417,7 @@ def run_comparative_experiment(
     active_project: Project,
 ) -> ComparativeExperimentResult:
     validate_comparative_config(config)
+    validate_execution_settings(config)
     start_time = time.time()
 
     base_project = config.base_project or active_project
@@ -316,40 +442,49 @@ def run_comparative_experiment(
         for param, val in config.scenario_b.parameter_overrides:
             apply_parameter_to_project(proj_b, param, val)
 
+    evidence: list[dict[str, Any]] = []
     qos_a_list: list[QosMetrics] = []
     qos_b_list: list[QosMetrics] = []
     route_changes_a: list[RouteChangeRecord] = []
     route_changes_b: list[RouteChangeRecord] = []
 
     for seed in config.seeds:
-        qos_a, rc_a = run_single_simulation(
+        overrides = {p.param_type: value for p, value in config.scenario_a.parameter_overrides or []}
+        qos_a, rc_a = execute_run(
             SingleRunParams(
                 base_project=proj_a,
                 seed=seed,
                 duration_us=duration_us,
                 traffic_src=src,
                 traffic_dst=dst,
-                packet_size=packet_size,
-                interval_us=interval_us,
-                packet_count=packet_count,
+                packet_size=int(overrides.get(SweepParameterType.PACKET_SIZE_BYTES, packet_size)),
+                interval_us=int(overrides.get(SweepParameterType.TRAFFIC_INTERVAL_US, interval_us)),
+                packet_count=int(overrides.get(SweepParameterType.PACKET_COUNT, packet_count)),
                 fault_schedule=config.scenario_a.fault_schedule,
-            )
+            ),
+            config.target,
+            evidence,
+            "a",
         )
         qos_a_list.append(qos_a)
         route_changes_a.extend(rc_a)
 
-        qos_b, rc_b = run_single_simulation(
+        overrides = {p.param_type: value for p, value in config.scenario_b.parameter_overrides or []}
+        qos_b, rc_b = execute_run(
             SingleRunParams(
                 base_project=proj_b,
                 seed=seed,
                 duration_us=duration_us,
                 traffic_src=src,
                 traffic_dst=dst,
-                packet_size=packet_size,
-                interval_us=interval_us,
-                packet_count=packet_count,
+                packet_size=int(overrides.get(SweepParameterType.PACKET_SIZE_BYTES, packet_size)),
+                interval_us=int(overrides.get(SweepParameterType.TRAFFIC_INTERVAL_US, interval_us)),
+                packet_count=int(overrides.get(SweepParameterType.PACKET_COUNT, packet_count)),
                 fault_schedule=config.scenario_b.fault_schedule,
-            )
+            ),
+            config.target,
+            evidence,
+            "b",
         )
         qos_b_list.append(qos_b)
         route_changes_b.extend(rc_b)
@@ -370,4 +505,6 @@ def run_comparative_experiment(
         route_changes_b=route_changes_b,
         runs_count_per_scenario=len(config.seeds),
         execution_time_ms=execution_time_ms,
+        provenance=provenance(config, base_project),
+        run_evidence=evidence,
     )

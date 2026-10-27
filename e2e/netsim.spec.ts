@@ -616,7 +616,7 @@ test.describe('NetSim full-stack end-to-end', () => {
     await page.getByRole('button', { name: 'Batch Experiments' }).click();
 
     const config = {
-      target: 'tcp',
+      target: 'network', // Timed topology traffic, not a TCP bulk transfer.
       parameter: { type: 'link_bandwidth' },
       parameter_values: [100_000, 10_000_000],
       seeds: [42],

@@ -1,5 +1,9 @@
 # NetSim — Final Hostile Quality Audit, Comprehensive Testing & Manual Verification
 
+> **Historical baseline report.** Counts and observations below apply to the dated source state,
+> not the current feature-branch release. See [final verification](docs/FINAL_VERIFICATION.md)
+> for reconciled current counts, real browser downloads and comparative-evidence limits.
+
 **Date:** 2026-10-12 · **Branch:** `arena/5d41fe31-cn-project` · **Baseline commit:** `28f762d`
 **Scope:** audit only — no features added, no redesign. Every defect listed as FIXED was reproduced
 before the change and re-verified after it.

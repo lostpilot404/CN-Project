@@ -1,7 +1,8 @@
 # NetSim — Testing Strategy
 
 This document describes the test strategy actually implemented in this repository and the commands
-that run it. For measured results, see [`QUALITY_AUDIT_REPORT.md`](QUALITY_AUDIT_REPORT.md); for the
+that run it. For current measured results, see [final verification](docs/FINAL_VERIFICATION.md); the
+[`QUALITY_AUDIT_REPORT.md`](QUALITY_AUDIT_REPORT.md) is historical; for the
 architecture under test, see [`README.md`](README.md).
 
 > Earlier revisions of this file described a Rust test strategy. That engine has been removed;
@@ -29,6 +30,7 @@ Front-end unit/component     rendering, state, error and empty states  src/*.tes
 Front-end ↔ service          real HTTP against a running service       src/integration/
         ↓
 Browser end-to-end           real Chromium, real service, real UI     e2e/netsim.spec.ts
+Browser downloads/replay     actual download events and saved JSON    e2e/experiment-downloads.spec.ts
         ↓
 Accessibility audit          axe-core over every workspace + sub-view e2e/a11y.spec.ts
 ```
@@ -233,3 +235,11 @@ selector inspection and TypeScript compilation are not browser tests.
    trusting the rendered label alone.
 6. To extend accessibility coverage, add the view to `WORKSPACES` or `SUB_VIEWS` in
    `e2e/a11y.spec.ts`; sub-views nested inside another sub-view need a `via` entry.
+
+## Final feature-branch acceptance (2026-10-27)
+
+Current counts: 277 Python tests (197 backend + 80 utility); 95 frontend tests with 11 default
+opt-in skips; 11 separately run live integration tests; 31 Chromium E2E tests. Lint/format, mypy,
+TypeScript and production build pass. See [final verification](docs/FINAL_VERIFICATION.md) for logs,
+warnings and precise limits. Six actual browser downloads (three targets × sweep/A-B) were replayed,
+not replaced by API/unit checks. Direct Packet Tracer execution remains unverified.

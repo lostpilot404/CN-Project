@@ -253,7 +253,7 @@ def test_parameter_sweep_varies_with_the_parameter_and_repeats_exactly(api):
     """A bandwidth sweep must move latency in the expected direction and be reproducible."""
     config = {
         "config": {
-            "target": "tcp",
+            "target": "network",
             "parameter": {"type": "link_bandwidth"},
             "parameter_values": [100_000, 1_000_000, 10_000_000],
             "seeds": [42, 43, 44],

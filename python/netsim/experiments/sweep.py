@@ -13,39 +13,33 @@ from netsim.models.project import Project
 
 
 def validate_parameter_for_target(param: SweepParameter, target: ExperimentTarget) -> None:
-    if target == ExperimentTarget.TCP:
-        if param.param_type == SweepParameterType.MAC_PERSISTENCE:
-            raise ValueError("Sweep parameter 'MacPersistence' is not supported for TCP target experiments")
-    elif target == ExperimentTarget.UDP:
-        if param.param_type == SweepParameterType.WINDOW_SIZE:
-            raise ValueError(
-                "Sweep parameter 'WindowSize' is not supported for UDP target experiments (UDP has no window flow control)"
-            )
-        elif param.param_type == SweepParameterType.TIMEOUT_US:
-            raise ValueError(
-                "Sweep parameter 'TimeoutUs' is not supported for UDP target experiments (UDP has no transport retransmissions)"
-            )
-        elif param.param_type == SweepParameterType.MAC_PERSISTENCE:
-            raise ValueError("Sweep parameter 'MacPersistence' is not supported for UDP target experiments")
-    elif target == ExperimentTarget.APPLICATION:
-        if param.param_type == SweepParameterType.WINDOW_SIZE:
-            raise ValueError(
-                "Sweep parameter 'WindowSize' is not supported for Application target experiments (use FlowControl or TCP)"
-            )
-        elif param.param_type == SweepParameterType.MAC_PERSISTENCE:
-            raise ValueError("Sweep parameter 'MacPersistence' is not supported for Application target experiments")
-    elif target == ExperimentTarget.FLOW_CONTROL:
-        if param.param_type == SweepParameterType.MAC_PERSISTENCE:
-            raise ValueError("Sweep parameter 'MacPersistence' is not supported for FlowControl target experiments")
-    elif target == ExperimentTarget.MAC:
-        if param.param_type == SweepParameterType.QUEUE_CAPACITY:
-            raise ValueError(
-                "Sweep parameter 'QueueCapacity' is not supported for MAC contention experiments (MAC models channel access without L3 queuing)"
-            )
-        elif param.param_type == SweepParameterType.WINDOW_SIZE:
-            raise ValueError("Sweep parameter 'WindowSize' is not supported for MAC target experiments")
-        elif param.param_type == SweepParameterType.TIMEOUT_US:
-            raise ValueError("Sweep parameter 'TimeoutUs' is not supported for MAC target experiments")
+    supported = {
+        ExperimentTarget.NETWORK: {
+            SweepParameterType.LINK_BANDWIDTH,
+            SweepParameterType.PROPAGATION_DELAY,
+            SweepParameterType.QUEUE_CAPACITY,
+            SweepParameterType.BIT_ERROR_RATE,
+            SweepParameterType.PACKET_SIZE_BYTES,
+            SweepParameterType.TRAFFIC_INTERVAL_US,
+            SweepParameterType.PACKET_COUNT,
+        },
+        ExperimentTarget.TCP: {
+            SweepParameterType.LINK_BANDWIDTH,
+            SweepParameterType.PROPAGATION_DELAY,
+            SweepParameterType.PACKET_SIZE_BYTES,
+            SweepParameterType.PACKET_COUNT,
+        },
+        ExperimentTarget.UDP: {
+            SweepParameterType.LINK_BANDWIDTH,
+            SweepParameterType.PROPAGATION_DELAY,
+            SweepParameterType.PACKET_SIZE_BYTES,
+            SweepParameterType.PACKET_COUNT,
+        },
+    }
+    if target not in supported:
+        raise ValueError(f"Target '{target.value}' is not supported by the experiment runner; use its dedicated studio")
+    if param.param_type not in supported[target]:
+        raise ValueError(f"Parameter '{param.param_type.value}' is not supported for target '{target.value}'")
 
 
 #: (minimum, maximum) bounds for each sweep parameter, or None for an open bound.
@@ -65,6 +59,14 @@ PARAMETER_BOUNDS: dict[SweepParameterType, tuple[float | None, float | None]] = 
 
 def validate_parameter_value(param: SweepParameter, value: float) -> None:
     """Reject parameter values that would produce a physically meaningless run."""
+    if not math.isfinite(value):
+        raise ValueError("Parameter values must be finite numbers")
+    if (
+        param.param_type != SweepParameterType.BIT_ERROR_RATE
+        and param.param_type != SweepParameterType.MAC_PERSISTENCE
+        and not float(value).is_integer()
+    ):
+        raise ValueError(f"Parameter {param.param_type.value} requires an integer")
     bounds = PARAMETER_BOUNDS.get(param.param_type)
     if bounds is None:
         return
@@ -91,8 +93,7 @@ def validate_sweep_config(config: SweepConfig) -> None:
         if math.isnan(val) or math.isinf(val):
             raise ValueError("Parameter values must be finite numbers")
     validate_parameter_values(config.parameter, config.parameter_values)
-    if config.target is not None:
-        validate_parameter_for_target(config.parameter, config.target)
+    validate_parameter_for_target(config.parameter, config.target or ExperimentTarget.NETWORK)
 
 
 def validate_comparative_config(config: ComparativeExperimentConfig) -> None:
@@ -104,13 +105,11 @@ def validate_comparative_config(config: ComparativeExperimentConfig) -> None:
         if scenario.parameter_overrides:
             for param, value in scenario.parameter_overrides:
                 validate_parameter_value(param, value)
-    if config.target is not None:
-        if config.scenario_a.parameter_overrides:
-            for p, _ in config.scenario_a.parameter_overrides:
-                validate_parameter_for_target(p, config.target)
-        if config.scenario_b.parameter_overrides:
-            for p, _ in config.scenario_b.parameter_overrides:
-                validate_parameter_for_target(p, config.target)
+    target = config.target or ExperimentTarget.NETWORK
+    validate_parameter_for_target(SweepParameter(SweepParameterType.PACKET_COUNT), target)
+    for scenario in (config.scenario_a, config.scenario_b):
+        for p, _ in scenario.parameter_overrides or []:
+            validate_parameter_for_target(p, target)
 
 
 def apply_parameter_to_project(
