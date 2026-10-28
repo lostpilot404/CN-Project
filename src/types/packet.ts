@@ -9,7 +9,9 @@ export type PacketState =
   | 'dropped_queue_full'
   | 'dropped_bit_error'
   | 'dropped_link_down'
+  | 'dropped_link_loss'
   | 'dropped_ttl_expired'
+  | 'dropped_no_route'
   | 'retransmitted';
 
 export interface AppHeader {

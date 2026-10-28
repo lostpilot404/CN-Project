@@ -62,7 +62,7 @@ def create_two_node_project() -> Project:
 def test_parity_01_basic_packet_delivery():
     proj = create_two_node_project()
     engine = SimulationEngine(seed=42)
-    engine.update_links(proj.links)
+    engine.update_topology(proj.nodes, proj.links)
 
     pkt_id = engine.inject_packet("node-a", "node-b", 1000, "HTTP", "TCP")
     assert pkt_id is not None
@@ -81,7 +81,7 @@ def test_parity_02_queue_overflow():
     proj = create_two_node_project()
     # Queue capacity is 10
     engine = SimulationEngine(seed=42)
-    engine.update_links(proj.links)
+    engine.update_topology(proj.nodes, proj.links)
 
     # Inject 25 packets rapidly at time 0
     for _ in range(25):
@@ -98,7 +98,7 @@ def test_parity_02_queue_overflow():
 def test_parity_03_link_down_fault():
     proj = create_two_node_project()
     engine = SimulationEngine(seed=42)
-    engine.update_links(proj.links)
+    engine.update_topology(proj.nodes, proj.links)
 
     # Schedule link-down at 5,000 us
     engine.schedule_fault("f-link-down", 5_000, FaultType.link_down("link-ab"))
@@ -115,7 +115,7 @@ def test_parity_03_link_down_fault():
 def test_parity_04_restoration():
     proj = create_two_node_project()
     engine = SimulationEngine(seed=42)
-    engine.update_links(proj.links)
+    engine.update_topology(proj.nodes, proj.links)
 
     # Link down at 5ms, restored at 20ms
     engine.schedule_fault("f-down", 5_000, FaultType.link_down("link-ab"))
@@ -161,7 +161,7 @@ def test_parity_05_node_failure_recovery():
 
     proj = Project.create("Transit Proj", nodes=[node_a, router_1, node_b], links=[l1, l2])
     engine = SimulationEngine(seed=42)
-    engine.update_links(proj.links)
+    engine.update_topology(proj.nodes, proj.links)
 
     # Node failure at 5ms, recovery at 25ms
     engine.schedule_fault("f-node-fail", 5_000, FaultType.node_failure("r1"))
@@ -344,6 +344,37 @@ def test_parity_12_aloha():
     )
     res = simulate_mac(cfg)
     assert res.frames_transmitted >= 1
+
+
+# 12b. MAC offered load must affect contention (regression: G was parsed and validated
+# but never used, so the studio's load control and G sweep were decorative).
+def test_mac_offered_load_drives_contention_deterministically():
+    def run(proto, g):
+        cfg = MacConfig(
+            protocol=proto,
+            num_stations=4,
+            total_frames_to_send=10,
+            frame_duration_us=10_000,
+            prop_delay_us=50,
+            frame_size_bits=8_000,
+            seed=12345,
+            max_retries=16,
+            offered_load_g=g,
+        )
+        return simulate_mac(cfg)
+
+    for proto in MacProtocol:
+        low = run(proto, 0.3)
+        high = run(proto, 2.5)
+        repeat = run(proto, 0.3)
+        assert low.completed_successfully and high.completed_successfully
+        # Same seed and load reproduce the run exactly.
+        assert (repeat.metrics.collisions, repeat.metrics.channel_utilization) == (
+            low.metrics.collisions,
+            low.metrics.channel_utilization,
+        )
+        # Heavier offered load produces strictly more contention.
+        assert high.metrics.collisions > low.metrics.collisions, proto
 
 
 # 13. CSMA

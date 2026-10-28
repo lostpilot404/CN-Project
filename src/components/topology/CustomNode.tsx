@@ -8,6 +8,9 @@ interface CustomNodeData {
   nodeType: NodeType;
   ip?: string;
   status: NodeState;
+  /** Keyboard/AT selection hook: Enter or Space on the focused node selects it. */
+  onSelect?: (nodeId: string) => void;
+  nodeId?: string;
 }
 
 const getNodeIcon = (type: NodeType) => {
@@ -28,7 +31,7 @@ const getNodeIcon = (type: NodeType) => {
   }
 };
 
-export const CustomNode = memo(({ data, selected }: { data: CustomNodeData; selected?: boolean }) => {
+export const CustomNode = memo(({ data, selected, id }: { data: CustomNodeData; selected?: boolean; id?: string }) => {
   const getStatusColor = () => {
     switch (data.status) {
       case 'up':
@@ -41,9 +44,20 @@ export const CustomNode = memo(({ data, selected }: { data: CustomNodeData; sele
     }
   };
 
+  const nodeKey = id ?? data.nodeId ?? '';
   return (
     <div
-      className={`px-3.5 py-2.5 rounded-xl bg-slate-900/95 border transition-all duration-200 shadow-lg min-w-[140px] select-none ${
+      tabIndex={0}
+      role="button"
+      aria-pressed={!!selected}
+      aria-label={`Node ${data.label}, type ${data.nodeType}, status ${data.status}`}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          data.onSelect?.(nodeKey);
+        }
+      }}
+      className={`px-3.5 py-2.5 rounded-xl bg-slate-900/95 border transition-all duration-200 shadow-lg min-w-[140px] select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
         selected
           ? 'border-brand-500 shadow-brand-500/20 ring-2 ring-brand-500/30'
           : 'border-slate-800 hover:border-slate-700'

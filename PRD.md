@@ -1,375 +1,43 @@
-# NetSim --- Product Requirements Document
+# NetSim — Product Requirements
 
-> **Historical document (superseded).** This was written for an earlier design in which a Rust
-> engine was the simulation authority. That engine and its `src-tauri/` tree have since been
-> removed: **Python (`python/netsim/`) is the sole simulation authority**, reached over HTTP by the
-> React front-end. Parts of this document therefore describe components, layers and test commands
-> that no longer exist, and any statement naming Rust or Tauri as authoritative is obsolete.
-> See `README.md` for the current architecture and `QUALITY_AUDIT_REPORT.md` for audit evidence.
+Current implementation baseline: Python service + browser-based React/TypeScript UI.
+This replaces the superseded desktop-engine proposal; requirements below describe the supported
+product boundary, not a list of unimplemented feature promises.
 
-## 1. Product
+## Users and problem
 
-**Name:** NetSim\
-**Full Name:** Interactive Computer Network Simulation and Performance
-Analysis Platform\
-**Type:** B.Tech CSE academic project\
-**Primary platform:** Windows 11 desktop\
-**Desktop shell:** Tauri 2.x\
-**Frontend:** React + TypeScript\
-**Core engine:** Rust\
-**Optional analysis toolkit:** Python
+Undergraduate networking students need to connect algorithm steps to observable consequences.
+Instructors need repeatable, short experiments with explicit inputs and inspectable outputs.
+NetSim focuses on those tasks, not certification-device emulation or measured superiority over
+other simulators.
 
-## 2. Product Vision
+## Product objectives
 
-NetSim is a local-first educational computer-network simulator that lets
-students build network topologies, configure devices, simulate packet
-transmission, inspect protocol behavior, inject faults, run controlled
-experiments, and analyze measured network performance.
+1. Preserve topology construction, packet inspection and dedicated algorithm studios.
+2. Execute the model selected by an experiment target; reject unsupported combinations.
+3. Compare parameter settings under common inputs and record the differences explicitly.
+4. Export complete run snapshots and per-seed evidence for independent reproduction.
+5. Explain simplified-model scope and distinguish computed metrics from unavailable ones.
 
-The application should demonstrate the major concepts in the supplied
-BCSE308L Computer Networks syllabus rather than functioning as a
-collection of unrelated calculators.
+## Current experiment scope
 
-## 3. Problem
+The general runner supports network packets, TCP bulk transfer and UDP bulk transfer.
+Flow-control GBN/SR comparison remains in its dedicated studio. Application and MAC studios
+remain separate; selecting them through the experiment API fails clearly. Supported parameters,
+timing semantics and reproducibility are specified in [PROJECT_REPORT.md](PROJECT_REPORT.md)
+and [docs/EXPERIMENT_WORKFLOW.md](docs/EXPERIMENT_WORKFLOW.md).
 
-Networking concepts such as routing, error detection, flow control,
-addressing, transport protocols and congestion control are commonly
-studied separately. Students need an environment in which these
-mechanisms can be observed together and tested under controlled
-conditions.
+## Acceptance
 
-## 4. Goals
+- Each exposed target reaches its model, never a fallback simulator.
+- Every accepted sweep parameter reaches effective model inputs or fails validation.
+- A/B overrides affect execution, not just labels.
+- A saved result includes inputs/topology, seeds, effective settings and per-run outputs.
+- Editing the form after a run does not change the downloadable result.
+- The controlled GBN/SR demonstration remains reproducible without changing its simulation logic.
 
-### Primary
+## Non-goals and evaluation gaps
 
-1.  Provide an interactive topology designer.
-2.  Build a deterministic discrete-event simulation engine.
-3.  Implement major networking algorithms in Rust.
-4.  Visualize packets and protocol state.
-5.  Measure actual simulation results.
-6.  Support reproducible experiments.
-7.  Compare algorithms using measured results.
-8.  Generate academic reports.
-9.  Provide learning and demonstration modes.
-
-### Secondary
-
--   Work locally without accounts.
--   Avoid cloud dependencies for core functionality.
--   Provide a polished desktop interface.
--   Keep simulation and UI code independent.
--   Allow future protocols to be added without rewriting the core.
-
-## 5. Non-Goals
-
-NetSim is not intended to be:
-
--   a real router OS
--   a production TCP/IP implementation
--   a packet sniffer
--   a replacement for enterprise network-management software
--   a cloud collaboration system
--   a real hardware configuration platform
--   a complete replacement for Cisco Packet Tracer
-
-## 6. Target Users
-
-### Student
-
-Build networks, learn concepts, run experiments and prepare
-demonstrations.
-
-### Faculty
-
-Inspect the implementation, run predefined demonstrations and review
-measured results.
-
-## 7. Syllabus Mapping
-
-The supplied BCSE308L syllabus covers networking principles and layered
-architecture, circuit/packet switching, data-link error and flow
-control, IPv4/IPv6 and NAT, routing, TCP/UDP and congestion control,
-QoS, and application-layer protocols.
-
-NetSim maps these to:
-
-  Course area             NetSim capability
-  ----------------------- ------------------------------------------------
-  Networking principles   Topology, OSI/TCP-IP visualization
-  Switching               Circuit and packet switching
-  Data link               Hamming, CRC, Checksum
-  Flow control            Sliding Window, Go-Back-N, Selective Repeat
-  Multiple access         ALOHA, Slotted ALOHA, CSMA, CSMA/CD
-  Network layer           IPv4, CIDR, subnetting, NAT, IPv6
-  Routing                 Distance Vector, Link State
-  Transport               TCP and UDP educational models
-  Congestion              Congestion-window visualization
-  QoS                     Latency, jitter, throughput, loss, utilization
-  Application             DNS, HTTP, FTP, SMTP, SNMP demonstrations
-
-## 8. Core Product Flow
-
-``` text
-Create/Open Project
-       ↓
-Build Topology
-       ↓
-Configure Interfaces
-       ↓
-Configure Links
-       ↓
-Calculate Routes
-       ↓
-Generate Traffic
-       ↓
-Run / Step Simulation
-       ↓
-Inspect Packets and Events
-       ↓
-Inject Faults if Required
-       ↓
-Collect Metrics
-       ↓
-Run Experiments
-       ↓
-Compare Results
-       ↓
-Save / Export Report
-```
-
-## 9. Main Features
-
-### Dashboard
-
--   recent projects
--   demo scenarios
--   experiment templates
--   learning modules
--   project status
-
-### Topology Designer
-
-Support:
-
--   PC
--   Server
--   Router
--   Switch
--   Wireless Access Point
--   Generic Node
-
-Operations:
-
--   create
--   delete
--   rename
--   move
--   connect
--   duplicate
--   configure
--   zoom
--   pan
--   auto-layout
--   undo/redo
-
-### Network Links
-
-Configurable:
-
--   bandwidth
--   latency
--   propagation delay
--   packet-loss probability
--   bit-error probability
--   queue capacity
--   status
-
-### Simulation
-
-Modes:
-
--   real-time
--   step-by-step
--   accelerated
--   instant/batch
-
-Simulation time must be independent of wall-clock time.
-
-### Packet Inspector
-
-Display:
-
--   packet ID
--   application protocol
--   transport protocol
--   source/destination
--   sequence
--   TTL
--   current node
--   state
--   timestamps
--   route
-
-### Event Timeline
-
-Show simulation events chronologically and allow selecting an event to
-highlight its packet/node/link.
-
-### Routing
-
-Implement:
-
--   Link State / Dijkstra
--   Distance Vector / Bellman-Ford-style logic
-
-Display routing tables, paths, costs, hop counts and route changes.
-
-### Addressing
-
-Implement:
-
--   IPv4 validation
--   CIDR
--   subnetting
--   classless addressing
--   NAT visualization
--   basic IPv6 representation
-
-### Error Control
-
-Implement:
-
--   Hamming Code
--   CRC
--   Checksum
-
-Support controlled error injection.
-
-### Flow Control
-
-Implement:
-
--   Sliding Window
--   Go-Back-N
--   Selective Repeat
-
-### Multiple Access
-
-Provide educational simulations for:
-
--   ALOHA
--   Slotted ALOHA
--   CSMA
--   CSMA/CD
-
-### Transport
-
-Educational models for:
-
--   TCP
--   UDP
--   ACKs
--   sequence numbers
--   retransmission
--   RTT
--   congestion window
-
-### Congestion and QoS
-
-Collect:
-
--   throughput
--   latency
--   RTT
--   jitter
--   packet loss
--   queue delay
--   utilization
--   retransmissions
-
-### Fault Injection
-
-Support:
-
--   packet loss
--   bit errors
--   link failure
--   router failure
--   queue overflow
--   increased latency
--   bandwidth reduction
-
-### Experiments
-
-Allow parameter sweeps such as:
-
-``` text
-Packet loss: 0%, 2%, 5%, 10%, 20%
-```
-
-and automatically run equivalent simulations.
-
-### Learning Mode
-
-Explain algorithms step-by-step during simulation.
-
-### Exam Mode
-
-Provide controlled academic exercises for subnetting, routing, CRC,
-Hamming, flow control and transport concepts.
-
-## 10. Architecture Requirements
-
-Rust is the authoritative simulation and domain layer.
-
-React must not implement authoritative networking algorithms.
-
-Python is optional and external to the core application.
-
-Recommended structure:
-
-``` text
-Tauri
-├── React + TypeScript UI
-└── Rust Core
-      ├── Network Model
-      ├── Simulation Engine
-      ├── Routing
-      ├── Data Link
-      ├── Transport
-      ├── Congestion
-      ├── Metrics
-      └── Persistence
-
-Optional Python Toolkit
-      ├── Batch Experiments
-      ├── Statistical Analysis
-      ├── Advanced Charts
-      └── Report Processing
-```
-
-## 11. Privacy
-
--   no account
--   no telemetry
--   no analytics
--   no cloud requirement
--   local project storage
-
-## 12. Success Criteria
-
-The final product must support an end-to-end academic demonstration:
-
-``` text
-Create topology
-→ Configure IPv4
-→ Calculate route
-→ Send packet
-→ Inspect packet
-→ Inject fault
-→ Observe response
-→ Measure QoS
-→ Compare algorithms
-→ Save experiment
-→ Generate report
-```
+No visual redesign solely to differ from Packet Tracer. No protocol rewrite or added protocol
+family for feature-count novelty. No accuracy, speed, exclusivity or learning-outcome claim without
+comparative evidence. Direct version-recorded comparison and classroom evaluation remain unperformed.

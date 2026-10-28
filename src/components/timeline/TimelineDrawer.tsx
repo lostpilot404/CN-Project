@@ -32,7 +32,7 @@ export const TimelineDrawer: React.FC<TimelineDrawerProps> = ({
       >
         <div className="flex items-center space-x-2 text-xs font-medium text-slate-300">
           <Layers className="w-3.5 h-3.5 text-cyan-400" />
-          <span>Authoritative Discrete Event Timeline</span>
+          <span>Discrete event timeline</span>
           <span className="text-[10px] font-mono px-2 py-0.2 bg-slate-800 text-slate-400 rounded-full">
             {events.length} events logged
           </span>

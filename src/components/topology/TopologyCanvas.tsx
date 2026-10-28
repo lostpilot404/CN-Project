@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import {
   ReactFlow,
   Background,
@@ -15,7 +15,8 @@ import {
   MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Undo2, Redo2, Network, Cpu } from 'lucide-react';
+import { Undo2, Redo2, Network, Cpu, Link2 } from 'lucide-react';
+import { ConnectDialog } from './ConnectDialog';
 import { CustomNode } from './CustomNode';
 import { DevicePalette } from './DevicePalette';
 import { PropertyEditor } from './PropertyEditor';
@@ -26,7 +27,7 @@ interface TopologyCanvasProps {
   project: Project | null;
   historyStatus: HistoryStatus;
   onAddNode: (type: NodeType, label: string) => void;
-  onConnectNodes: (sourceId: string, targetId: string) => void;
+  onConnectNodes: (sourceId: string, targetId: string) => Promise<string | null>;
   onUpdateNode: (nodeId: string, label: string, state: NodeState) => Promise<void>;
   onNodePositionChange: (nodeId: string, position: { x: number; y: number }) => Promise<void>;
   onDeleteNode: (nodeId: string) => Promise<void>;
@@ -67,6 +68,9 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
 }) => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedLinkId, setSelectedLinkId] = useState<string | null>(null);
+  const [snapEnabled, setSnapEnabled] = useState(true);
+  const [showHelp, setShowHelp] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
 
   const nodeTypes = useMemo(() => ({ custom: CustomNode }), []);
 
@@ -79,6 +83,20 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
     if (!project || !selectedLinkId) return null;
     return project.links.find((l) => l.id === selectedLinkId) || null;
   }, [project, selectedLinkId]);
+
+  // Stable props for ConnectDialog: the app re-renders this canvas on a 1 Hz poll, so
+  // inline arrays/closures there would re-trigger dialog effects every tick.
+  const connectableNodes = useMemo(
+    () => (project?.nodes ?? []).map((n) => ({ id: n.id, label: n.label })),
+    [project]
+  );
+  const closeConnectDialog = useCallback(() => setConnectOpen(false), []);
+
+  // Keyboard/AT selection of a canvas node (Enter or Space on the focused node).
+  const selectNode = useCallback((nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    setSelectedLinkId(null);
+  }, []);
 
   // Map Project nodes to XYFlow nodes
   const initialNodes: FlowNode[] = useMemo(() => {
@@ -93,9 +111,11 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
         nodeType: n.node_type,
         ip: n.interfaces[0]?.ipv4 || 'Unconfigured',
         status: n.state,
+        nodeId: n.id,
+        onSelect: selectNode,
       },
     }));
-  }, [project, selectedNodeId]);
+  }, [project, selectedNodeId, selectNode]);
 
   // Map Project links to XYFlow edges
   const initialEdges: FlowEdge[] = useMemo(() => {
@@ -184,7 +204,9 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
     (params: Connection) => {
       if (params.source && params.target) {
         setEdges((eds) => addEdge(params, eds));
-        onConnectNodes(params.source, params.target);
+        // Drag connections report failures through the App toast; the keyboard dialog
+        // surfaces the same authoritative add_link errors inline.
+        void onConnectNodes(params.source, params.target);
       }
     },
     [onConnectNodes]
@@ -207,12 +229,40 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
 
   const onNodeDragStop = useCallback(
     (_event: unknown, node: FlowNode) => {
-      onNodePositionChange(node.id, { x: node.position.x, y: node.position.y });
+      // Optional snap-to-grid: 10 px grid keeps topologies aligned without pixel hunting.
+      const position = snapEnabled
+        ? { x: Math.round(node.position.x / 10) * 10, y: Math.round(node.position.y / 10) * 10 }
+        : { x: node.position.x, y: node.position.y };
+      setNodes((nds) => nds.map((n) => (n.id === node.id ? { ...n, position } : n)));
+      onNodePositionChange(node.id, position);
     },
-    [onNodePositionChange]
+    [onNodePositionChange, snapEnabled]
   );
 
-  // Global keyboard shortcuts for Undo, Redo, and Delete
+  // Arrow-key nudge for the selected node (Shift = coarse step).
+  const nudgeSelectedNode = useCallback(
+    (dx: number, dy: number, coarse: boolean) => {
+      if (!selectedNodeId) return;
+      const current = nodes.find((n) => n.id === selectedNodeId);
+      if (!current) return;
+      const step = coarse ? 40 : 10;
+      const raw = { x: current.position.x + dx * step, y: current.position.y + dy * step };
+      const position = snapEnabled
+        ? { x: Math.round(raw.x / 10) * 10, y: Math.round(raw.y / 10) * 10 }
+        : raw;
+      setNodes((nds) => nds.map((n) => (n.id === selectedNodeId ? { ...n, position } : n)));
+      onNodePositionChange(selectedNodeId, position);
+    },
+    [selectedNodeId, nodes, snapEnabled, onNodePositionChange]
+  );
+
+  // Global keyboard shortcuts for Undo, Redo, and Delete.
+  // `project` is read through a ref so the listener never runs with a stale closure:
+  // the toolbar enables as soon as the project renders, but a listener re-attached in
+  // the post-paint effect can lag one tick behind — a keypress in that window would
+  // otherwise see project=null and be dropped.
+  const projectRef = useRef(project);
+  projectRef.current = project;
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't intercept if user is typing in an input or textarea
@@ -247,6 +297,23 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
           onDeleteLink(selectedLinkId);
           setSelectedLinkId(null);
         }
+      } else if (e.key === 'Escape') {
+        setShowHelp(false);
+        setSelectedNodeId(null);
+        setSelectedLinkId(null);
+      } else if (e.key === '?' ) {
+        e.preventDefault();
+        setShowHelp((open) => !open);
+      } else if ((e.key === 'c' || e.key === 'C') && projectRef.current && projectRef.current.nodes.length >= 2) {
+        e.preventDefault();
+        setConnectOpen(true);
+      } else if (e.key.startsWith('Arrow') && selectedNodeId) {
+        e.preventDefault();
+        const step = e.shiftKey;
+        if (e.key === 'ArrowUp') nudgeSelectedNode(0, -1, step);
+        else if (e.key === 'ArrowDown') nudgeSelectedNode(0, 1, step);
+        else if (e.key === 'ArrowLeft') nudgeSelectedNode(-1, 0, step);
+        else if (e.key === 'ArrowRight') nudgeSelectedNode(1, 0, step);
       }
     };
 
@@ -260,6 +327,7 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
     onRedo,
     onDeleteNode,
     onDeleteLink,
+    nudgeSelectedNode,
   ]);
 
   return (
@@ -268,7 +336,7 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
       <DevicePalette onAddDevice={onAddNode} />
 
       {/* Top Topology Canvas Action Bar */}
-      <div className="absolute top-4 left-64 z-10 flex items-center space-x-2 bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl px-2 py-1.5 shadow-xl select-none">
+      <div className="absolute top-4 left-4 right-4 z-10 flex flex-wrap items-center gap-x-2 gap-y-1 bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl px-2 py-1.5 shadow-xl select-none">
         {/* Undo Button */}
         <button
           onClick={onUndo}
@@ -299,10 +367,48 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
           <span>Redo</span>
         </button>
 
+        <div className="hidden sm:block w-[1px] h-4 bg-slate-800" />
+
+        {/* Snap-to-grid toggle */}
+        <button
+          onClick={() => setSnapEnabled((v) => !v)}
+          aria-pressed={snapEnabled}
+          title="Snap nodes to a 10 px grid (toggle)"
+          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+            snapEnabled ? 'text-cyan-300 bg-cyan-950/50' : 'text-slate-300 hover:bg-slate-800'
+          }`}
+          data-testid="snap-toggle"
+        >
+          Snap {snapEnabled ? 'On' : 'Off'}
+        </button>
+
+        {/* Keyboard-accessible connection workflow */}
+        <button
+          onClick={() => setConnectOpen(true)}
+          disabled={!project || project.nodes.length < 2}
+          title="Connect two nodes (C)"
+          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+          data-testid="connect-nodes"
+        >
+          <Link2 className="w-3.5 h-3.5" aria-hidden="true" />
+          Connect
+        </button>
+
+        {/* Keyboard help */}
+        <button
+          onClick={() => setShowHelp((v) => !v)}
+          title="Keyboard shortcuts (?)"
+          aria-label="Keyboard shortcuts"
+          className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800"
+          data-testid="keyboard-help"
+        >
+          Keys ?
+        </button>
+
         <div className="w-[1px] h-4 bg-slate-800" />
 
         {/* Topology Summary Counts */}
-        <div className="flex items-center space-x-3 px-2 text-[11px] font-mono text-slate-400">
+        <div className="hidden sm:flex items-center space-x-3 px-2 text-[11px] font-mono text-slate-400">
           <span className="flex items-center space-x-1">
             <Cpu className="w-3 h-3 text-brand-400" />
             <span>{project?.nodes.length || 0} Nodes</span>
@@ -327,16 +433,81 @@ export const TopologyCanvas: React.FC<TopologyCanvasProps> = ({
         onPaneClick={onPaneClick}
         onNodeDragStop={onNodeDragStop}
         fitView
+        proOptions={{ hideAttribution: false }}
+        attributionPosition="top-right"
         className="bg-slate-950"
       >
         <Background color="#1e293b" gap={20} size={1} />
-        <Controls className="!bg-slate-900 !border-slate-800 !fill-slate-300" />
+        <Controls position="bottom-left" style={{ bottom: 64 }} className="!bg-slate-900 !border-slate-800 !fill-slate-300" />
         <MiniMap
-          nodeColor="#38aaf6"
+          nodeColor={(node) => {
+            const status = (node.data as { status?: string } | undefined)?.status;
+            if (status === 'up') return '#38aaf6';
+            if (status === 'degraded') return '#fbbf24';
+            return '#64748b';
+          }}
+          nodeStrokeWidth={1.5}
           maskColor="rgba(6, 10, 18, 0.7)"
-          className="!bg-slate-900/80 !border-slate-800 !rounded-lg"
+          className="!bg-slate-900/80 !border-slate-800 !rounded-lg max-sm:!hidden"
         />
       </ReactFlow>
+
+      {/* Keyboard help overlay */}
+      {showHelp && (
+        <div
+          className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70"
+          onClick={() => setShowHelp(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="keyboard-help-title"
+            className="w-[min(24rem,90vw)] rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+            data-testid="keyboard-help-overlay"
+          >
+            <h2 id="keyboard-help-title" className="text-sm font-semibold text-slate-100">
+              Keyboard shortcuts
+            </h2>
+            <dl className="mt-3 space-y-1.5 text-xs text-slate-300">
+              {[
+                ['Ctrl/⌘ + Z', 'Undo'],
+                ['Ctrl/⌘ + Y or Shift + Ctrl/⌘ + Z', 'Redo'],
+                ['Delete / Backspace', 'Remove selected node or link'],
+                ['C', 'Connect two nodes (source and target dialog)'],
+                ['Arrow keys', 'Nudge the selected node by 10 px'],
+                ['Shift + Arrow keys', 'Nudge the selected node by 40 px'],
+                ['?', 'Toggle this help'],
+                ['Escape', 'Close help / clear selection'],
+              ].map(([keys, what]) => (
+                <div key={keys} className="flex justify-between gap-4">
+                  <dt className="font-mono text-cyan-300">{keys}</dt>
+                  <dd className="text-right text-slate-400">{what}</dd>
+                </div>
+              ))}
+            </dl>
+            <button
+              type="button"
+              onClick={() => setShowHelp(false)}
+              className="mt-4 w-full rounded-md border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Keyboard-accessible connection workflow */}
+      <ConnectDialog
+        open={connectOpen}
+        nodes={connectableNodes}
+        onCancel={closeConnectDialog}
+        onConfirm={async (sourceId, targetId) => {
+          const failure = await onConnectNodes(sourceId, targetId);
+          if (!failure) setConnectOpen(false);
+          return failure;
+        }}
+      />
 
       {/* Properties Inspector Panel */}
       <PropertyEditor

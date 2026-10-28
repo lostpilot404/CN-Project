@@ -71,6 +71,9 @@ export const FtpStudio: React.FC<FtpStudioProps> = ({
         onPacketSelect?.(res.packets[0]);
       }
     } catch (err) {
+      // A failed run must not leave the previous successful result on screen.
+      setResult(null);
+      onPacketSelect?.(null);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsRunning(false);
@@ -139,22 +142,40 @@ export const FtpStudio: React.FC<FtpStudioProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-900/40 p-3.5 rounded-xl border border-slate-800/80">
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">FTP Client Node</label>
-          <input aria-label="FTP Client Node"
-            type="text"
+          <select aria-label="FTP Client Node"
             value={clientNode}
             onChange={(e) => setClientNode(e.target.value)}
             className="w-full px-2.5 py-1.5 bg-slate-950 rounded border border-slate-800 text-xs text-slate-200 font-mono"
-          />
+          >
+            {(project?.nodes ?? []).length > 0 ? (
+              (project?.nodes ?? []).map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.label} ({n.id})
+                </option>
+              ))
+            ) : (
+              <option value={clientNode}>{clientNode}</option>
+            )}
+          </select>
         </div>
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">FTP Server Node</label>
-          <input aria-label="FTP Server Node"
-            type="text"
+          <select aria-label="FTP Server Node"
             value={serverNode}
             onChange={(e) => setServerNode(e.target.value)}
             className="w-full px-2.5 py-1.5 bg-slate-950 rounded border border-slate-800 text-xs text-slate-200 font-mono"
-          />
+          >
+            {(project?.nodes ?? []).length > 0 ? (
+              (project?.nodes ?? []).map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.label} ({n.id})
+                </option>
+              ))
+            ) : (
+              <option value={serverNode}>{serverNode}</option>
+            )}
+          </select>
         </div>
 
         <div>

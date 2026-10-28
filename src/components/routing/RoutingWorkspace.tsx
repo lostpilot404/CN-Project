@@ -36,6 +36,40 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Live forwarding policy: shared by the routing tables and the real packet path.
+  const [fwdAlgorithm, setFwdAlgorithm] = useState<RoutingAlgorithm>('dijkstra');
+  const [fwdMetric, setFwdMetric] = useState<MetricType>('hop_count');
+  const [policyMsg, setPolicyMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const state = await api.getSimulationState();
+        if (!cancelled && state.forwarding_policy) {
+          setFwdAlgorithm(state.forwarding_policy.algorithm as RoutingAlgorithm);
+          setFwdMetric(state.forwarding_policy.metric_type as MetricType);
+        }
+      } catch {
+        // Policy panel still works locally; the authoritative value is re-applied on change.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const applyForwardingPolicy = useCallback(async (algorithm: RoutingAlgorithm, metric: MetricType) => {
+    setPolicyMsg(null);
+    try {
+      await api.setForwardingPolicy(algorithm, metric);
+      setFwdAlgorithm(algorithm);
+      setFwdMetric(metric);
+    } catch (err: unknown) {
+      setPolicyMsg(err instanceof Error ? err.message : String(err));
+    }
+  }, []);
+
   // Set default router selection
   useEffect(() => {
     if (routers.length > 0 && (!selectedNodeId || !routers.some((r) => r.id === selectedNodeId))) {
@@ -59,6 +93,9 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
         setConvergence(null);
       }
     } catch (err: unknown) {
+      // A failed compute must not leave a previous table/convergence trace on screen.
+      setRoutingTable(null);
+      setConvergence(null);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsLoading(false);
@@ -83,14 +120,11 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
               <Route className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+              <h2 className="text-lg font-bold tracking-tight text-white">
                 Routing Studio
-                <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-brand-500/10 text-brand-400 border border-brand-500/20">
-                  Authoritative Python Core
-                </span>
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Dijkstra Link-State & Bellman-Ford Distance-Vector shortest path computation with convergence rounds
+                Dijkstra link-state and Bellman-Ford distance-vector computation, routing tables and convergence rounds
               </p>
             </div>
           </div>
@@ -113,7 +147,7 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-900/60 border border-slate-800/80 p-4 rounded-xl">
         {/* Source Router */}
         <div>
-          <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+          <label className="block text-[11px] font-semibold text-slate-400 mb-1.5 flex items-center gap-1.5">
             <Cpu className="w-3.5 h-3.5 text-brand-400" />
             Source Device (Router)
           </label>
@@ -139,8 +173,8 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
 
         {/* Algorithm */}
         <div>
-          <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-            <Layers className="w-3.5 h-3.5 text-indigo-400" />
+          <label className="block text-[11px] font-semibold text-slate-400 mb-1.5 flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5 text-brand-400" />
             Routing Algorithm
           </label>
           <div className="grid grid-cols-2 gap-2">
@@ -167,9 +201,47 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
           </div>
         </div>
 
+        {/* Live forwarding policy */}
+        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-3 space-y-2">
+          <label className="block text-[11px] font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+            <Cpu className="w-3.5 h-3.5 text-brand-400" />
+            Live forwarding policy
+          </label>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            The routing tables above and real packet forwarding share this policy. Both algorithms select the
+            same minimum-cost path with the same deterministic tie-break.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              aria-label="Live forwarding algorithm"
+              value={fwdAlgorithm}
+              onChange={(e) => void applyForwardingPolicy(e.target.value as RoutingAlgorithm, fwdMetric)}
+              className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-500"
+            >
+              <option value="dijkstra">Dijkstra</option>
+              <option value="bellman_ford">Bellman-Ford</option>
+            </select>
+            <select
+              aria-label="Live forwarding metric"
+              value={fwdMetric}
+              onChange={(e) => void applyForwardingPolicy(fwdAlgorithm, e.target.value as MetricType)}
+              className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-500"
+            >
+              <option value="hop_count">Hop count</option>
+              <option value="propagation_delay">Propagation delay</option>
+              <option value="inverse_bandwidth">Inverse bandwidth</option>
+            </select>
+          </div>
+          {policyMsg && (
+            <p role="alert" className="text-[11px] text-rose-300 border border-rose-900/60 bg-rose-950/40 rounded px-2 py-1">
+              {policyMsg}
+            </p>
+          )}
+        </div>
+
         {/* Metric Type */}
         <div>
-          <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+          <label className="block text-[11px] font-semibold text-slate-400 mb-1.5 flex items-center gap-1.5">
             <Sliders className="w-3.5 h-3.5 text-emerald-400" />
             Cost Metric
           </label>
@@ -201,7 +273,7 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
             <div className="px-4 py-3 bg-slate-850/80 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Activity className="w-4 h-4 text-brand-400" />
-                <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+                <h3 className="text-xs font-semibold text-slate-200">
                   Routing Table for {routingTable?.node_label || selectedNodeId}
                 </h3>
               </div>
@@ -281,7 +353,7 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
           {/* Path Inspector */}
           {selectedEntry && (
             <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl space-y-2">
-              <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <h4 className="text-xs font-semibold text-slate-300 tracking-wider flex items-center gap-2">
                 <Route className="w-3.5 h-3.5 text-brand-400" />
                 Path Reconstruction: {selectedEntry.destination_label}
               </h4>
@@ -306,8 +378,8 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
           {algorithm === 'bellman_ford' && convergence ? (
             <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-4 space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                  <Activity className="w-4 h-4 text-indigo-400" />
+                <h3 className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                  <Activity className="w-4 h-4 text-brand-400" />
                   Distance Vector Convergence
                 </h3>
                 <span
@@ -323,7 +395,7 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
 
               {/* Round Selector Tabs */}
               <div className="space-y-1.5">
-                <span className="text-[10px] text-slate-400 font-semibold uppercase">Step-Through Rounds:</span>
+                <span className="text-[10px] text-slate-400 font-semibold">Step-Through Rounds:</span>
                 <div className="flex flex-wrap gap-1.5">
                   {convergence.rounds.map((r, i) => (
                     <button
@@ -374,7 +446,7 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
 
                   {convergence.rounds[selectedRoundIndex].changes.length > 0 && (
                     <div className="pt-2 border-t border-slate-800/80 space-y-1">
-                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Round Updates:</span>
+                      <span className="text-[10px] text-slate-400 font-semibold">Round Updates:</span>
                       {convergence.rounds[selectedRoundIndex].changes.map((ch, idx) => (
                         <p key={idx} className="text-[11px] text-slate-300">
                           • {ch}
@@ -389,16 +461,16 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
 
           {/* Theoretical Rules & Guidance Box */}
           <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3 text-xs text-slate-400">
-            <h4 className="font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+            <h4 className="font-semibold text-slate-300 flex items-center gap-1.5">
               <HelpCircle className="w-3.5 h-3.5 text-brand-400" />
-              Authoritative Algorithmic Rules
+              Routing rules
             </h4>
             <ul className="space-y-2 list-disc list-inside text-[11px] leading-relaxed">
               <li>
-                <strong className="text-slate-200">Bidirectional Links:</strong> Canvas links automatically generate two directed graph edges ($A \to B$ and $B \to A$).
+                <strong className="text-slate-200">Bidirectional links:</strong> every canvas link generates two directed graph edges (A to B and B to A).
               </li>
               <li>
-                <strong className="text-slate-200">Degraded Penalty:</strong> Degraded links apply a deterministic metric penalty: $(base \times 3).max(base + 50)$.
+                <strong className="text-slate-200">Degraded penalty:</strong> degraded links apply a deterministic metric penalty of the larger of base x 3 and base + 50.
               </li>
               <li>
                 <strong className="text-slate-200">Down Links:</strong> Down links are completely excluded from graph routing.
@@ -407,7 +479,7 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
                 <strong className="text-slate-200">Non-Transit End Hosts:</strong> PCs and Servers cannot act as intermediate transit routers.
               </li>
               <li>
-                <strong className="text-slate-200">Inverse Bandwidth:</strong> Computed as $\lceil 1,000,000,000 / bw \rceil$, minimum 1 (never zero cost).
+                <strong className="text-slate-200">Inverse bandwidth:</strong> computed as ceiling(1,000,000,000 / bandwidth), minimum 1 (never zero cost).
               </li>
             </ul>
           </div>

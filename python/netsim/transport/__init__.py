@@ -179,6 +179,12 @@ class TransportMetrics:
     throughput_bits_per_sec: float = 0.0
     throughput_bytes_per_sec: float = 0.0
     goodput_bits_per_sec: float = 0.0
+    # Wire-byte accounting behind the rates (see netsim.core.overhead):
+    #   wire_bytes_sent = bytes_sent + retransmitted_payload_bytes + header_bytes_sent
+    #   goodput payload = bytes_delivered (unique acknowledged/delivered payload)
+    retransmitted_payload_bytes: int = 0
+    header_bytes_sent: int = 0
+    wire_bytes_sent: int = 0
     packet_loss_rate: float = 0.0
     sender_window_occupancy_avg: float = 0.0
     receiver_window_occupancy_max: int = 0
@@ -203,6 +209,9 @@ class TransportMetrics:
             "throughput_bits_per_sec": self.throughput_bits_per_sec,
             "throughput_bytes_per_sec": self.throughput_bytes_per_sec,
             "goodput_bits_per_sec": self.goodput_bits_per_sec,
+            "retransmitted_payload_bytes": self.retransmitted_payload_bytes,
+            "header_bytes_sent": self.header_bytes_sent,
+            "wire_bytes_sent": self.wire_bytes_sent,
             "packet_loss_rate": self.packet_loss_rate,
             "sender_window_occupancy_avg": self.sender_window_occupancy_avg,
             "receiver_window_occupancy_max": self.receiver_window_occupancy_max,

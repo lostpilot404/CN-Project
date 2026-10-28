@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Globe, Database, AlertTriangle } from 'lucide-react';
+import { Play, Database, AlertTriangle } from 'lucide-react';
 import { api } from '../../lib/api';
 import { Project } from '../../types/project';
 import {
@@ -88,6 +88,9 @@ export const DnsStudio: React.FC<DnsStudioProps> = ({
         onPacketSelect?.(res.packets[0]);
       }
     } catch (err) {
+      // A failed run must not leave the previous successful result on screen.
+      setResult(null);
+      onPacketSelect?.(null);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsRunning(false);
@@ -101,20 +104,9 @@ export const DnsStudio: React.FC<DnsStudioProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Top Banner / Concept Card */}
-      <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex flex-wrap gap-3 items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-brand-500/10 rounded-lg text-brand-400">
-            <Globe className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-slate-200">Domain Name System (DNS) Studio</h3>
-            <p className="text-xs text-slate-400">
-              Authoritative UDP port 53 resolver queries, recursive/iterative routing, zone records, and NOERROR/NXDOMAIN resolution.
-            </p>
-          </div>
-        </div>
-
+      {/* Query presets */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <span className="text-xs font-medium text-slate-400">Query presets</span>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -177,22 +169,40 @@ export const DnsStudio: React.FC<DnsStudioProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-900/40 p-3.5 rounded-xl border border-slate-800/80">
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Client Node</label>
-          <input aria-label="Client Node"
-            type="text"
+          <select aria-label="Client Node"
             value={clientNode}
             onChange={(e) => setClientNode(e.target.value)}
             className="w-full px-2.5 py-1.5 bg-slate-950 rounded border border-slate-800 text-xs text-slate-200 font-mono"
-          />
+          >
+            {(project?.nodes ?? []).length > 0 ? (
+              (project?.nodes ?? []).map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.label} ({n.id})
+                </option>
+              ))
+            ) : (
+              <option value={clientNode}>{clientNode}</option>
+            )}
+          </select>
         </div>
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Local DNS Resolver</label>
-          <input aria-label="Local DNS Resolver"
-            type="text"
+          <select aria-label="Local DNS Resolver"
             value={serverNode}
             onChange={(e) => setServerNode(e.target.value)}
             className="w-full px-2.5 py-1.5 bg-slate-950 rounded border border-slate-800 text-xs text-slate-200 font-mono"
-          />
+          >
+            {(project?.nodes ?? []).length > 0 ? (
+              (project?.nodes ?? []).map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.label} ({n.id})
+                </option>
+              ))
+            ) : (
+              <option value={serverNode}>{serverNode}</option>
+            )}
+          </select>
         </div>
 
         <div>
@@ -250,8 +260,8 @@ export const DnsStudio: React.FC<DnsStudioProps> = ({
 
         {queryMode === 'iterative' && (
           <div>
-            <label className="text-[11px] font-semibold text-slate-400 block mb-1">Authoritative DNS Node</label>
-            <input aria-label="Authoritative DNS Node"
+            <label className="text-[11px] font-semibold text-slate-400 block mb-1">DNS server node</label>
+            <input aria-label="DNS server node"
               type="text"
               value={authServerNode}
               onChange={(e) => setAuthServerNode(e.target.value)}

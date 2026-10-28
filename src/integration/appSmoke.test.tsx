@@ -60,6 +60,7 @@ describe.skipIf(!live)('application against the live simulation service', () => 
       'Algorithm Studio',
       'Transport Layer',
       'Application Layer',
+      'Circuit Switching',
       'QoS Performance',
       'Batch Experiments',
     ]) {
@@ -78,7 +79,7 @@ describe.skipIf(!live)('application against the live simulation service', () => 
       { tab: 'Routing Studio', marker: /Routing Studio/ },
       { tab: 'Addressing & NAT', marker: /Addressing/ },
       { tab: 'Simulation & Events', marker: /Simulation/ },
-      { tab: 'Algorithm Studio', marker: /Data Link Layer/ },
+      { tab: 'Algorithm Studio', marker: /Deterministic Python implementations/ },
       { tab: 'Transport Layer', marker: /Transport/ },
       { tab: 'Application Layer', marker: /Application/ },
       { tab: 'QoS Performance', marker: /QoS Performance/ },

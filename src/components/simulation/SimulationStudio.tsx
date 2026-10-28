@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Play,
   Pause,
@@ -48,6 +48,52 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
   const [injectSize, setInjectSize] = useState<number>(1000);
   const [injectAppProto, setInjectAppProto] = useState<string>('HTTP');
   const [injectTransProto, setInjectTransProto] = useState<string>('TCP');
+
+  // Inject-modal accessibility: opener tracking (for focus return) and dialog ref (trap/focus).
+  const injectOpenerRef = useRef<HTMLButtonElement | null>(null);
+  const injectDialogRef = useRef<HTMLDivElement | null>(null);
+  const injectWasOpenRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (!showInjectModal) {
+      // Return focus to the opener when the dialog closes.
+      if (injectWasOpenRef.current) {
+        injectWasOpenRef.current = false;
+        injectOpenerRef.current?.focus();
+      }
+      return;
+    }
+    injectWasOpenRef.current = true;
+    const dialog = injectDialogRef.current;
+    // Move focus into the dialog (first field) so keyboard users are not stranded behind it.
+    dialog?.querySelector<HTMLElement>('select, input, button')?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setShowInjectModal(false);
+        return;
+      }
+      // Lightweight focus trap: keep Tab cycling inside the dialog.
+      if (e.key !== 'Tab' || !dialog) return;
+      const items = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), select, input, [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => el.offsetParent !== null);
+      if (items.length === 0) return;
+      const firstItem = items[0];
+      const lastItem = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === firstItem) {
+        e.preventDefault();
+        lastItem.focus();
+      } else if (!e.shiftKey && document.activeElement === lastItem) {
+        e.preventDefault();
+        firstItem.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [showInjectModal]);
 
   // Initialize node defaults
   useEffect(() => {
@@ -200,10 +246,23 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
           </button>
         </div>
       )}
+      {/* Workspace Header */}
+      <div className="border-b border-slate-800 bg-slate-900/60 backdrop-blur px-6 py-3 flex items-center space-x-3">
+        <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400">
+          <Layers className="w-4 h-4" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold text-slate-200">Simulation &amp; Events</h2>
+          <p className="text-[11px] text-slate-400">
+            Discrete-event playback, packet injection and the full event timeline
+          </p>
+        </div>
+      </div>
+
       {/* Top Playback & Metrics Toolbar */}
-      <div className="h-14 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between px-4 z-10">
+      <div className="min-h-14 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-2 z-10">
         {/* Playback action buttons */}
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isRunning ? (
             <button
               onClick={handlePause}
@@ -215,7 +274,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
           ) : (
             <button
               onClick={handleRunBurst}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-700 hover:bg-cyan-800 text-white transition-colors shadow-sm cursor-pointer"
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white transition-colors shadow-sm cursor-pointer"
               title="Advance 50ms virtual simulation time"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
@@ -250,12 +309,15 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
             <span>Reset</span>
           </button>
 
-          <div className="h-4 w-px bg-slate-800 mx-1" />
+          <div className="hidden lg:block h-4 w-px bg-slate-800 mx-1" />
 
           {/* Inject Packet Button */}
           <button
-            onClick={() => setShowInjectModal(true)}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white transition-colors shadow-sm cursor-pointer"
+            onClick={(e) => {
+              injectOpenerRef.current = e.currentTarget;
+              setShowInjectModal(true);
+            }}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white transition-colors shadow-sm cursor-pointer"
           >
             <Send className="w-3.5 h-3.5" />
             <span>Inject Packet</span>
@@ -263,7 +325,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
         </div>
 
         {/* Live Metrics and SimTime */}
-        <div className="flex items-center space-x-4 text-xs font-mono">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-mono">
           <div className="flex items-center space-x-1.5 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
             <Clock className="w-3.5 h-3.5 text-cyan-400" />
             <span className="text-slate-400">SimTime:</span>
@@ -272,7 +334,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
             </span>
           </div>
 
-          <div className="flex items-center space-x-3 text-slate-400">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-400">
             <div>
               <span>Delivered: </span>
               <span className="text-emerald-400 font-bold">
@@ -285,7 +347,10 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                 className={`font-bold ${
                   (metrics?.packets_dropped_overflow ?? 0) +
                     (metrics?.packets_dropped_loss ?? 0) +
-                    (metrics?.packets_dropped_error ?? 0) >
+                    (metrics?.packets_dropped_error ?? 0) +
+                    (metrics?.packets_dropped_link_down ?? 0) +
+                    (metrics?.packets_dropped_ttl ?? 0) +
+                    (metrics?.packets_dropped_no_route ?? 0) >
                   0
                     ? 'text-rose-400'
                     : 'text-slate-400'
@@ -294,7 +359,9 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                 {(metrics?.packets_dropped_overflow ?? 0) +
                   (metrics?.packets_dropped_loss ?? 0) +
                   (metrics?.packets_dropped_error ?? 0) +
-                  (metrics?.packets_dropped_link_down ?? 0)}
+                  (metrics?.packets_dropped_link_down ?? 0) +
+                  (metrics?.packets_dropped_ttl ?? 0) +
+                  (metrics?.packets_dropped_no_route ?? 0)}
               </span>
             </div>
             <div>
@@ -307,10 +374,10 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
         </div>
       </div>
 
-      {/* Main 3-Column Studio Workspace */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main 3-Column Studio Workspace (stacked scroll on narrow screens). */}
+      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
         {/* LEFT COLUMN: Event Filters, Active Packets, Chronological Timeline (380px) */}
-        <div className="w-96 border-r border-slate-800 bg-slate-900/60 flex flex-col overflow-hidden">
+        <div className="w-full lg:w-96 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-800 bg-slate-900/60 flex flex-col overflow-hidden">
           {/* Filters */}
           <EventFilters
             filter={filter}
@@ -322,7 +389,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
           {/* Active Packets Carousel */}
           {packets.length > 0 && (
             <div className="p-2.5 border-b border-slate-800 bg-slate-950/40">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <div className="text-[10px] font-bold text-slate-400 tracking-wider mb-1.5 flex items-center justify-between">
                 <span>Active Packets ({packets.length})</span>
                 <span className="text-[9px] text-slate-400">Click to inspect</span>
               </div>
@@ -343,7 +410,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
           )}
 
           {/* Chronological Event Timeline */}
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden min-h-[30vh] max-h-[55vh] lg:min-h-0 lg:max-h-none">
             <div className="px-4 py-2 border-b border-slate-800/80 flex items-center justify-between text-[11px] font-semibold text-slate-300">
               <span>Chronological Event Trace</span>
               <span className="text-[10px] font-mono text-slate-400">
@@ -360,7 +427,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
         </div>
 
         {/* CENTER COLUMN: Packet Journey Hop Map (Flex-1) */}
-        <div className="flex-1 flex flex-col border-r border-slate-800 bg-slate-950/90 overflow-hidden">
+        <div className="w-full lg:w-auto flex-none lg:flex-1 h-[55vh] lg:h-auto flex flex-col border-b lg:border-b-0 lg:border-r border-slate-800 bg-slate-950/90 overflow-hidden">
           <div className="h-10 border-b border-slate-800 px-4 flex items-center justify-between bg-slate-900/40">
             <div className="flex items-center space-x-2 text-xs font-semibold text-slate-200">
               <Route className="w-4 h-4 text-emerald-400" />
@@ -383,7 +450,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
         </div>
 
         {/* RIGHT COLUMN: 5-Layer Encapsulation Viewer & Packet Inspector (420px) */}
-        <div className="w-[420px] flex flex-col bg-slate-900/70 overflow-hidden">
+        <div className="w-full lg:w-[420px] h-[70vh] lg:h-auto shrink-0 flex flex-col bg-slate-900/70 overflow-hidden">
           {/* Tab selector */}
           <div className="h-10 border-b border-slate-800 px-3 flex items-center justify-between bg-slate-900/90">
             <div className="flex items-center space-x-1">
@@ -442,14 +509,21 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
       {/* Inject Packet Modal */}
       {showInjectModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 select-none">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
+          <div
+            ref={injectDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="inject-modal-title"
+            className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95"
+          >
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white flex items-center space-x-2">
+              <h3 id="inject-modal-title" className="text-sm font-bold text-white flex items-center space-x-2">
                 <Send className="w-4 h-4 text-emerald-400" />
                 <span>Inject Discrete Packet</span>
               </h3>
               <button
                 onClick={() => setShowInjectModal(false)}
+                aria-label="Close inject packet dialog"
                 className="text-slate-400 hover:text-white text-xs"
               >
                 ✕
@@ -459,7 +533,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
             <form onSubmit={handleInjectPacket} className="p-4 space-y-3 font-mono text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
+                  <label className="text-[10px] text-slate-400 font-semibold block mb-1">
                     Source Node
                   </label>
                   <select aria-label="Source Node"
@@ -476,7 +550,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
+                  <label className="text-[10px] text-slate-400 font-semibold block mb-1">
                     Destination Node
                   </label>
                   <select aria-label="Destination Node"
@@ -495,7 +569,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
 
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
+                  <label className="text-[10px] text-slate-400 font-semibold block mb-1">
                     Payload Size
                   </label>
                   <input aria-label="Payload Size"
@@ -509,7 +583,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
+                  <label className="text-[10px] text-slate-400 font-semibold block mb-1">
                     App Protocol
                   </label>
                   <select aria-label="App Protocol"
@@ -525,7 +599,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
+                  <label className="text-[10px] text-slate-400 font-semibold block mb-1">
                     Transport
                   </label>
                   <select aria-label="Transport"
@@ -549,7 +623,7 @@ export const SimulationStudio: React.FC<SimulationStudioProps> = ({ project }) =
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 font-bold text-white shadow-md cursor-pointer"
+                  className="px-4 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 font-bold text-white shadow-md cursor-pointer"
                 >
                   Inject Packet
                 </button>

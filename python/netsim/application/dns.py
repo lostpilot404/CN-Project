@@ -373,7 +373,14 @@ def simulate_dns(config: DnsConfig, project: Project | None = None) -> DnsSimRes
             description=f"DNS Server {config.server_node_id} dispatched {status_str} response with {len(found_records)} record(s) to {config.client_node_id}",
             packet_id=resp_pkt_id,
             session_id=f"dns-{config.query_id}",
-            details=f"Response status: {status_str}, records returned: {found_records}",
+            details=(
+                f"Response status: {status_str}, records returned: "
+                + (
+                    ", ".join(f"{r.name} {r.record_type.value} {r.value}" for r in found_records)
+                    if found_records
+                    else "none"
+                )
+            ),
         )
     )
     step_index += 1

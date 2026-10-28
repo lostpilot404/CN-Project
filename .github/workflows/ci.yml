@@ -1,0 +1,126 @@
+name: CI
+
+# Full verification gate for NetSim. Every command here is one of the documented
+# verification steps in TESTING.md — CI runs exactly what a developer runs locally.
+#
+# Node is pinned to 22.22.2 (not '20'): the jsdom 30 / @testing-library/jest-dom 7
+# line requires ^22.22.2 || ^24.15.0 || >=26.0.0 and undici 8 requires >=22.19.0.
+# On Node 20, vitest dies during environment initialisation
+# (webidl.util.markAsUncloneable is not a function) before any test body runs —
+# that is a runtime incompatibility, not application test failures.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  python-gate:
+    name: Python (tests · ruff · mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest ruff mypy
+          pip install -r python-tools/requirements.txt
+
+      - name: Unit + integration tests (engine)
+        run: python -m pytest python/tests -q
+
+      - name: Utility tests (python-tools)
+        run: pytest python-tools/tests -q
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check python/ python-tools/
+
+      - name: Mypy
+        run: mypy
+
+  frontend-gate:
+    name: Front-end (tsc · vitest · build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.2'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: |
+          set +e
+          npx vitest run --reporter=default --reporter=junit --outputFile=test-results/vitest-junit.xml
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ]; then
+            python3 ci/emit_vitest_annotations.py test-results/vitest-junit.xml
+          fi
+          exit "$code"
+
+      - name: Upload unit-test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-junit
+          path: test-results/vitest-junit.xml
+          if-no-files-found: ignore
+
+      - name: Production build
+        run: npm run build
+
+      - name: Production bundle must not contain the simulation double
+        run: |
+          # The double is aliased to an inert rejecting stub outside VITEST builds.
+          ! grep -rl "not implemented in mock mode" dist/assets/
+          grep -rl "No simulation service is available for command" dist/assets/
+
+  e2e-gate:
+    name: Browser e2e (functional · a11y · cold start)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.2'
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          pip install -r python-tools/requirements.txt
+          npx playwright install --with-deps chromium
+
+      # playwright.config.ts starts both servers itself (cold start: the suite has
+      # never seen a warm service), so no separate service step is needed.
+      - name: Functional end-to-end
+        run: npx playwright test e2e/netsim.spec.ts
+
+      - name: Accessibility audit (WCAG A/AA)
+        run: npx playwright test e2e/a11y.spec.ts
+
+      - name: Experiment downloads and replay
+        run: npx playwright test e2e/experiment-downloads.spec.ts

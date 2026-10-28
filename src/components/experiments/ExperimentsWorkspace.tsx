@@ -19,6 +19,7 @@ import {
   Legend,
 } from 'recharts';
 import { api } from '../../lib/api';
+import { ExportButtons } from './ExportButtons';
 import { Project } from '../../types/project';
 import {
   SweepConfig,
@@ -40,7 +41,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
 
   // -- Sweep State --
   const [sweepName, setSweepName] = useState<string>('Bandwidth Sweep Analysis');
-  const [sweepTarget, setSweepTarget] = useState<ExperimentTarget>('tcp');
+  const [sweepTarget, setSweepTarget] = useState<ExperimentTarget>('network');
   const [sweepParamType, setSweepParamType] = useState<string>('link_bandwidth');
   const [sweepValuesStr, setSweepValuesStr] = useState<string>('1000000, 5000000, 10000000, 50000000, 100000000');
   const [sweepSeedsStr, setSweepSeedsStr] = useState<string>('42, 101, 202');
@@ -50,7 +51,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
 
   // -- Comparative State --
   const [compName, setCompName] = useState<string>('Capacity & Congestion A/B Test');
-  const [compTarget, setCompTarget] = useState<ExperimentTarget>('tcp');
+  const [compTarget, setCompTarget] = useState<ExperimentTarget>('network');
   const [scenarioAName, setScenarioAName] = useState<string>('High Bandwidth Baseline');
   const [scenarioBName, setScenarioBName] = useState<string>('Constrained Bandwidth Link');
   const [scenarioABw, setScenarioABw] = useState<number>(100000000); // 100M
@@ -59,9 +60,19 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
   const [compDurationUs, setCompDurationUs] = useState<number>(60000);
   const [compResult, setCompResult] = useState<ComparativeExperimentResult | null>(null);
 
+  const parseNumbers = (value: string, integers: boolean) => {
+    const parts = value.split(',');
+    const numbers = parts.map(Number);
+    if (parts.some((part) => !part.trim()) || numbers.some((n) => !Number.isFinite(n) || (integers && !Number.isInteger(n)))) {
+      throw new Error('Enter a comma-separated list of finite numbers; seeds must be integers');
+    }
+    return numbers;
+  };
+
   // Quick Presets for Sweeps
   const handleSweepPreset = (type: string) => {
     setSweepParamType(type);
+    if (['queue_capacity', 'bit_error_rate', 'traffic_interval_us'].includes(type)) setSweepTarget('network');
     if (type === 'link_bandwidth') {
       setSweepName('Bandwidth Impact Sweep');
       setSweepValuesStr('1000000, 10000000, 50000000, 100000000');
@@ -84,14 +95,8 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
     setIsRunning(true);
     setErrorMsg(null);
     try {
-      const rawValues = sweepValuesStr
-        .split(',')
-        .map((s) => parseFloat(s.trim()))
-        .filter((n) => !isNaN(n));
-      const rawSeeds = sweepSeedsStr
-        .split(',')
-        .map((s) => parseInt(s.trim(), 10))
-        .filter((n) => !isNaN(n));
+      const rawValues = parseNumbers(sweepValuesStr, false);
+      const rawSeeds = parseNumbers(sweepSeedsStr, true);
 
       if (rawValues.length === 0) {
         throw new Error('Please enter at least one valid parameter value');
@@ -139,6 +144,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
       const cfg: SweepConfig = {
         experiment_name: sweepName,
         target: sweepTarget,
+        base_project: project,
         parameter: param,
         parameter_values: rawValues,
         seeds: rawSeeds,
@@ -149,7 +155,8 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
       const res = await api.runParameterSweep(cfg);
       setSweepResult(res);
     } catch (err) {
-      setErrorMsg(String(err));
+      setSweepResult(null);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsRunning(false);
     }
@@ -159,10 +166,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
     setIsRunning(true);
     setErrorMsg(null);
     try {
-      const rawSeeds = compSeedsStr
-        .split(',')
-        .map((s) => parseInt(s.trim(), 10))
-        .filter((n) => !isNaN(n));
+      const rawSeeds = parseNumbers(compSeedsStr, true);
 
       if (rawSeeds.length === 0) {
         throw new Error('Please enter at least one seed');
@@ -171,6 +175,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
       const cfg: ComparativeExperimentConfig = {
         experiment_name: compName,
         target: compTarget,
+        base_project: project,
         scenario_a: {
           name: scenarioAName,
           description: `Bandwidth configured to ${(scenarioABw / 1_000_000).toFixed(1)} Mbps`,
@@ -192,10 +197,22 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
       const res = await api.runComparativeExperiment(cfg);
       setCompResult(res);
     } catch (err) {
-      setErrorMsg(String(err));
+      setCompResult(null);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsRunning(false);
     }
+  };
+
+  const downloadResult = (name: string, result: unknown) => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `netsim-${name}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
   const formatBps = (bps: number) => {
@@ -226,12 +243,12 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
       <div className="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur px-6 py-4 flex items-center justify-between">
         <div>
           <div className="flex items-center space-x-2.5">
-            <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <div className="p-1.5 rounded-lg bg-brand-500/10 text-brand-400 border border-brand-500/20">
               <FlaskConical className="w-5 h-5" />
             </div>
-            <h2 className="text-lg font-bold text-slate-100 tracking-tight">Experimentation & Sweeps Lab</h2>
-            <span className="text-xs px-2.5 py-0.5 rounded-full font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              Deterministic Monte Carlo
+            <h2 className="text-lg font-bold text-slate-100 tracking-tight">Batch Experiments</h2>
+            <span className="text-xs px-2.5 py-0.5 rounded-full font-medium bg-brand-500/20 text-brand-300 border border-brand-500/30">
+              Controlled model experiments
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
@@ -240,12 +257,12 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex p-1 bg-slate-950 border border-slate-800 rounded-xl space-x-1 text-xs font-semibold">
+        <div className="flex flex-wrap gap-1 p-1 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold max-w-full">
           <button
             onClick={() => setActiveTab('sweep')}
             className={`px-3 py-1.5 rounded-lg transition flex items-center space-x-1.5 ${
               activeTab === 'sweep'
-                ? 'bg-indigo-600 text-white shadow-md'
+                ? 'bg-brand-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -256,7 +273,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
             onClick={() => setActiveTab('comparative')}
             className={`px-3 py-1.5 rounded-lg transition flex items-center space-x-1.5 ${
               activeTab === 'comparative'
-                ? 'bg-indigo-600 text-white shadow-md'
+                ? 'bg-brand-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -267,6 +284,19 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
       </div>
 
       <div className="p-6 space-y-6 max-w-7xl w-full mx-auto">
+        <p className="text-xs text-amber-200">
+          Topology packets use timed injection and a 100,000 µs drain. TCP/UDP run bulk transfers
+          to completion (duration is not a cutoff); they do not model scheduled faults or stochastic
+          link loss. Transport requires links ≥1 Mbps and delay ≥100 µs. Seeds do not randomize
+          transport runs. TCP latency is an RTT/2 estimate; UDP latency and jitter are unavailable
+          (zero placeholders), not measured zero delay. Other protocols use their dedicated studios.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <button disabled={!sweepResult} onClick={() => downloadResult('sweep', sweepResult)}
+            className="text-xs border rounded px-3 py-2 disabled:opacity-40">Download sweep JSON</button>
+          <button disabled={!compResult} onClick={() => downloadResult('comparison', compResult)}
+            className="text-xs border rounded px-3 py-2 disabled:opacity-40">Download A/B JSON</button>
+        </div>
         {errorMsg && (
           <div className="p-3 rounded-xl bg-rose-950/80 border border-rose-800 text-xs text-rose-200 flex items-center space-x-2">
             <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
@@ -283,7 +313,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
             <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div className="flex items-center space-x-2">
-                  <Sparkles className="w-4 h-4 text-indigo-400" />
+                  <Sparkles className="w-4 h-4 text-brand-400" />
                   <h3 className="text-sm font-semibold text-slate-200">Sweep Design Configuration</h3>
                 </div>
                 <div className="flex items-center space-x-1.5 text-[11px] text-slate-400">
@@ -322,7 +352,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     type="text"
                     value={sweepName}
                     onChange={(e) => setSweepName(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500"
                   />
                 </div>
 
@@ -330,14 +360,13 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   <label className="block text-slate-300 font-medium mb-1">Experiment Target</label>
                   <select aria-label="Experiment Target"
                     value={sweepTarget}
-                    onChange={(e) => setSweepTarget(e.target.value as ExperimentTarget)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+                    onChange={(e) => { setSweepTarget(e.target.value as ExperimentTarget); handleSweepPreset('link_bandwidth'); }}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500"
                   >
-                    <option value="tcp">TCP (Transport & Flow Control)</option>
+                    <option value="network">Topology packets (timed injection)</option>
+                    <option value="tcp">TCP bulk transfer</option>
                     <option value="udp">UDP (Connectionless Datagram)</option>
-                    <option value="application">Application (HTTP / DNS / FTP / SNMP)</option>
-                    <option value="flow_control">Flow Control (Sliding Window)</option>
-                    <option value="mac">MAC (Medium Access Contention)</option>
+
                   </select>
                 </div>
 
@@ -346,18 +375,16 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   <select aria-label="Variable Parameter"
                     value={sweepParamType}
                     onChange={(e) => handleSweepPreset(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500"
                   >
                     <option value="link_bandwidth">Link Bandwidth (bps)</option>
                     <option value="propagation_delay">Link Propagation Delay (µs)</option>
-                    <option value="queue_capacity">Buffer Queue Capacity (pkts)</option>
-                    <option value="bit_error_rate">Bit Error Rate (BER)</option>
+                    {sweepTarget === 'network' && <option value="queue_capacity">Buffer Queue Capacity (pkts)</option>}
+                    {sweepTarget === 'network' && <option value="bit_error_rate">Bit Error Rate (BER)</option>}
                     <option value="packet_size_bytes">Packet Size (bytes)</option>
-                    <option value="traffic_interval_us">Injection Interval (µs)</option>
+                    {sweepTarget === 'network' && <option value="traffic_interval_us">Injection Interval (µs)</option>}
                     <option value="packet_count">Total Packet Count</option>
-                    <option value="window_size">Window Size (pkts/bytes)</option>
-                    <option value="timeout_us">Timeout Duration (µs)</option>
-                    <option value="mac_persistence">MAC Persistence Probability</option>
+
                   </select>
                 </div>
 
@@ -367,9 +394,10 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     type="number"
                     min="1000"
                     step="5000"
+                    disabled={sweepTarget !== 'network'}
                     value={sweepDurationUs}
                     onChange={(e) => setSweepDurationUs(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500"
                   />
                 </div>
 
@@ -382,7 +410,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     value={sweepValuesStr}
                     onChange={(e) => setSweepValuesStr(e.target.value)}
                     placeholder="e.g. 1000000, 10000000, 100000000"
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500 font-mono"
                   />
                 </div>
 
@@ -395,7 +423,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     value={sweepSeedsStr}
                     onChange={(e) => setSweepSeedsStr(e.target.value)}
                     placeholder="e.g. 42, 101, 202"
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500 font-mono"
                   />
                 </div>
 
@@ -408,7 +436,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     min="1"
                     value={sweepPacketCount}
                     onChange={(e) => setSweepPacketCount(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500 font-mono"
                   />
                 </div>
               </div>
@@ -420,7 +448,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                 <button
                   onClick={handleRunSweep}
                   disabled={isRunning}
-                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/20 transition flex items-center space-x-2 disabled:bg-slate-700 disabled:text-slate-300"
+                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-600/20 transition flex items-center space-x-2 disabled:bg-slate-700 disabled:text-slate-300"
                 >
                   <Play className={`w-3.5 h-3.5 ${isRunning ? 'animate-spin' : ''}`} />
                   <span>{isRunning ? 'Simulating Sweep Points...' : 'Execute Parameter Sweep'}</span>
@@ -431,6 +459,12 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
             {/* Sweep Results Visualizer */}
             {sweepResult && (
               <div className="space-y-6 animate-in fade-in">
+                {/* Export: JSON is the verbatim backend result for python-tools; CSV is tidy data */}
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-slate-200">Result Export</h4>
+                  <ExportButtons kind="sweep" result={sweepResult} />
+                </div>
+
                 {/* Result Highlights */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
@@ -444,7 +478,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   </div>
                   <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
                     <span className="text-slate-400 text-xs">Sweep Variable</span>
-                    <div className="text-xl font-bold text-indigo-400 mt-0.5 capitalize">
+                    <div className="text-xl font-bold text-brand-400 mt-0.5 capitalize">
                       {sweepResult.parameter_name.replace(/_/g, ' ')}
                     </div>
                     <span className="text-[11px] text-slate-400">
@@ -465,7 +499,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-3">
                     <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                       <div className="flex items-center space-x-2">
-                        <TrendingUp className="w-4 h-4 text-indigo-400" />
+                        <TrendingUp className="w-4 h-4 text-brand-400" />
                         <h4 className="text-xs font-semibold text-slate-200">
                           Performance Curve: Throughput & Latency vs {sweepResult.parameter_name}
                         </h4>
@@ -526,7 +560,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                       <tbody className="divide-y divide-slate-800/50">
                         {sweepResult.points.map((pt, idx) => (
                           <tr key={idx} className="hover:bg-slate-800/30 transition">
-                            <td className="py-2.5 px-3 font-mono font-bold text-indigo-300">
+                            <td className="py-2.5 px-3 font-mono font-bold text-brand-300">
                               {pt.parameter_value}
                             </td>
                             <td className="py-2.5 px-3 font-mono text-slate-200">
@@ -597,11 +631,10 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     onChange={(e) => setCompTarget(e.target.value as ExperimentTarget)}
                     className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-emerald-500"
                   >
-                    <option value="tcp">TCP (Transport & Flow Control)</option>
+                    <option value="network">Topology packets (timed injection)</option>
+                    <option value="tcp">TCP bulk transfer</option>
                     <option value="udp">UDP (Connectionless Datagram)</option>
-                    <option value="application">Application (HTTP / DNS / FTP / SNMP)</option>
-                    <option value="flow_control">Flow Control (Sliding Window)</option>
-                    <option value="mac">MAC (Medium Access Contention)</option>
+
                   </select>
                 </div>
               </div>
@@ -621,7 +654,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                       type="text"
                       value={scenarioAName}
                       onChange={(e) => setScenarioAName(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500"
                     />
                   </div>
                   <div>
@@ -631,7 +664,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                       step="1000000"
                       value={scenarioABw}
                       onChange={(e) => setScenarioABw(Number(e.target.value))}
-                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 font-mono focus:outline-none focus:border-brand-500"
                     />
                   </div>
                 </div>
@@ -650,7 +683,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                       type="text"
                       value={scenarioBName}
                       onChange={(e) => setScenarioBName(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500"
                     />
                   </div>
                   <div>
@@ -660,7 +693,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                       step="1000000"
                       value={scenarioBBw}
                       onChange={(e) => setScenarioBBw(Number(e.target.value))}
-                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 font-mono focus:outline-none focus:border-brand-500"
                     />
                   </div>
                 </div>
@@ -673,16 +706,17 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     type="text"
                     value={compSeedsStr}
                     onChange={(e) => setCompSeedsStr(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 font-mono focus:outline-none focus:border-brand-500"
                   />
                 </div>
                 <div>
                   <label className="block text-slate-300 font-medium mb-1">Duration per run (µs)</label>
                   <input aria-label="Duration per run (µs)"
                     type="number"
+                    disabled={compTarget !== 'network'}
                     value={compDurationUs}
                     onChange={(e) => setCompDurationUs(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500"
                   />
                 </div>
               </div>
@@ -691,7 +725,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                 <button
                   onClick={handleRunComparative}
                   disabled={isRunning}
-                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2 disabled:bg-slate-700 disabled:text-slate-300"
+                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-600/20 transition flex items-center space-x-2 disabled:bg-slate-700 disabled:text-slate-300"
                 >
                   <GitCompare className={`w-3.5 h-3.5 ${isRunning ? 'animate-spin' : ''}`} />
                   <span>{isRunning ? 'Running Comparative Analysis...' : 'Run Comparative A/B Test'}</span>
@@ -702,6 +736,12 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
             {/* Comparative Results */}
             {compResult && (
               <div className="space-y-6 animate-in fade-in">
+                {/* Export: JSON is the verbatim backend result; CSV holds one row per metric */}
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-slate-200">Result Export</h4>
+                  <ExportButtons kind="comparison" result={compResult} />
+                </div>
+
                 {/* Deltas Table */}
                 <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3">

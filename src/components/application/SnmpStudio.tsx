@@ -97,6 +97,9 @@ export const SnmpStudio: React.FC<SnmpStudioProps> = ({
         onPacketSelect?.(res.packets[0]);
       }
     } catch (err) {
+      // A failed run must not leave the previous successful result on screen.
+      setResult(null);
+      onPacketSelect?.(null);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsRunning(false);
@@ -167,12 +170,21 @@ export const SnmpStudio: React.FC<SnmpStudioProps> = ({
 
         <div>
           <label className="text-[11px] font-semibold text-slate-400 block mb-1">Managed Agent Node</label>
-          <input aria-label="Managed Agent Node"
-            type="text"
+          <select aria-label="Managed Agent Node"
             value={agentNode}
             onChange={(e) => setAgentNode(e.target.value)}
             className="w-full px-2.5 py-1.5 bg-slate-950 rounded border border-slate-800 text-xs text-slate-200 font-mono"
-          />
+          >
+            {(project?.nodes ?? []).length > 0 ? (
+              (project?.nodes ?? []).map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.label} ({n.id})
+                </option>
+              ))
+            ) : (
+              <option value={agentNode}>{agentNode}</option>
+            )}
+          </select>
         </div>
 
         <div>

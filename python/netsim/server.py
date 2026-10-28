@@ -33,7 +33,7 @@ from netsim.application.ftp import FtpConfig, simulate_ftp
 from netsim.application.http import HttpConfig, simulate_http
 from netsim.application.smtp import SmtpConfig, simulate_smtp
 from netsim.application.snmp import SnmpConfig, simulate_snmp
-from netsim.core.engine import SimulationEngine
+from netsim.core.engine import DEFAULT_PACKET_TTL, MAX_PACKET_TTL, SimulationEngine
 from netsim.core.schema import require_int, require_non_empty
 from netsim.datalink.checksum import internet_checksum, verify_checksum
 from netsim.datalink.crc import calculate_crc, verify_crc
@@ -59,6 +59,7 @@ from netsim.routing.bellman_ford import (
 )
 from netsim.routing.dijkstra import compute_dijkstra_shortest_paths
 from netsim.routing.graph import MetricType, RoutingGraph
+from netsim.switching.circuit import CircuitManager
 from netsim.transport import TransportConfig
 from netsim.transport.tcp import simulate_tcp
 from netsim.transport.udp import simulate_udp
@@ -169,10 +170,11 @@ class SessionState:
     def __init__(self) -> None:
         self.project = create_default_project()
         self.engine = SimulationEngine(seed=42)
-        self.engine.update_links(self.project.links)
+        self.engine.update_topology(self.project.nodes, self.project.links)
         self.undo_stack: list[Project] = []
         self.redo_stack: list[Project] = []
         self.nat_tables: dict[str, NatTable] = {}
+        self.circuit_manager = CircuitManager()
 
     def push_undo(self) -> None:
         self.undo_stack.append(copy.deepcopy(self.project))
@@ -182,12 +184,15 @@ class SessionState:
 
     def reset_engine(self) -> None:
         self.engine.reset()
-        self.engine.update_links(self.project.links)
+        self.engine.update_topology(self.project.nodes, self.project.links)
 
 
 SESSION = SessionState()
 
 SERVER_VERSION = "0.9.0"
+# Hard request-body cap (bytes). Project documents are small JSON; anything larger is
+# refused with a structured 413 before it is read into memory.
+MAX_REQUEST_BYTES = 5 * 1024 * 1024
 
 
 class CommandError(ValueError):
@@ -407,6 +412,7 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         # NAT tables are per-project configuration: a brand new project must not inherit the
         # dynamic mappings and static port forwards of the project it replaced.
         SESSION.nat_tables.clear()
+        SESSION.circuit_manager.clear()
         SESSION.reset_engine()
         return SESSION.project.to_dict()
 
@@ -430,18 +436,34 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
             project = Project.from_dict(data)
         except (KeyError, TypeError, ValueError) as exc:
             raise CommandError(f"Project JSON is not a valid NetSim project: {exc}") from exc
+        if project.schema_version != 1:
+            raise CommandError(
+                f"Unsupported project schema version {project.schema_version}: this build supports version 1"
+            )
         validate_project(project)
         SESSION.push_undo()
         SESSION.project = project
         # Loaded projects carry their own NAT configuration (if any) and never inherit another
         # project's tables; unknown router ids are recreated on first use.
         SESSION.nat_tables.clear()
+        SESSION.circuit_manager.clear()
         SESSION.reset_engine()
         return SESSION.project.to_dict()
 
     # 2. Topology Mutation
     elif cmd in ("add_node", "addNode"):
         label = str(arg(args, "label", default="Node"))
+        if "node_type" not in args and "nodeType" not in args:
+            # A request that names the device kind under any other key (for example
+            # {"type": "router"}) used to fall through to the "pc" default and create an
+            # unintended device. Omitting the key still defaults to a PC; a lookalike key
+            # is almost certainly a malformed request, so reject it with guidance.
+            for lookalike in ("type", "device_type", "deviceType", "kind", "node_kind", "nodeKind"):
+                if lookalike in args:
+                    raise CommandError(
+                        f"Unknown node-type field '{lookalike}'. "
+                        "Use 'node_type' (or 'nodeType') with one of: " + ", ".join(sorted(m.value for m in NodeType))
+                    )
         raw_nt = arg(args, "node_type", "nodeType", default="pc")
         nt = parse_enum(NodeType, raw_nt, "node type")
         pos = arg(args, "position", default=None)
@@ -489,6 +511,8 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
             lnk.id for lnk in SESSION.project.links if lnk.source.node_id == node_id or lnk.target.node_id == node_id
         }
         SESSION.push_undo()
+        for link_id in removed_link_ids:
+            SESSION.circuit_manager.release_circuits_for_link(link_id, f"Link {link_id} removed with node {node_id}")
         SESSION.project.nodes = [n for n in SESSION.project.nodes if n.id != node_id]
         SESSION.project.links = [lnk for lnk in SESSION.project.links if lnk.id not in removed_link_ids]
         for node in SESSION.project.nodes:
@@ -506,6 +530,10 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
             raise CommandError(f"Cannot connect node '{src_node_id}' to itself")
         src_node = find_node(str(src_node_id))
         dst_node = find_node(str(dst_node_id))
+        # NOTE: parallel links between the same pair are intentionally allowed (covered by
+        # test_regression_a_link_can_be_added_even_when_every_port_is_in_use): each new
+        # cable provisions fresh interfaces. They render overlapped on the canvas, which is
+        # a known cosmetic limitation, not a modeling error.
 
         src_if = resolve_link_endpoint(src_node, arg(args, "source_interface_id", "sourceInterfaceId"))
         dst_if = resolve_link_endpoint(dst_node, arg(args, "target_interface_id", "targetInterfaceId"))
@@ -536,7 +564,7 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         src_node.attach_link(src_if.id, link_id)
         dst_node.attach_link(dst_if.id, link_id)
         SESSION.project.links.append(new_link)
-        SESSION.engine.update_links(SESSION.project.links)
+        SESSION.engine.update_topology(SESSION.project.nodes, SESSION.project.links)
         return new_link.to_dict()
 
     elif cmd in ("update_link", "updateLink"):
@@ -558,18 +586,23 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
             link.status = parse_enum(LinkStatus, args["status"], "link status")
         link.validate()
         SESSION.push_undo()
+        # Capacity or status changes invalidate circuit reservations on this link.
+        if any(k in args for k in ("bandwidth_bps", "bandwidthBps", "status")):
+            SESSION.circuit_manager.release_circuits_for_link(link.id, f"Link {link.id} capacity or status changed")
         # An explicit reconfiguration supersedes any captured pre-fault value.
         SESSION.engine.clear_fault_snapshot(link.id)
-        SESSION.engine.update_links(SESSION.project.links)
+        SESSION.engine.update_topology(SESSION.project.nodes, SESSION.project.links)
         return link.to_dict()
 
     elif cmd in ("remove_link", "removeLink"):
         link_id = str(arg(args, "link_id", "linkId"))
         SESSION.push_undo()
+        # Circuits reserve capacity on this link: release them before it disappears.
+        SESSION.circuit_manager.release_circuits_for_link(link_id, f"Link {link_id} was removed")
         SESSION.project.links = [lnk for lnk in SESSION.project.links if lnk.id != link_id]
         for node in SESSION.project.nodes:
             node.detach_link(link_id)
-        SESSION.engine.update_links(SESSION.project.links)
+        SESSION.engine.update_topology(SESSION.project.nodes, SESSION.project.links)
         return None
 
     elif cmd in ("update_interface", "updateInterface"):
@@ -636,6 +669,29 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
     elif cmd in ("get_simulation_state", "getSimulationState"):
         return SESSION.engine.get_state_snapshot()
 
+    elif cmd in ("set_forwarding_policy", "setForwardingPolicy"):
+        """Configure the routing model that governs live packet forwarding.
+
+        The policy is explicit and shared with the routing graph: 'dijkstra' (heap-based
+        shortest path) or 'bellman_ford' (|V|-1 relaxation) over one of the supported
+        metrics. Both algorithms minimise the metric with the same deterministic
+        tie-break, so tables, convergence telemetry and live forwarding agree. Default:
+        dijkstra + hop_count.
+        """
+        algo_raw = arg(args, "algorithm", default=SESSION.engine.forwarding_algorithm)
+        algo_str = str(algo_raw).strip().lower().replace("-", "_")
+        if algo_str not in ("dijkstra", "bellman_ford"):
+            raise CommandError(f"Unsupported forwarding algorithm '{algo_raw}'. Expected 'dijkstra' or 'bellman_ford'")
+        metric_raw = arg(args, "metric_type", "metricType", default=SESSION.engine.forwarding_metric.value)
+        metric = parse_enum(MetricType, metric_raw, "routing metric")
+        SESSION.engine.forwarding_algorithm = algo_str
+        SESSION.engine.forwarding_metric = metric
+        return {
+            "algorithm": SESSION.engine.forwarding_algorithm,
+            "metric_type": SESSION.engine.forwarding_metric.value,
+            "default_ttl": DEFAULT_PACKET_TTL,
+        }
+
     elif cmd in ("step_simulation", "stepSimulation"):
         evt = SESSION.engine.step()
         return evt.to_dict() if evt else None
@@ -678,7 +734,17 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
             raise CommandError("Packet size must not exceed 9,000,000 bytes")
         app = str(arg(args, "app_protocol", "appProtocol", default="HTTP"))
         trans = str(arg(args, "transport_protocol", "transportProtocol", default="TCP"))
-        pkt_id = SESSION.engine.inject_packet(str(src), str(dst), size, app, trans)
+        raw_ttl = arg(args, "ttl", "packet_ttl", default=DEFAULT_PACKET_TTL)
+        try:
+            ttl = int(raw_ttl)
+        except (TypeError, ValueError) as exc:
+            raise CommandError(f"TTL must be an integer between 1 and 255 (received {raw_ttl!r})") from exc
+        if ttl < 1 or ttl > MAX_PACKET_TTL:
+            raise CommandError(f"TTL must be between 1 and 255 (received {ttl})")
+        try:
+            pkt_id = SESSION.engine.inject_packet(str(src), str(dst), size, app, trans, ttl=ttl)
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
         return pkt_id
 
     elif cmd in ("get_packet_details", "getPacketDetails"):
@@ -705,6 +771,57 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         if src == dst:
             raise CommandError("A demo packet must have different source and destination nodes")
         return SESSION.engine.inject_packet(src, dst, 1000, "HTTP", "TCP")
+
+    # 3b. Circuit Switching (educational model: setup / reservation / blocking / teardown)
+    elif cmd in ("request_circuit", "requestCircuit"):
+        src = arg(args, "source_node_id", "sourceNodeId")
+        dst = arg(args, "target_node_id", "targetNodeId", "destination_node_id", "destinationNodeId")
+        if not src or not dst:
+            raise CommandError("Both source and target node identifiers are required for a circuit")
+        find_node(str(src))
+        find_node(str(dst))
+        if str(src) == str(dst):
+            raise CommandError("A circuit must connect two distinct nodes")
+        raw_bw = arg(args, "bandwidth_bps", "bandwidthBps")
+        try:
+            bw = int(raw_bw)
+        except (TypeError, ValueError) as exc:
+            raise CommandError(f"Circuit bandwidth must be an integer number of bps (received {raw_bw!r})") from exc
+        if bw < 1:
+            raise CommandError("Circuit bandwidth must be at least 1 bps")
+        if bw > 100_000_000_000:
+            raise CommandError("Circuit bandwidth must not exceed 100,000,000,000 bps")
+        cid = arg(args, "circuit_id", "circuitId", default=None)
+        cid_str = str(cid).strip() if cid is not None else None
+        if cid_str == "":
+            raise CommandError("Circuit identifier must not be empty when supplied")
+        try:
+            circuit_result = SESSION.circuit_manager.request_circuit(
+                SESSION.project.nodes,
+                SESSION.project.links,
+                str(src),
+                str(dst),
+                bw,
+                circuit_id=cid_str,
+            )
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
+        return circuit_result.to_dict()
+
+    elif cmd in ("teardown_circuit", "teardownCircuit"):
+        cid = arg(args, "circuit_id", "circuitId")
+        if not cid or not str(cid).strip():
+            raise CommandError("A circuit identifier is required to tear down a circuit")
+        try:
+            circuit = SESSION.circuit_manager.teardown_circuit(str(cid))
+        except KeyError as exc:
+            raise CommandError(str(exc).strip("'")) from exc
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
+        return circuit.to_dict()
+
+    elif cmd in ("get_circuit_state", "getCircuitState"):
+        return SESSION.circuit_manager.get_state(SESSION.project.nodes, SESSION.project.links)
 
     # 4. Algorithms & Addressing
     elif cmd in ("calculate_simple_checksum", "calculateSimpleChecksum"):
@@ -1055,7 +1172,45 @@ class NetSimRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self) -> None:
-        content_length = int(self.headers.get("Content-Length", 0))
+        raw_length = self.headers.get("Content-Length", "0")
+        try:
+            content_length = int(raw_length)
+        except ValueError:
+            self._send_json(
+                400,
+                {
+                    "status": "error",
+                    "code": "invalid_request",
+                    "message": f"Malformed Content-Length header: {raw_length!r}",
+                },
+            )
+            return
+        if content_length < 0:
+            self._send_json(
+                400,
+                {"status": "error", "code": "invalid_request", "message": "Negative Content-Length"},
+            )
+            return
+        if content_length > MAX_REQUEST_BYTES:
+            # Refuse before buffering: projects are small JSON documents, so a body this
+            # large is either a client bug or abuse. Structured response, no traceback.
+            self._send_json(
+                413,
+                {
+                    "status": "error",
+                    "code": "request_too_large",
+                    "message": f"Request body exceeds the {MAX_REQUEST_BYTES} byte limit",
+                },
+            )
+            # Drain a bounded prefix so the client is not cut off mid-write (and never
+            # buffer more than the cap regardless of what was declared).
+            remaining = min(content_length, MAX_REQUEST_BYTES + 1)
+            while remaining > 0:
+                chunk = self.rfile.read(min(remaining, 65536))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+            return
         body = self.rfile.read(content_length) if content_length > 0 else b"{}"
 
         # URL path: /api/<cmd> or /<cmd>

@@ -155,7 +155,7 @@ export const PropertyEditor: React.FC<PropertyEditorProps> = ({
   };
 
   return (
-    <div className="absolute top-4 right-4 z-20 w-84 max-h-[calc(100vh-140px)] flex flex-col bg-slate-900/95 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right duration-200">
+    <div className="absolute top-4 left-4 right-4 sm:left-auto sm:right-4 z-20 sm:w-84 max-h-[calc(100vh-140px)] flex flex-col bg-slate-900/95 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right duration-200">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800/80 bg-slate-950/40">
         <div className="flex items-center space-x-2">
@@ -215,7 +215,7 @@ export const PropertyEditor: React.FC<PropertyEditorProps> = ({
                 <label className="block text-[11px] font-medium text-slate-400 mb-1">
                   Device Type
                 </label>
-                <div className="px-2.5 py-1.5 rounded-lg bg-slate-950/60 border border-slate-800/80 text-slate-300 font-mono text-[11px] uppercase">
+                <div className="px-2.5 py-1.5 rounded-lg bg-slate-950/60 border border-slate-800/80 text-slate-300 font-mono text-[11px]">
                   {selectedNode.node_type}
                 </div>
               </div>
@@ -236,7 +236,7 @@ export const PropertyEditor: React.FC<PropertyEditorProps> = ({
             {/* Interfaces List */}
             <div className="pt-2 border-t border-slate-800/80">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold tracking-wider text-slate-400 flex items-center gap-1.5">
                   <Layers className="w-3.5 h-3.5 text-slate-400" />
                   Interfaces ({selectedNode.interfaces.length})
                 </span>

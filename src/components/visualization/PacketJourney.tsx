@@ -20,7 +20,7 @@ export const PacketJourney: React.FC<PacketJourneyProps> = ({
         <Route className="w-12 h-12 text-slate-600 mb-3 stroke-[1.5]" />
         <h4 className="text-sm font-semibold text-slate-300">No Journey Selected</h4>
         <p className="text-xs text-slate-400 mt-1 max-w-[240px]">
-          Select a packet to view its authoritative hop-by-hop traversal history across the topology.
+          Select a packet to view its hop-by-hop traversal history across the topology.
         </p>
       </div>
     );
@@ -41,7 +41,7 @@ export const PacketJourney: React.FC<PacketJourneyProps> = ({
             </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            Authoritative traversal recorded by the Python simulation engine.
+            Traversal recorded by the Python simulation engine.
           </p>
         </div>
 
@@ -60,7 +60,7 @@ export const PacketJourney: React.FC<PacketJourneyProps> = ({
       {packet.planned_route && packet.planned_route.length > 0 && (
         <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between text-xs font-mono">
           <div className="flex items-center space-x-2">
-            <span className="text-[10px] text-slate-400 uppercase font-semibold">Planned Path (Ref):</span>
+            <span className="text-[10px] text-slate-400 font-semibold">Planned Path (Ref):</span>
             <div className="flex items-center space-x-1 text-slate-300">
               {packet.planned_route.map((node, i) => (
                 <React.Fragment key={i}>
@@ -73,14 +73,14 @@ export const PacketJourney: React.FC<PacketJourneyProps> = ({
             </div>
           </div>
           <span className="text-[10px] text-slate-400 italic">
-            Planned route is snapshot reference; hop history below is authoritative truth
+            Planned route is a snapshot reference; hop history below is the recorded truth
           </span>
         </div>
       )}
 
       {/* Actual Traversed Hops Timeline */}
       <div className="space-y-3">
-        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">
+        <div className="text-[10px] font-bold text-slate-400 tracking-wider px-1">
           Actual Observed Traversal (Python Source of Truth)
         </div>
 
@@ -142,7 +142,7 @@ export const PacketJourney: React.FC<PacketJourneyProps> = ({
 
                     <div className="flex items-center space-x-2">
                       <span
-                        className={`text-[10px] font-mono uppercase font-semibold px-2 py-0.5 rounded-full border ${
+                        className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full border ${
                           isDropped
                             ? 'bg-rose-950 text-rose-300 border-rose-800'
                             : isDelivered

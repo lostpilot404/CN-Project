@@ -1,7 +1,29 @@
-# NetSim — Interactive Computer Network Simulation Platform
+# NetSim — Interactive Computer Network Simulation and Performance Analysis Platform
 
 NetSim is an educational computer-network simulator: a discrete-event simulation core written in
 **Python 3.11+** and a **React 18 + TypeScript** front-end that renders what the core returns.
+
+## Educational contribution and implementation audit
+
+NetSim targets students and instructors exploring how networking algorithms respond to controlled
+inputs. Its defensible contribution is an integrated, inspectable teaching workflow—not a new
+networking algorithm or demonstrated superiority over Packet Tracer.
+
+See the [implementation-aware novelty audit](docs/IMPLEMENTATION_NOVELTY_AUDIT.md) for the
+feature evidence, related-tool comparison, limitations and prioritized changes. The existing
+**Flow Control comparison mode** already compares Go-Back-N and Selective Repeat using matched
+inputs. A [reproducible example](examples/compare_flow_control.py) exports both traces and metrics:
+
+```bash
+PYTHONPATH=python python examples/compare_flow_control.py > flow-comparison.json
+```
+
+**Current boundary:** the general runner explicitly dispatches topology packets (`network`), TCP
+bulk transfer and UDP bulk transfer. Other targets and unsupported parameter combinations fail
+clearly. Sweep/A-B downloads include full configuration, topology and per-run evidence; see
+[the workflow and replay guide](docs/EXPERIMENT_WORKFLOW.md) for supported settings and model
+limitations. The [project report](PROJECT_REPORT.md) now describes the Python-backed runtime.
+The dated novelty audit records the pre-fix baseline, not the current completion status.
 
 ## Architecture and ownership
 
@@ -42,7 +64,7 @@ produce a simulation result on its own: an unreachable backend raises an error t
 ## Prerequisites
 
 - **Python 3.11 or newer** (the core and the service).
-- **Node.js 18 or newer** with npm (the front-end build and tests).
+- **Node.js 22.x LTS, 22.22.2 or newer within 22.x** with npm (the front-end build and tests). `package.json` declares `^22.22.2`; CI pins 22.22.2 and the audit environment ran 22.22.3. Other majors are untested — and several dependencies exclude Node 23.x/25.x outright, while the jsdom 30 stack cannot run on Node 20.
 - A Chromium browser for the browser test suite. Playwright can install one itself, or you can
   point it at an existing binary — see [Browser tests](#browser-tests).
 
@@ -52,7 +74,10 @@ produce a simulation result on its own: an unreachable backend raises an error t
 # 1. Python service (authoritative simulation core) — terminal 1
 python3 -m venv .venv
 .venv/bin/pip install pytest ruff mypy   # pytest-cov is optional, for coverage reports
-.venv/bin/pip install -r python-tools/requirements.txt   # optional: only matplotlib, for charts
+# Required for the supported verification commands: the python-tools test suite and the
+# mypy check both import python-tools/plot_metrics.py, which needs matplotlib.
+# Install it in every environment where you intend to run the full test gate.
+.venv/bin/pip install -r python-tools/requirements.txt
 .venv/bin/python python/netsim/server.py 8765      # http://127.0.0.1:8765/health
 
 # 2. Front-end — terminal 2
@@ -83,21 +108,44 @@ fails loudly with the operating system's bind error rather than silently serving
 
 ## Verification status
 
-Every count below was produced by running the command in this repository. See
-[`QUALITY_AUDIT_REPORT.md`](QUALITY_AUDIT_REPORT.md) for the full evidence and for the list of
-checks that could not be executed in the audit environment.
+Verified **2026-10-28** on the consolidated `main` (all work branches merged; binary audit
+evidence removed — see the consolidation notes in the audit reports). Detailed historical
+results and limitations are recorded in [the final release gate](docs/FINAL_VERIFICATION.md),
+[`FINAL_ENGINEERING_REPORT.md`](FINAL_ENGINEERING_REPORT.md) and
+[`SUBMISSION_READINESS_REVIEW.md`](SUBMISSION_READINESS_REVIEW.md). The older
+`QUALITY_AUDIT_REPORT.md` is a historical baseline, not the current test-count source.
 
-| Suite | Command | Result |
+| Suite | Command | Consolidated result (2026-10-28) |
 |---|---|---|
-| Python tests | `.venv/bin/python -m pytest python/tests -q` | **154 passed** |
-| Utility tests (`python-tools/`) | `.venv/bin/pytest python-tools/tests -q` | **80 passed**, 99% statement coverage of both scripts |
-| Python lint + format | `.venv/bin/ruff check . && .venv/bin/ruff format --check python/ python-tools/` | clean (71 files) |
-| Python static types | `.venv/bin/mypy` | **clean** (63 files, no `# type: ignore`) |
-| Front-end typecheck | `npx tsc --noEmit` | clean |
-| Front-end unit/component tests | `npx vitest run` | **93 passed, 11 skipped** (live suite opt-in) |
-| Front-end ↔ service integration | `NETSIM_LIVE_API=1 npx vitest run src/integration` | **11 passed** (real service) |
-| Production build | `npm run build` | succeeds |
-| Browser end-to-end | `npx playwright test` | **24 passed** in a real Chromium (22 functional + 2 axe-core accessibility) |
+| Python backend tests | `.venv/bin/python -m pytest python/tests -q` | **267 passed** |
+| Utility tests (`python-tools/`) | `.venv/bin/pytest python-tools/tests -q` | **83 passed** |
+| Python lint + format | `.venv/bin/ruff check .` and format check | clean, 81 formatted Python files |
+| Python static types | `.venv/bin/mypy` | clean, 67 source files |
+| Frontend typecheck | `npm run typecheck` | clean |
+| Frontend unit/component | `npm test` | **126 passed, 11 skipped** (opt-in live suite) |
+| Frontend ↔ service integration | `npm run test:live` | **11 passed** (real service) |
+| Production build | `npm run build` | succeeds; code-split chunks, largest ≈ 379 kB; bundle contains only the inert test-double stub |
+| Real Chromium E2E | `npx playwright test` | **27 passed in CI** on the consolidation PR (24 functional + 3 accessibility, cold start); experiment download/replay suite runs in the same `e2e-gate` |
+
+### Evidence categories and novelty boundary
+
+- **Implemented and verified:** three supported experiment targets, bandwidth sweep/A-B browser
+  downloads and replay, matched-loss GBN/SR task; broader wiring is regression-tested.
+- **Implemented but not manually verified:** individual non-bandwidth browser sweeps, wider inputs,
+  human usability and cross-platform replay.
+- **Comparable capability found in Packet Tracer:** topology/packet inspection, routing/addressing,
+  saving/rerunning scenarios, established by official documentation—not a local application test.
+- **Candidate differentiator requiring further evidence:** the exact integrated GBN/SR and experiment
+  evidence workflow relative to a named Packet Tracer build; no verified exclusivity.
+- **Unsupported or out of scope:** other protocol targets in the general runner, full device
+  emulation and unsupported transport faults/loss/timed injection.
+
+Packet Tracer was unavailable; its advertised version 9.0.1 is established from official sources,
+but its exact installed build and direct workflow parity remain unverified. See the
+[source-backed comparison](docs/PACKET_TRACER_COMPARISON.md). NetSim's contribution is integration
+for selected educational tasks, not a first/unique/faster/more-accurate/superior claim. The release
+is **not unconditionally ready for exclusive novelty claims**. Live jsdom tests retain `act(...)`
+warnings; recorded download flows had no first-party console/service errors.
 
 ### Running the tests
 
@@ -119,10 +167,15 @@ NETSIM_LIVE_API=1 npx vitest run src/integration       # terminal 2
 
 # Browser end-to-end (starts both servers itself via playwright.config.ts)
 npx playwright test
+npx playwright test e2e/a11y.spec.ts        # accessibility audit alone
 ```
 
 The integration suite is skipped unless `NETSIM_LIVE_API=1` is set, which is why `npx vitest run`
 reports 11 skipped tests. They are not disabled — they require a running service.
+
+CI (`.github/workflows/ci.yml`) runs the same gate on every push and pull request: Python tests
+and tool tests, ruff, mypy, tsc, vitest, a production build with a double-free bundle check, and
+the browser suites from a cold start.
 
 ### Browser tests
 
@@ -184,10 +237,38 @@ Representative commands:
 | Data link | `calculate_hamming_encode`, `verify_and_correct_hamming`, `calculate_crc`, `verify_crc`, `calculate_internet_checksum`, `verify_internet_checksum`, `simulate_sliding_window`, `simulate_go_back_n`, `simulate_selective_repeat`, `simulate_pure_aloha`, `simulate_slotted_aloha`, `simulate_csma`, `simulate_csma_cd` |
 | Transport / application | `simulate_tcp`, `simulate_udp`, `simulate_tcp_congestion`, `simulate_dns`, `simulate_http`, `simulate_ftp`, `simulate_smtp`, `simulate_snmp` |
 | QoS, faults, experiments | `get_current_qos_metrics`, `schedule_fault_command`, `run_parameter_sweep_command`, `run_comparative_experiment_command` |
+| Circuit switching | `request_circuit`, `teardown_circuit`, `get_circuit_state` |
 
 Errors are structured: HTTP 400 with `{ "status": "error", "code": "invalid_request", "message": ... }`
 for rejected input, 404 for an unknown command, 500 for a genuine internal fault. A rejected
 command never returns a substitute result.
+
+## Implementation scope
+
+NetSim is an educational simulator. The table below states honestly what each area does today —
+**Implemented** (fully exercised by tests), **Partial** (real behaviour with documented
+boundaries), and **Illustrative** (visual or model output that does not claim production
+protocol behaviour).
+
+| Area | Status | What it does and does not do |
+|---|---|---|
+| Packet switching engine | Implemented | Discrete-event store-and-forward engine with per-hop table-driven forwarding (Dijkstra/Bellman-Ford next hop), enforced TTL/hop limit, loop guard, explicit per-packet drop causes, and deterministic per-seed replay. |
+| Circuit switching | Partial | Educational admission-control model in the Circuit Switching workspace: setup resolves the same authoritative routing path and reserves the requested rate on **every** link (all-or-nothing), blocked requests get a precise reason, teardown releases capacity, and per-link utilisation/blocking metrics are reported. It is a resource-reservation model — there is no call signalling, no holding-time traffic pattern, and no cross-connect hardware behaviour. |
+| IPv4 / subnetting | Implemented | Subnet calculation, VLSM allocation and validation are real arithmetic. |
+| IPv6 | Partial | Validation, RFC 5952 canonical formatting, expansion/compression and scope classification are real. IPv6 addresses are **text labels**: the packet engine forwards IPv4-style headers only, and no IPv6 routing, neighbour discovery or dual-stack behaviour is simulated. |
+| NAT | Partial | Real stateful NAPT model: dynamic SNAT with per-router port pools, static DNAT rules, timeout tracking, and strict per-router/per-project state isolation. Prefix handling normalises wildcarded `0.x` octets. It is not a full NAT traversal story: no ALGs, no port-preservation heuristics beyond the pool, no ICMP error rewriting. |
+| MAC / Ethernet | Illustrative | Interfaces carry generated MAC identifiers and the L2 header visualisation shows Ethernet II fields (with FCS). There is **no** MAC learning, bridging, ARP/ND resolution or switch forwarding — MACs are display identifiers, and the L2 header addresses on packets are fixed illustrative values, not learned from the topology. |
+| Sliding window / GBN / Selective Repeat | Partial | A receding-window time-step model with real window/sequence/ACK/timeout/retransmission bookkeeping per protocol (in-order delivery, GBN rewind, SR buffering). It is a teaching model: discrete rounds, simplified ACK timing, no delayed ACKs or ACK loss. |
+| Hamming / CRC / checksum | Implemented | Real algorithms with intermediate values exposed for learning (parity placement, syndrome-based single-bit correction, modulo-2 division, one's-complement arithmetic). |
+| TCP | Partial | Educational transport simulation over the real routed topology: three-way handshake, slow start, congestion avoidance, fast retransmit, timeout recovery, Jacobson-style RTT estimation, and wire-vs-goodput accounting. It is **not** a production stack: no SACK, no window scaling, no delayed ACKs, simplified congestion response, and the receiver window is not modelled as a bottleneck. |
+| UDP | Implemented | Single-phase datagram path over the same routed engine, with loss recorded without recovery. |
+| Application models (DNS/HTTP/FTP/SMTP/SNMP) | Illustrative | Request/response event timelines with realistic field visualisation (e.g. DNS record types, HTTP methods/status). No real application payloads, caches or server state machines are executed. |
+| QoS metrics | Implemented | Throughput and goodput are distinct documented quantities (wire rate vs unique delivered payload; see the QoS metric definitions), with hand-calculated regression coverage. |
+| Faults | Implemented | Scheduled link down/restore events with downstream rerouting through the forwarding table and exactly-once drop accounting. |
+| Experiments (sweeps, A/B comparisons) | Implemented | Seeded, deterministic batch runs over the real engine with aggregated statistics, raw deltas, and JSON/CSV exports consumable by `python-tools`. |
+
+The same distinctions are restated next to the affected features in `USER_GUIDE.md`, and the
+algorithm-level boundaries are documented in `ALGORITHMS.md`.
 
 ## Known limitations
 
@@ -218,7 +299,7 @@ command never returns a substitute result.
 | `src/lib/api.ts` | Typed command surface consumed by the UI |
 | `src/lib/testDouble.ts` | In-memory double used **only** by the vitest runner |
 | `e2e/` | Playwright browser suite (`netsim.spec.ts` functional, `a11y.spec.ts` axe-core audit) |
-| `python-tools/` | Optional standalone scripts for analysing exported experiment JSON, with their own test suite; only `matplotlib` is needed (`requirements.txt`) |
+| `python-tools/` | Optional standalone scripts for analysing exported experiment JSON, with their own test suite. Not needed to run the simulator, but `pip install -r python-tools/requirements.txt` (matplotlib) is required before running the utility tests and `mypy` |
 
 ## Further documentation
 

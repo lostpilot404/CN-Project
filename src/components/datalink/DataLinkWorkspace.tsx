@@ -77,6 +77,7 @@ export const DataLinkWorkspace: React.FC = () => {
       setHammingTestCodeword(res.encoded_bits);
       setHammingVerifyRes(null);
     } catch (err: unknown) {
+      setHammingEncodeRes(null);
       setHammingError(err instanceof Error ? err.message : String(err));
     } finally {
       setHammingLoading(false);
@@ -92,6 +93,7 @@ export const DataLinkWorkspace: React.FC = () => {
       const res = await api.verifyAndCorrectHamming(code, hammingParityMode);
       setHammingVerifyRes(res);
     } catch (err: unknown) {
+      setHammingVerifyRes(null);
       setHammingError(err instanceof Error ? err.message : String(err));
     } finally {
       setHammingLoading(false);
@@ -134,6 +136,7 @@ export const DataLinkWorkspace: React.FC = () => {
       setCrcTestFrame(res.transmitted_codeword);
       setCrcVerifyRes(null);
     } catch (err: unknown) {
+      setCrcCalcRes(null);
       setCrcError(err instanceof Error ? err.message : String(err));
     } finally {
       setCrcLoading(false);
@@ -149,6 +152,7 @@ export const DataLinkWorkspace: React.FC = () => {
       const res = await api.verifyCrc(frame, crcPoly, crcPreset);
       setCrcVerifyRes(res);
     } catch (err: unknown) {
+      setCrcVerifyRes(null);
       setCrcError(err instanceof Error ? err.message : String(err));
     } finally {
       setCrcLoading(false);
@@ -177,6 +181,7 @@ export const DataLinkWorkspace: React.FC = () => {
       setChecksumTestWord(res.checksum_hex);
       setChecksumVerifyRes(null);
     } catch (err: unknown) {
+      setChecksumCalcRes(null);
       setChecksumError(err instanceof Error ? err.message : String(err));
     } finally {
       setChecksumLoading(false);
@@ -199,6 +204,7 @@ export const DataLinkWorkspace: React.FC = () => {
       const res = await api.verifyInternetChecksum(payload, csum);
       setChecksumVerifyRes(res);
     } catch (err: unknown) {
+      setChecksumVerifyRes(null);
       setChecksumError(err instanceof Error ? err.message : String(err));
     } finally {
       setChecksumLoading(false);
@@ -208,29 +214,31 @@ export const DataLinkWorkspace: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 text-slate-100 overflow-hidden">
       {/* Workspace Header */}
-      <div className="h-16 border-b border-slate-800 bg-slate-900/60 backdrop-blur px-6 flex items-center justify-between">
+      <div className="border-b border-slate-800 bg-slate-900/60 backdrop-blur px-4 sm:px-6 py-3">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+          <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400">
             <Binary className="w-4 h-4" />
           </div>
           <div>
             <h1 className="text-sm font-semibold text-slate-200">
-              Data Link Layer Protocol & Algorithm Studio
+              Algorithm Studio
             </h1>
             <p className="text-[11px] text-slate-400">
-              Authoritative deterministic Python algorithms: Error Control, Flow Control & Multiple Access
+              Deterministic Python implementations of error control, flow control and multiple access
             </p>
           </div>
         </div>
+      </div>
 
-        {/* Top-Level Category Switcher */}
-        <div className="flex items-center space-x-3">
+      {/* Category and algorithm switchers */}
+      <div className="border-b border-slate-800/80 px-4 sm:px-6 py-2.5">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center space-x-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
             <button
               onClick={() => setCategoryTab('error_control')}
               className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 ${
                 categoryTab === 'error_control'
-                  ? 'bg-indigo-600 text-white shadow-sm'
+                  ? 'bg-brand-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -240,7 +248,7 @@ export const DataLinkWorkspace: React.FC = () => {
               onClick={() => setCategoryTab('flow_control')}
               className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 ${
                 categoryTab === 'flow_control'
-                  ? 'bg-indigo-600 text-white shadow-sm'
+                  ? 'bg-brand-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -250,7 +258,7 @@ export const DataLinkWorkspace: React.FC = () => {
               onClick={() => setCategoryTab('multiple_access')}
               className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center space-x-1.5 ${
                 categoryTab === 'multiple_access'
-                  ? 'bg-indigo-600 text-white shadow-sm'
+                  ? 'bg-brand-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -260,12 +268,12 @@ export const DataLinkWorkspace: React.FC = () => {
 
           {/* Algorithm Subtabs for Error Control */}
           {categoryTab === 'error_control' && (
-            <div className="flex items-center space-x-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60 text-xs">
+            <div className="flex flex-wrap items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60 text-xs max-w-full">
               <button
                 onClick={() => setActiveTab('hamming')}
                 className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                   activeTab === 'hamming'
-                    ? 'bg-indigo-600 text-white shadow-sm'
+                    ? 'bg-brand-600 text-white shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -275,7 +283,7 @@ export const DataLinkWorkspace: React.FC = () => {
                 onClick={() => setActiveTab('crc')}
                 className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                   activeTab === 'crc'
-                    ? 'bg-indigo-600 text-white shadow-sm'
+                    ? 'bg-brand-600 text-white shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -285,7 +293,7 @@ export const DataLinkWorkspace: React.FC = () => {
                 onClick={() => setActiveTab('checksum')}
                 className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                   activeTab === 'checksum'
-                    ? 'bg-indigo-600 text-white shadow-sm'
+                    ? 'bg-brand-600 text-white shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -312,7 +320,7 @@ export const DataLinkWorkspace: React.FC = () => {
             <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
                 <div className="flex items-center space-x-2">
-                  <ShieldCheck className="w-5 h-5 text-indigo-400" />
+                  <ShieldCheck className="w-5 h-5 text-brand-400" />
                   <span className="text-sm font-semibold text-slate-200">
                     Hamming Code Configuration
                   </span>
@@ -341,7 +349,7 @@ export const DataLinkWorkspace: React.FC = () => {
                     value={hammingData}
                     onChange={(e) => setHammingData(e.target.value.replace(/[^01]/g, ''))}
                     placeholder="Enter binary bits, e.g. 1011"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm font-mono text-indigo-300 tracking-wider focus:outline-none focus:border-indigo-500 transition"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm font-mono text-brand-300 tracking-wider focus:outline-none focus:border-brand-500 transition"
                   />
                   <p className="text-[11px] text-slate-400">
                     Configurable data bit width: Parity bits are placed dynamically at powers of two (positions 1, 2, 4, 8, ...).
@@ -357,7 +365,7 @@ export const DataLinkWorkspace: React.FC = () => {
                         onClick={() => setHammingParityMode(mode)}
                         className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition ${
                           hammingParityMode === mode
-                            ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 shadow-sm'
+                            ? 'bg-brand-600/20 border-brand-500 text-brand-300 shadow-sm'
                             : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'
                         }`}
                       >
@@ -372,7 +380,7 @@ export const DataLinkWorkspace: React.FC = () => {
                 <button
                   onClick={handleHammingEncode}
                   disabled={hammingLoading || !hammingData}
-                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-indigo-600/20 transition flex items-center space-x-2"
+                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-700 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-brand-600/20 transition flex items-center space-x-2"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Encode into Hamming Codeword</span>
@@ -394,9 +402,9 @@ export const DataLinkWorkspace: React.FC = () => {
                 <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                     <span className="text-xs font-semibold text-slate-200">
-                      Authoritative Codeword Output
+                      Codeword output
                     </span>
-                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-brand-950 text-brand-300 border border-brand-800">
                       Hamming({hammingEncodeRes.total_bit_count},{hammingEncodeRes.data_bit_count}) + SECDED
                     </span>
                   </div>
@@ -413,7 +421,7 @@ export const DataLinkWorkspace: React.FC = () => {
                           className={`flex flex-col items-center justify-center p-2 rounded-xl border min-w-[50px] transition ${
                             b.is_parity
                               ? 'bg-amber-950/40 border-amber-600/50 text-amber-300'
-                              : 'bg-indigo-950/40 border-indigo-600/50 text-indigo-200'
+                              : 'bg-brand-950/40 border-brand-600/50 text-brand-200'
                           }`}
                         >
                           <span className="text-[10px] font-mono text-slate-400">
@@ -434,14 +442,14 @@ export const DataLinkWorkspace: React.FC = () => {
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-400">SECDED Overall Parity ($P_0$):</span>
+                        <span className="text-slate-400">SECDED Overall Parity (P0):</span>
                         <span className="font-mono text-sm text-amber-400 font-semibold">
                           {hammingEncodeRes.overall_parity}
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-xs">
                         <span className="text-slate-400">Codeword with SECDED:</span>
-                        <span className="font-mono text-sm text-indigo-300 font-semibold tracking-widest">
+                        <span className="font-mono text-sm text-brand-300 font-semibold tracking-widest">
                           {hammingEncodeRes.encoded_bits_secded}
                         </span>
                       </div>
@@ -455,7 +463,7 @@ export const DataLinkWorkspace: React.FC = () => {
                     <span className="text-xs font-semibold text-slate-200">
                       Step-by-Step Parity Bit Traces
                     </span>
-                    <span className="text-[11px] text-slate-400">Python Authoritative Calculation</span>
+                    <span className="text-[11px] text-slate-400">Computed by the Python engine</span>
                   </div>
 
                   <div className="space-y-2.5 overflow-x-auto">
@@ -473,7 +481,7 @@ export const DataLinkWorkspace: React.FC = () => {
                           <tr key={p.parity_index} className="hover:bg-slate-800/30">
                             <td className="py-2 font-bold text-amber-400">{p.label} (pos {p.parity_index})</td>
                             <td className="py-2 text-slate-300">[{p.covered_indices.join(', ')}]</td>
-                            <td className="py-2 text-indigo-300">[{p.covered_bits.join(', ')}]</td>
+                            <td className="py-2 text-brand-300">[{p.covered_bits.join(', ')}]</td>
                             <td className="py-2 text-right font-bold text-emerald-400">
                               {p.parity_value}
                             </td>
@@ -517,7 +525,7 @@ export const DataLinkWorkspace: React.FC = () => {
                           className={`flex flex-col items-center justify-center px-3 py-2 rounded-xl border text-sm font-mono transition-all transform active:scale-95 ${
                             !isCleanBit
                               ? 'bg-rose-950 border-rose-500 text-rose-200 shadow-lg shadow-rose-950/50'
-                              : 'bg-slate-950 border-slate-700 text-slate-200 hover:border-indigo-400'
+                              : 'bg-slate-950 border-slate-700 text-slate-200 hover:border-brand-400'
                           }`}
                         >
                           <span className="text-[10px] text-slate-400">pos {pos}</span>
@@ -537,7 +545,7 @@ export const DataLinkWorkspace: React.FC = () => {
                   <button
                     onClick={() => handleHammingVerify()}
                     disabled={hammingLoading || !hammingTestCodeword}
-                    className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2"
+                    className="px-5 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-700 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-brand-600/20 transition flex items-center space-x-2"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     <span>Run Syndrome Calculation & Correction</span>
@@ -565,7 +573,7 @@ export const DataLinkWorkspace: React.FC = () => {
                           <XCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
                         )}
                         <div>
-                          <span className="font-semibold text-xs uppercase tracking-wider block">
+                          <span className="font-semibold text-xs tracking-wider block">
                             {!hammingVerifyRes.has_error
                               ? 'PASS — NO ERROR DETECTED'
                               : hammingVerifyRes.is_correctable
@@ -598,7 +606,7 @@ export const DataLinkWorkspace: React.FC = () => {
                         </div>
                         <div className="p-2 rounded bg-black/30">
                           <span className="text-slate-400 block text-[10px]">EXTRACTED DATA:</span>
-                          <span className="text-indigo-300 font-bold tracking-wider">
+                          <span className="text-brand-300 font-bold tracking-wider">
                             {hammingVerifyRes.extracted_data_bits}
                           </span>
                         </div>
@@ -620,7 +628,7 @@ export const DataLinkWorkspace: React.FC = () => {
             <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
                 <div className="flex items-center space-x-2">
-                  <Hash className="w-5 h-5 text-indigo-400" />
+                  <Hash className="w-5 h-5 text-brand-400" />
                   <span className="text-sm font-semibold text-slate-200">
                     Cyclic Redundancy Check (CRC) Modulo-2 Division
                   </span>
@@ -633,7 +641,7 @@ export const DataLinkWorkspace: React.FC = () => {
                       onClick={() => handleCrcPresetChange(p)}
                       className={`px-2 py-0.5 rounded text-[11px] font-mono transition border ${
                         crcPreset === p
-                          ? 'bg-indigo-600 text-white border-indigo-500'
+                          ? 'bg-brand-600 text-white border-brand-500'
                           : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
                       }`}
                     >
@@ -651,15 +659,15 @@ export const DataLinkWorkspace: React.FC = () => {
                     value={crcData}
                     onChange={(e) => setCrcData(e.target.value.replace(/[^01]/g, ''))}
                     placeholder="Enter binary frame payload, e.g. 11010011101100"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm font-mono text-indigo-300 tracking-wider focus:outline-none focus:border-indigo-500 transition"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm font-mono text-brand-300 tracking-wider focus:outline-none focus:border-brand-500 transition"
                   />
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-slate-300">
-                    Generator Polynomial $G(x)$ (Binary Bitstring)
+                    Generator polynomial G(x) (binary bitstring)
                   </label>
-                  <input aria-label="Generator Polynomial $G(x)$ (Binary Bitstring)"
+                  <input aria-label="Generator polynomial G(x) (binary bitstring)"
                     type="text"
                     value={crcPoly}
                     onChange={(e) => {
@@ -670,7 +678,7 @@ export const DataLinkWorkspace: React.FC = () => {
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm font-mono text-amber-300 tracking-wider focus:outline-none focus:border-amber-500 transition"
                   />
                   <p className="text-[11px] text-slate-400">
-                    Polynomial degree $r = {Math.max(0, crcPoly.length - 1)}$. Must begin with '1' and degree $\ge 1$.
+                    Polynomial degree r = {Math.max(0, crcPoly.length - 1)}. Must begin with '1' and have degree at least 1.
                   </p>
                 </div>
               </div>
@@ -679,7 +687,7 @@ export const DataLinkWorkspace: React.FC = () => {
                 <button
                   onClick={handleCrcCalculate}
                   disabled={crcLoading || !crcData || !crcPoly}
-                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-indigo-600/20 transition flex items-center space-x-2"
+                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-700 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-brand-600/20 transition flex items-center space-x-2"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Execute Modulo-2 Polynomial Division</span>
@@ -700,16 +708,16 @@ export const DataLinkWorkspace: React.FC = () => {
                 <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                     <span className="text-xs font-semibold text-slate-200">
-                      Authoritative CRC Remainder & Transmitted Frame
+                      CRC remainder and transmitted frame
                     </span>
-                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">
-                      Degree $r = {crcCalcRes.degree}$
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-brand-950 text-brand-300 border border-brand-800">
+                      Degree r = {crcCalcRes.degree}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
                     <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                      <span className="text-slate-400 block text-[10px]">AUGMENTED DATA (+$0^r$):</span>
+                      <span className="text-slate-400 block text-[10px]">AUGMENTED DATA (+ r zero bits):</span>
                       <span className="text-slate-300 font-semibold break-all">
                         {crcCalcRes.augmented_bits}
                       </span>
@@ -759,7 +767,7 @@ export const DataLinkWorkspace: React.FC = () => {
                             <td className="py-2 px-3 text-slate-200 font-semibold">{st.current_window}</td>
                             <td className="py-2 px-3 text-amber-400">{st.divisor_applied}</td>
                             <td className="py-2 px-3 text-emerald-400 font-semibold">{st.xor_result}</td>
-                            <td className="py-2 px-3 text-indigo-300">
+                            <td className="py-2 px-3 text-brand-300">
                               {st.next_bit_brought_down !== null ? st.next_bit_brought_down : '—'}
                             </td>
                             <td className="py-2 px-3 text-slate-400 font-sans text-xs">
@@ -802,7 +810,7 @@ export const DataLinkWorkspace: React.FC = () => {
                                 ? 'bg-rose-950 border-rose-500 text-rose-200 font-bold'
                                 : isRemainderBit
                                 ? 'bg-amber-950/40 border-amber-700/50 text-amber-300'
-                                : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-indigo-400'
+                                : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-brand-400'
                             }`}
                           >
                             <span className="block text-[9px] text-slate-500">
@@ -819,7 +827,7 @@ export const DataLinkWorkspace: React.FC = () => {
                     <button
                       onClick={() => handleCrcVerify()}
                       disabled={crcLoading || !crcTestFrame}
-                      className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2"
+                      className="px-5 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-700 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-brand-600/20 transition flex items-center space-x-2"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Verify Received Frame via Modulo-2 Division</span>
@@ -843,7 +851,7 @@ export const DataLinkWorkspace: React.FC = () => {
                             <XCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
                           )}
                           <div>
-                            <span className="font-semibold text-xs uppercase tracking-wider block">
+                            <span className="font-semibold text-xs tracking-wider block">
                               {crcVerifyRes.is_valid ? 'PASS — FRAME VERIFIED' : 'FAIL — CORRUPTED FRAME'}
                             </span>
                             <p className="text-xs mt-0.5 opacity-90">{crcVerifyRes.status_message}</p>
@@ -871,7 +879,7 @@ export const DataLinkWorkspace: React.FC = () => {
             <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
                 <div className="flex items-center space-x-2">
-                  <RotateCcw className="w-5 h-5 text-indigo-400" />
+                  <RotateCcw className="w-5 h-5 text-brand-400" />
                   <span className="text-sm font-semibold text-slate-200">
                     Standard 16-Bit Internet Checksum (RFC 1071)
                   </span>
@@ -903,7 +911,7 @@ export const DataLinkWorkspace: React.FC = () => {
                   value={checksumHexInput}
                   onChange={(e) => setChecksumHexInput(e.target.value)}
                   placeholder="e.g. 0x0001, 0xF203, 0xF4F5, 0xF6F7 or 0001 F203 F4F5 F6F7"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm font-mono text-indigo-300 tracking-wider focus:outline-none focus:border-indigo-500 transition"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm font-mono text-brand-300 tracking-wider focus:outline-none focus:border-brand-500 transition"
                 />
                 <p className="text-[11px] text-slate-400">
                   Standard one's-complement addition with end-around carry folding and final one's complement. Odd-length byte arrays are zero-padded on the right per RFC 1071.
@@ -914,7 +922,7 @@ export const DataLinkWorkspace: React.FC = () => {
                 <button
                   onClick={handleChecksumCalculate}
                   disabled={checksumLoading || !checksumHexInput}
-                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-indigo-600/20 transition flex items-center space-x-2"
+                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-700 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-brand-600/20 transition flex items-center space-x-2"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Calculate 16-Bit Internet Checksum</span>
@@ -935,7 +943,7 @@ export const DataLinkWorkspace: React.FC = () => {
                 <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                     <span className="text-xs font-semibold text-slate-200">
-                      Authoritative Checksum Result
+                      Checksum result
                     </span>
                     <span className="text-[11px] text-slate-400">
                       Evaluated {checksumCalcRes.total_words} 16-bit words
@@ -990,7 +998,7 @@ export const DataLinkWorkspace: React.FC = () => {
                         {checksumCalcRes.addition_steps.map((st) => (
                           <tr key={st.step_index} className="hover:bg-slate-800/30">
                             <td className="py-2 px-3 text-slate-400">{st.step_index}</td>
-                            <td className="py-2 px-3 text-indigo-300 font-semibold">0x{st.word_hex}</td>
+                            <td className="py-2 px-3 text-brand-300 font-semibold">0x{st.word_hex}</td>
                             <td className="py-2 px-3 text-slate-300">0x{st.sum_before_addition.toString(16).toUpperCase()}</td>
                             <td className="py-2 px-3 text-slate-200 font-semibold">0x{st.sum_after_addition.toString(16).toUpperCase()}</td>
                             <td className="py-2 px-3 text-amber-400">
@@ -1054,7 +1062,7 @@ export const DataLinkWorkspace: React.FC = () => {
                     <button
                       onClick={() => handleChecksumVerify(false)}
                       disabled={checksumLoading || !checksumTestHex || !checksumTestWord}
-                      className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-emerald-600/20 transition flex items-center space-x-2"
+                      className="px-5 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-700 disabled:bg-slate-700 disabled:text-slate-300 text-white shadow-lg shadow-brand-600/20 transition flex items-center space-x-2"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Verify Checksum on Receiver</span>
@@ -1078,7 +1086,7 @@ export const DataLinkWorkspace: React.FC = () => {
                             <XCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
                           )}
                           <div>
-                            <span className="font-semibold text-xs uppercase tracking-wider block">
+                            <span className="font-semibold text-xs tracking-wider block">
                               {checksumVerifyRes.is_valid ? 'PASS — CHECKSUM VALID' : 'FAIL — CHECKSUM MISMATCH'}
                             </span>
                             <p className="text-xs mt-0.5 opacity-90">{checksumVerifyRes.status_message}</p>

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from netsim.congestion.cwnd import CongestionController
 from netsim.core.delays import calculate_tx_delay_us
+from netsim.core.overhead import packet_overhead_bytes
 from netsim.models.project import Project
 from netsim.transport import (
     ConnectionState,
@@ -67,6 +68,7 @@ def simulate_tcp(
     duplicate_acks = 0
     bytes_sent = 0
     bytes_delivered = 0
+    retransmitted_payload_bytes = 0
     timeout_count = 0
     fast_retransmit_count = 0
     receiver_window_occupancy_max = 0
@@ -475,6 +477,7 @@ def simulate_tcp(
                     missing_seg.is_retransmit = True
                     missing_seg.tx_time_us = curr_time_us
                     missing_seg.retries += 1
+                    retransmitted_payload_bytes += missing_seg.length
 
                     retransmit_seg = TransportSegment(
                         source_port=config.source_port,
@@ -532,6 +535,7 @@ def simulate_tcp(
                 curr_time_us = timeout_time
                 timeout_count += 1
                 retransmissions += 1
+                retransmitted_payload_bytes += oldest_seg.length
 
                 congestion_controller.on_timeout(curr_time_us)
 
@@ -805,9 +809,14 @@ def simulate_tcp(
     )
 
     # 4. METRICS & TELEMETRY
+    # Throughput (sender boundary) = every wire byte transmitted: initial payload,
+    # retransmitted payload and the per-attempt IP+TCP headers (overhead.py).
+    # Goodput (receiver boundary)  = unique payload bytes acknowledged by the peer.
     completion_time_us = max(1, curr_time_us)
-    throughput_bits_per_sec = (bytes_sent * 8.0 * 1_000_000.0) / float(completion_time_us)
-    throughput_bytes_per_sec = (bytes_sent * 1_000_000.0) / float(completion_time_us)
+    header_bytes_sent = (segments_sent + retransmissions) * packet_overhead_bytes("TCP")
+    wire_bytes_sent = bytes_sent + retransmitted_payload_bytes + header_bytes_sent
+    throughput_bits_per_sec = (wire_bytes_sent * 8.0 * 1_000_000.0) / float(completion_time_us)
+    throughput_bytes_per_sec = (wire_bytes_sent * 1_000_000.0) / float(completion_time_us)
     goodput_bits_per_sec = (bytes_delivered * 8.0 * 1_000_000.0) / float(completion_time_us)
     total_attempts = segments_sent + segments_lost
     packet_loss_rate = float(segments_lost) / float(total_attempts) if total_attempts > 0 else 0.0
@@ -831,6 +840,9 @@ def simulate_tcp(
         throughput_bits_per_sec=throughput_bits_per_sec,
         throughput_bytes_per_sec=throughput_bytes_per_sec,
         goodput_bits_per_sec=goodput_bits_per_sec,
+        retransmitted_payload_bytes=retransmitted_payload_bytes,
+        header_bytes_sent=header_bytes_sent,
+        wire_bytes_sent=wire_bytes_sent,
         packet_loss_rate=packet_loss_rate,
         sender_window_occupancy_avg=sender_window_occupancy_avg,
         receiver_window_occupancy_max=receiver_window_occupancy_max,

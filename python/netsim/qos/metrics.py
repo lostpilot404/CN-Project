@@ -17,6 +17,8 @@ class LossCategoryBreakdown:
     link_down: int = 0
     bit_error: int = 0
     stochastic_loss: int = 0
+    ttl_expired: int = 0
+    no_route: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -24,6 +26,8 @@ class LossCategoryBreakdown:
             "link_down": self.link_down,
             "bit_error": self.bit_error,
             "stochastic_loss": self.stochastic_loss,
+            "ttl_expired": self.ttl_expired,
+            "no_route": self.no_route,
         }
 
 
@@ -45,10 +49,27 @@ class LinkUtilizationRecord:
 
 @dataclass
 class QosMetrics:
+    """Measured quality-of-service quantities.
+
+    Rate definitions (see ``netsim.core.overhead`` for the header accounting):
+
+    * **Throughput** — gross wire rate at the model's documented measurement
+      boundary: headers + payload, including retransmitted copies where the model
+      produces them. The byte total behind the rate is exposed as
+      ``throughput_bytes_counted``.
+      - Packet engine boundary: final delivery at the destination node.
+      - Transport models boundary: the sender's transmission onto the network.
+    * **Goodput** — net useful rate: unique, successfully delivered application
+      payload bits, excluding protocol headers and retransmitted/duplicate payload.
+      The byte total behind the rate is exposed as ``goodput_payload_bytes``.
+    """
+
     measurement_interval_us: int = 0
     throughput_bits_per_sec: float = 0.0
     throughput_bytes_per_sec: float = 0.0
     goodput_bits_per_sec: float = 0.0
+    throughput_bytes_counted: int = 0
+    goodput_payload_bytes: int = 0
     end_to_end_latencies_us: list[int] = field(default_factory=list)
     average_latency_us: float = 0.0
     min_latency_us: int | None = None
@@ -73,6 +94,8 @@ class QosMetrics:
             "throughput_bits_per_sec": self.throughput_bits_per_sec,
             "throughput_bytes_per_sec": self.throughput_bytes_per_sec,
             "goodput_bits_per_sec": self.goodput_bits_per_sec,
+            "throughput_bytes_counted": self.throughput_bytes_counted,
+            "goodput_payload_bytes": self.goodput_payload_bytes,
             "end_to_end_latencies_us": self.end_to_end_latencies_us,
             "average_latency_us": self.average_latency_us,
             "min_latency_us": self.min_latency_us,
@@ -122,6 +145,8 @@ def compute_network_qos(
         link_down=sim_metrics.packets_dropped_link_down,
         bit_error=sim_metrics.packets_dropped_error,
         stochastic_loss=sim_metrics.packets_dropped_loss,
+        ttl_expired=sim_metrics.packets_dropped_ttl,
+        no_route=sim_metrics.packets_dropped_no_route,
     )
 
     latencies: list[int] = []
@@ -161,10 +186,19 @@ def compute_network_qos(
         qos.jitter_us = safe_div(sum(all_jitter_samples), float(len(all_jitter_samples)))
     qos.jitter_samples = all_jitter_samples
 
+    # Throughput / goodput with distinct, documented numerators:
+    #   throughput = delivered wire bytes (headers + payload) at the destination;
+    #   goodput    = unique delivered payload bytes (headers excluded).
+    # The packet engine has no retransmissions, so every delivered packet counts
+    # exactly once in both numerators, at its wire size and payload size.
     elapsed_f = float(elapsed_us)
-    qos.throughput_bits_per_sec = safe_div(float(sim_metrics.bytes_delivered) * 8.0 * 1_000_000.0, elapsed_f)
-    qos.throughput_bytes_per_sec = safe_div(float(sim_metrics.bytes_delivered) * 1_000_000.0, elapsed_f)
-    qos.goodput_bits_per_sec = safe_div(float(sim_metrics.bytes_delivered) * 8.0 * 1_000_000.0, elapsed_f)
+    wire_delivered = sim_metrics.bytes_delivered
+    payload_delivered = sim_metrics.bytes_payload_delivered
+    qos.throughput_bytes_counted = wire_delivered
+    qos.goodput_payload_bytes = payload_delivered
+    qos.throughput_bits_per_sec = safe_div(float(wire_delivered) * 8.0 * 1_000_000.0, elapsed_f)
+    qos.throughput_bytes_per_sec = safe_div(float(wire_delivered) * 1_000_000.0, elapsed_f)
+    qos.goodput_bits_per_sec = safe_div(float(payload_delivered) * 8.0 * 1_000_000.0, elapsed_f)
 
     link_busy: dict[str, int] = {}
     for event in events:
@@ -201,6 +235,12 @@ def compute_network_qos(
 
 
 def compute_transport_qos(tm: TransportMetrics, elapsed_us: int) -> QosMetrics:
+    """Map transport-model measurements onto the shared QoS shape.
+
+    Transport boundary: throughput counts every wire byte the sender put on the
+    network (data payload + per-segment headers, including retransmissions);
+    goodput counts the unique payload bytes the receiver actually got.
+    """
     return QosMetrics(
         measurement_interval_us=elapsed_us,
         packets_sent=tm.segments_sent,
@@ -208,9 +248,12 @@ def compute_transport_qos(tm: TransportMetrics, elapsed_us: int) -> QosMetrics:
         packets_lost=tm.segments_lost,
         retransmissions=tm.retransmissions,
         packet_loss_rate=tm.packet_loss_rate,
+        loss_by_category=LossCategoryBreakdown(stochastic_loss=tm.segments_lost),
         throughput_bits_per_sec=tm.throughput_bits_per_sec,
         throughput_bytes_per_sec=tm.throughput_bytes_per_sec,
         goodput_bits_per_sec=tm.goodput_bits_per_sec,
+        throughput_bytes_counted=tm.wire_bytes_sent,
+        goodput_payload_bytes=tm.bytes_delivered,
         average_rtt_us=tm.average_rtt_us,
         average_latency_us=float(tm.average_rtt_us) / 2.0,
     )

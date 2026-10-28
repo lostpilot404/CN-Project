@@ -3,6 +3,8 @@ export interface LossCategoryBreakdown {
   link_down: number;
   bit_error: number;
   stochastic_loss: number;
+  ttl_expired: number;
+  no_route: number;
 }
 
 export interface LinkUtilizationRecord {
@@ -14,9 +16,14 @@ export interface LinkUtilizationRecord {
 
 export interface QosMetrics {
   measurement_interval_us: number;
+  /** Gross wire rate at the model's documented boundary (headers + payload, incl. retransmissions). */
   throughput_bits_per_sec: number;
   throughput_bytes_per_sec: number;
+  /** Net useful payload rate: unique delivered payload, headers and retransmissions excluded. */
   goodput_bits_per_sec: number;
+  /** Byte totals behind the two rates (wire bytes vs unique delivered payload bytes). */
+  throughput_bytes_counted: number;
+  goodput_payload_bytes: number;
   end_to_end_latencies_us: number[];
   average_latency_us: number;
   min_latency_us: number | null;
@@ -83,7 +90,7 @@ export interface RouteChangeRecord {
   timestamp_us: number;
 }
 
-export type ExperimentTarget = 'tcp' | 'udp' | 'application' | 'flow_control' | 'mac';
+export type ExperimentTarget = 'network' | 'tcp' | 'udp' | 'application' | 'flow_control' | 'mac';
 
 export type SweepParameter =
   | { type: 'link_bandwidth'; link_id?: string | null }
@@ -133,6 +140,8 @@ export interface SweepExperimentResult {
   total_runs: number;
   seeds: number[];
   execution_time_ms: number;
+  provenance?: Record<string, unknown>;
+  run_evidence?: Record<string, unknown>[];
 }
 
 export interface MetricDelta {
@@ -177,4 +186,6 @@ export interface ComparativeExperimentResult {
   route_changes_b: RouteChangeRecord[];
   runs_count_per_scenario: number;
   execution_time_ms: number;
+  provenance?: Record<string, unknown>;
+  run_evidence?: Record<string, unknown>[];
 }

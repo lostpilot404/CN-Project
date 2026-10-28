@@ -66,9 +66,9 @@ export const EncapsulationViewer: React.FC<EncapsulationViewerProps> = ({
       totalBytes: packet.size_bytes + (isTcp ? 20 : 8) + 20,
       summary: `${packet.headers.network.src_ip} → ${packet.headers.network.dst_ip} | TTL: ${packet.headers.network.ttl}`,
       icon: Network,
-      color: 'indigo',
-      borderClass: 'border-indigo-500/40 bg-indigo-950/20 text-indigo-300',
-      badgeClass: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+      color: 'brand',
+      borderClass: 'border-brand-500/40 bg-brand-950/20 text-brand-300',
+      badgeClass: 'bg-brand-500/20 text-brand-400 border-brand-500/30',
     },
     {
       index: 2,
@@ -156,7 +156,7 @@ export const EncapsulationViewer: React.FC<EncapsulationViewerProps> = ({
           <div className="w-[18%] bg-emerald-400 flex items-center justify-center truncate px-1" title="Ethernet Header (14B)">
             Eth (14B)
           </div>
-          <div className="w-[18%] bg-indigo-400 flex items-center justify-center truncate px-1" title="IPv4 Header (20B)">
+          <div className="w-[18%] bg-brand-400 flex items-center justify-center truncate px-1" title="IPv4 Header (20B)">
             IP (20B)
           </div>
           <div className="w-[20%] bg-cyan-400 flex items-center justify-center truncate px-1" title={isTcp ? "TCP Header (20B)" : "UDP Header (8B)"}>

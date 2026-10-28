@@ -9,6 +9,12 @@ from netsim.faults.model import FaultSchedule
 from netsim.models.project import Project
 
 
+def integer_input(value: Any, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not float(value).is_integer():
+        raise ValueError(f"{name} must be an integer")
+    return int(value)
+
+
 class SweepParameterType(str, Enum):
     LINK_BANDWIDTH = "link_bandwidth"
     PROPAGATION_DELAY = "propagation_delay"
@@ -57,6 +63,7 @@ class SweepParameter:
 
 
 class ExperimentTarget(str, Enum):
+    NETWORK = "network"
     TCP = "tcp"
     UDP = "udp"
     APPLICATION = "application"
@@ -94,7 +101,7 @@ class SweepConfig:
 
         try:
             parameter_values = [float(v) for v in require_list(data.get("parameter_values", []), "parameter_values")]
-            seeds = [int(s) for s in require_list(data.get("seeds", [42]), "seeds")]
+            seeds = [integer_input(s, "seed") for s in require_list(data.get("seeds", [42]), "seeds")]
         except (TypeError, ValueError) as exc:
             raise ValueError(f"Invalid sweep configuration: {exc}") from exc
         if not parameter_values:
@@ -108,7 +115,9 @@ class SweepConfig:
             parameter=param,
             parameter_values=parameter_values,
             seeds=seeds,
-            simulation_duration_us=int(data.get("simulation_duration_us", 1_000_000)),
+            simulation_duration_us=integer_input(
+                data.get("simulation_duration_us", 1_000_000), "simulation_duration_us"
+            ),
             base_project=base_proj,
             traffic_src_id=data.get("traffic_src_id"),
             traffic_dst_id=data.get("traffic_dst_id"),
@@ -247,8 +256,10 @@ class ComparativeExperimentConfig:
             experiment_name=data.get("experiment_name", "comparative_experiment"),
             scenario_a=ComparativeScenarioConfig.from_dict(scenario_a_data),
             scenario_b=ComparativeScenarioConfig.from_dict(scenario_b_data),
-            seeds=[int(s) for s in data.get("seeds", [42])],
-            simulation_duration_us=int(data.get("simulation_duration_us", 1_000_000)),
+            seeds=[integer_input(s, "seed") for s in require_list(data.get("seeds", [42]), "seeds")],
+            simulation_duration_us=integer_input(
+                data.get("simulation_duration_us", 1_000_000), "simulation_duration_us"
+            ),
             target=target,
             base_project=base_proj,
             traffic_src_id=data.get("traffic_src_id"),
