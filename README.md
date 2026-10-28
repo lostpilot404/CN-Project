@@ -125,7 +125,7 @@ results and limitations are recorded in [the final release gate](docs/FINAL_VERI
 | Frontend unit/component | `npm test` | **126 passed, 11 skipped** (opt-in live suite) |
 | Frontend ↔ service integration | `npm run test:live` | **11 passed** (real service) |
 | Production build | `npm run build` | succeeds; code-split chunks, largest ≈ 379 kB; bundle contains only the inert test-double stub |
-| Real Chromium E2E | `npx playwright test` | run by CI (`e2e-gate`: functional + accessibility, cold start) on every PR |
+| Real Chromium E2E | `npx playwright test` | **27 passed in CI** on the consolidation PR (24 functional + 3 accessibility, cold start); experiment download/replay suite runs in the same `e2e-gate` |
 
 ### Evidence categories and novelty boundary
 

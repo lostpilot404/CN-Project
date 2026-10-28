@@ -121,3 +121,6 @@ jobs:
 
       - name: Accessibility audit (WCAG A/AA)
         run: npx playwright test e2e/a11y.spec.ts
+
+      - name: Experiment downloads and replay
+        run: npx playwright test e2e/experiment-downloads.spec.ts
