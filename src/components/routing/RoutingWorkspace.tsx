@@ -93,6 +93,9 @@ export const RoutingWorkspace: React.FC<RoutingWorkspaceProps> = ({ project }) =
         setConvergence(null);
       }
     } catch (err: unknown) {
+      // A failed compute must not leave a previous table/convergence trace on screen.
+      setRoutingTable(null);
+      setConvergence(null);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsLoading(false);

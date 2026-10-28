@@ -28,6 +28,7 @@ export const DevicePalette = ({ onAddDevice }: DevicePaletteProps) => {
             key={device.type}
             onClick={() => onAddDevice(device.type, device.label)}
             title={`Add ${device.label}`}
+            aria-label={`Add ${device.label}`}
             className="flex items-center space-x-1.5 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors border border-transparent hover:border-slate-700"
           >
             <div className="w-5 h-5 rounded bg-slate-800 flex items-center justify-center text-brand-400">

@@ -181,7 +181,15 @@ class FaultScheduleEntry:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> FaultScheduleEntry:
         ft_raw = data.get("fault_type", {})
-        ft = FaultType.from_dict(ft_raw) if isinstance(ft_raw, dict) else ft_raw
+        if not isinstance(ft_raw, dict):
+            # A bare string such as "link_down" used to slip through and crash target
+            # validation with AttributeError (HTTP 500). Reject it as a client error with
+            # guidance toward the documented object shape.
+            raise ValueError(
+                "fault_type must be an object like "
+                f"{{'type': 'link_down', 'link_id': ...}} (received {type(ft_raw).__name__})"
+            )
+        ft = FaultType.from_dict(ft_raw)
         return cls(
             fault_id=data["fault_id"],
             timestamp_us=require_int(data.get("timestamp_us", 0), "fault timestamp_us", minimum=0),

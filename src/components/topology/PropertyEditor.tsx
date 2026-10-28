@@ -155,7 +155,7 @@ export const PropertyEditor: React.FC<PropertyEditorProps> = ({
   };
 
   return (
-    <div className="absolute top-4 right-4 z-20 w-84 max-h-[calc(100vh-140px)] flex flex-col bg-slate-900/95 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right duration-200">
+    <div className="absolute top-4 left-4 right-4 sm:left-auto sm:right-4 z-20 sm:w-84 max-h-[calc(100vh-140px)] flex flex-col bg-slate-900/95 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right duration-200">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800/80 bg-slate-950/40">
         <div className="flex items-center space-x-2">

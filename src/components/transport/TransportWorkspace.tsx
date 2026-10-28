@@ -99,6 +99,10 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
       setTcpResult(res);
       setCurrentStepIndex(res.events.length);
     } catch (err) {
+      // A failed run must not leave the previous successful result on screen as if it
+      // belonged to the current parameters.
+      setTcpResult(null);
+      setCurrentStepIndex(0);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsRunning(false);
@@ -133,6 +137,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
       const res = await api.simulateUdp(config);
       setUdpResult(res);
     } catch (err) {
+      setUdpResult(null);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsRunning(false);
@@ -154,7 +159,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
       className="flex-1 flex flex-col h-full bg-slate-950 text-slate-100 overflow-hidden select-none"
     >
       {/* Workspace Header */}
-      <header className="border-b border-slate-800 bg-slate-900/60 px-6 py-3">
+      <header className="border-b border-slate-800 bg-slate-900/60 px-4 sm:px-6 py-3">
         <div className="flex items-center space-x-3">
           <div className="p-2 rounded-lg bg-brand-500/10 text-brand-400 border border-brand-500/20">
             <ArrowLeftRight className="w-5 h-5" />
@@ -171,8 +176,8 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
       </header>
 
       {/* Sub-studio tabs */}
-      <div className="border-b border-slate-800/80 px-6 py-2.5">
-        <div className="flex flex-wrap bg-slate-950 border border-slate-800 rounded-lg p-1 space-x-1 w-fit">
+      <div className="border-b border-slate-800/80 px-4 sm:px-6 py-2.5">
+        <div className="flex flex-wrap bg-slate-950 border border-slate-800 rounded-lg p-1 space-x-1 w-fit max-w-full">
           <button
             data-testid="tab-tcp-studio"
             onClick={() => setActiveStudio('tcp')}

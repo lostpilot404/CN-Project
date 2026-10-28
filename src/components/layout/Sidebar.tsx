@@ -64,7 +64,7 @@ export const Sidebar = ({
           : { label: 'UNKNOWN', className: 'text-slate-400', dot: 'bg-slate-500' };
 
   return (
-    <aside className="w-14 md:w-56 bg-slate-900/90 border-r border-slate-800 flex flex-col justify-between select-none py-3">
+    <aside className="w-14 md:w-56 shrink-0 bg-slate-900/90 border-r border-slate-800 flex flex-col justify-between select-none py-3">
       <div className="space-y-1 px-2">
         <div className="hidden md:block px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
           Workspaces
@@ -93,7 +93,7 @@ export const Sidebar = ({
       </div>
 
       <div className="px-2 md:px-4 py-2 border-t border-slate-800/60 text-[11px] text-slate-400">
-        <div className="flex flex-col md:flex-row items-center md:justify-between gap-0.5 md:gap-0">
+        <div className="flex flex-col md:flex-row items-center md:justify-between gap-0.5 md:gap-0" title={`Simulation Engine: ${engineStatus.label}`}>
           <span className="hidden md:inline">Simulation Engine:</span>
           <span className={cn('font-mono font-semibold flex items-center space-x-1.5 text-[9px] md:text-[11px]', engineStatus.className)}>
             <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', engineStatus.dot)} aria-hidden="true" />

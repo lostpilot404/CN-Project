@@ -174,7 +174,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
               key={ev.id}
               onClick={() => onSelectEvent(ev)}
               data-testid={`timeline-event-${ev.id}`}
-              className={`flex items-center space-x-3 px-3 py-2 rounded-xl border transition-all cursor-pointer ${
+              className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2 rounded-xl border transition-all cursor-pointer ${
                 statusStyle.bg
               } ${statusStyle.border} ${
                 isSelected
@@ -183,16 +183,16 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
               }`}
             >
               {/* Event ID and SimTime */}
-              <span className="text-slate-400 text-[10px] min-w-[28px]">#{ev.id}</span>
+              <span className="text-slate-400 text-[10px] min-w-[28px] shrink-0">#{ev.id}</span>
 
-              <div className="flex items-center space-x-1 text-cyan-400 text-[11px] min-w-[75px]">
-                <Clock className="w-3 h-3" />
-                <span>{formatTimeUs(ev.timestamp_us)}</span>
+              <div className="flex items-center space-x-1 text-cyan-400 text-[11px] min-w-[75px] shrink-0">
+                <Clock className="w-3 h-3 shrink-0" />
+                <span className="whitespace-nowrap">{formatTimeUs(ev.timestamp_us)}</span>
               </div>
 
               {/* Layer Badge */}
               <span
-                className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                className={`text-[9px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap shrink-0 ${
                   layerColorBadge[ev.layer || 'Other'] || layerColorBadge.Other
                 }`}
               >
@@ -201,31 +201,31 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
 
               {/* Packet or Protocol identifier */}
               {ev.packetId ? (
-                <span className="text-[10px] font-semibold text-cyan-300 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                <span className="text-[10px] font-semibold text-cyan-300 bg-slate-950 px-2 py-0.5 rounded border border-slate-800 whitespace-nowrap shrink-0">
                   {ev.packetId}
                 </span>
               ) : (
-                <span className="text-[10px] text-slate-400 bg-slate-950/80 px-2 py-0.5 rounded border border-slate-800/80">
+                <span className="text-[10px] text-slate-400 bg-slate-950/80 px-2 py-0.5 rounded border border-slate-800/80 whitespace-nowrap shrink-0">
                   Trace
                 </span>
               )}
 
               {/* Location: Node / Link */}
               {ev.nodeId && (
-                <span className="text-[10px] text-emerald-400 flex items-center space-x-0.5">
-                  <Cpu className="w-2.5 h-2.5" />
+                <span className="text-[10px] text-emerald-400 flex items-center space-x-0.5 whitespace-nowrap shrink-0">
+                  <Cpu className="w-2.5 h-2.5 shrink-0" />
                   <span>{ev.nodeId}</span>
                 </span>
               )}
               {ev.linkId && (
-                <span className="text-[10px] text-brand-400 flex items-center space-x-0.5">
-                  <Network className="w-2.5 h-2.5" />
+                <span className="text-[10px] text-brand-400 flex items-center space-x-0.5 whitespace-nowrap shrink-0">
+                  <Network className="w-2.5 h-2.5 shrink-0" />
                   <span>{ev.linkId}</span>
                 </span>
               )}
 
-              {/* Description */}
-              <span className={`text-xs flex-1 truncate ${statusStyle.text}`}>
+              {/* Description (drops below the badges when the column is too narrow). */}
+              <span className={`text-xs flex-1 min-w-0 basis-40 truncate ${statusStyle.text}`}>
                 {ev.description}
               </span>
             </div>

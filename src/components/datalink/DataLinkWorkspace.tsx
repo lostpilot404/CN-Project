@@ -77,6 +77,7 @@ export const DataLinkWorkspace: React.FC = () => {
       setHammingTestCodeword(res.encoded_bits);
       setHammingVerifyRes(null);
     } catch (err: unknown) {
+      setHammingEncodeRes(null);
       setHammingError(err instanceof Error ? err.message : String(err));
     } finally {
       setHammingLoading(false);
@@ -92,6 +93,7 @@ export const DataLinkWorkspace: React.FC = () => {
       const res = await api.verifyAndCorrectHamming(code, hammingParityMode);
       setHammingVerifyRes(res);
     } catch (err: unknown) {
+      setHammingVerifyRes(null);
       setHammingError(err instanceof Error ? err.message : String(err));
     } finally {
       setHammingLoading(false);
@@ -134,6 +136,7 @@ export const DataLinkWorkspace: React.FC = () => {
       setCrcTestFrame(res.transmitted_codeword);
       setCrcVerifyRes(null);
     } catch (err: unknown) {
+      setCrcCalcRes(null);
       setCrcError(err instanceof Error ? err.message : String(err));
     } finally {
       setCrcLoading(false);
@@ -149,6 +152,7 @@ export const DataLinkWorkspace: React.FC = () => {
       const res = await api.verifyCrc(frame, crcPoly, crcPreset);
       setCrcVerifyRes(res);
     } catch (err: unknown) {
+      setCrcVerifyRes(null);
       setCrcError(err instanceof Error ? err.message : String(err));
     } finally {
       setCrcLoading(false);
@@ -177,6 +181,7 @@ export const DataLinkWorkspace: React.FC = () => {
       setChecksumTestWord(res.checksum_hex);
       setChecksumVerifyRes(null);
     } catch (err: unknown) {
+      setChecksumCalcRes(null);
       setChecksumError(err instanceof Error ? err.message : String(err));
     } finally {
       setChecksumLoading(false);
@@ -199,6 +204,7 @@ export const DataLinkWorkspace: React.FC = () => {
       const res = await api.verifyInternetChecksum(payload, csum);
       setChecksumVerifyRes(res);
     } catch (err: unknown) {
+      setChecksumVerifyRes(null);
       setChecksumError(err instanceof Error ? err.message : String(err));
     } finally {
       setChecksumLoading(false);
@@ -208,7 +214,7 @@ export const DataLinkWorkspace: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 text-slate-100 overflow-hidden">
       {/* Workspace Header */}
-      <div className="border-b border-slate-800 bg-slate-900/60 backdrop-blur px-6 py-3">
+      <div className="border-b border-slate-800 bg-slate-900/60 backdrop-blur px-4 sm:px-6 py-3">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400">
             <Binary className="w-4 h-4" />
@@ -225,7 +231,7 @@ export const DataLinkWorkspace: React.FC = () => {
       </div>
 
       {/* Category and algorithm switchers */}
-      <div className="border-b border-slate-800/80 px-6 py-2.5">
+      <div className="border-b border-slate-800/80 px-4 sm:px-6 py-2.5">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center space-x-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
             <button
@@ -262,7 +268,7 @@ export const DataLinkWorkspace: React.FC = () => {
 
           {/* Algorithm Subtabs for Error Control */}
           {categoryTab === 'error_control' && (
-            <div className="flex items-center space-x-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60 text-xs">
+            <div className="flex flex-wrap items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60 text-xs max-w-full">
               <button
                 onClick={() => setActiveTab('hamming')}
                 className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
@@ -436,7 +442,7 @@ export const DataLinkWorkspace: React.FC = () => {
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-400">SECDED Overall Parity ($P_0$):</span>
+                        <span className="text-slate-400">SECDED Overall Parity (P0):</span>
                         <span className="font-mono text-sm text-amber-400 font-semibold">
                           {hammingEncodeRes.overall_parity}
                         </span>
@@ -711,7 +717,7 @@ export const DataLinkWorkspace: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
                     <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                      <span className="text-slate-400 block text-[10px]">AUGMENTED DATA (+$0^r$):</span>
+                      <span className="text-slate-400 block text-[10px]">AUGMENTED DATA (+ r zero bits):</span>
                       <span className="text-slate-300 font-semibold break-all">
                         {crcCalcRes.augmented_bits}
                       </span>

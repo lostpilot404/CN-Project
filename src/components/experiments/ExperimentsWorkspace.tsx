@@ -150,7 +150,8 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
       const res = await api.runParameterSweep(cfg);
       setSweepResult(res);
     } catch (err) {
-      setErrorMsg(String(err));
+      setSweepResult(null);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsRunning(false);
     }
@@ -193,7 +194,8 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
       const res = await api.runComparativeExperiment(cfg);
       setCompResult(res);
     } catch (err) {
-      setErrorMsg(String(err));
+      setCompResult(null);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsRunning(false);
     }
@@ -238,7 +240,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex p-1 bg-slate-950 border border-slate-800 rounded-xl space-x-1 text-xs font-semibold">
+        <div className="flex flex-wrap gap-1 p-1 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold max-w-full">
           <button
             onClick={() => setActiveTab('sweep')}
             className={`px-3 py-1.5 rounded-lg transition flex items-center space-x-1.5 ${

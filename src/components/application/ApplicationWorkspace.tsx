@@ -41,7 +41,7 @@ export const ApplicationWorkspace: React.FC<ApplicationWorkspaceProps> = ({ proj
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-hidden">
       {/* Top Header & Sub-Navigation */}
-      <header className="px-6 py-3 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur shrink-0">
+      <header className="px-4 sm:px-6 py-3 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur shrink-0">
         <div>
           <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
             <span className="p-1.5 rounded-lg bg-brand-500/20 text-brand-400">
@@ -56,8 +56,8 @@ export const ApplicationWorkspace: React.FC<ApplicationWorkspaceProps> = ({ proj
       </header>
 
       {/* Sub-studio tabs */}
-      <div className="border-b border-slate-800/80 px-6 py-2.5">
-        <div className="flex flex-wrap items-center gap-1.5 bg-slate-950/80 p-1 rounded-xl border border-slate-800/80 w-fit">
+      <div className="border-b border-slate-800/80 px-4 sm:px-6 py-2.5">
+        <div className="flex flex-wrap items-center gap-1.5 bg-slate-950/80 p-1 rounded-xl border border-slate-800/80 w-fit max-w-full">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;

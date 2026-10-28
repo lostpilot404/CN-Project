@@ -71,6 +71,9 @@ export const FtpStudio: React.FC<FtpStudioProps> = ({
         onPacketSelect?.(res.packets[0]);
       }
     } catch (err) {
+      // A failed run must not leave the previous successful result on screen.
+      setResult(null);
+      onPacketSelect?.(null);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
       setIsRunning(false);
