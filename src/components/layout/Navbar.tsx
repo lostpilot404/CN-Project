@@ -111,12 +111,12 @@ export const Navbar = ({
 
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md transition-colors"
+          className="flex items-center space-x-1.5 px-2 lg:px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md transition-colors"
           title="Import Project JSON (.netsim)"
           data-testid="import-project"
         >
           <FileUp className="w-3.5 h-3.5" />
-          <span>Import JSON</span>
+          <span className="sr-only lg:not-sr-only">Import JSON</span>
         </button>
         <input
           ref={fileInputRef}

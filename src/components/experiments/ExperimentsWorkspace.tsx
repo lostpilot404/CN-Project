@@ -291,7 +291,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
           transport runs. TCP latency is an RTT/2 estimate; UDP latency and jitter are unavailable
           (zero placeholders), not measured zero delay. Other protocols use their dedicated studios.
         </p>
-        <div className="flex gap-4">
+        <div className="flex flex-wrap gap-4">
           <button disabled={!sweepResult} onClick={() => downloadResult('sweep', sweepResult)}
             className="text-xs border rounded px-3 py-2 disabled:opacity-40">Download sweep JSON</button>
           <button disabled={!compResult} onClick={() => downloadResult('comparison', compResult)}
