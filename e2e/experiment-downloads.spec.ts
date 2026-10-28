@@ -159,7 +159,7 @@ test('dedicated GBN/SR comparison reproduces the reported matched-loss teaching 
     ['Window Size (N)', '4'], ['Seq Space (M)', '8'], ['Total Frames', '8'],
     ['Frame Tx (µs)', '1000'], ['Prop Delay (µs)', '2000'], ['ACK Tx (µs)', '100'],
     ['Timeout (µs)', '10000'], ['Drop Frames (0-based indices, comma-separated)', '2'],
-    ['Drop ACKs (seq numbers, comma-separated)', ''], ['RNG Seed (Authoritative Determinism)', '42'],
+    ['Drop ACKs (seq numbers, comma-separated)', ''], ['RNG seed', '42'],
   ]) await page.getByLabel(label, { exact: true }).fill(value);
   const gbnPromise = page.waitForResponse(r => r.url().includes('/api/simulate_go_back_n'));
   const srPromise = page.waitForResponse(r => r.url().includes('/api/simulate_selective_repeat'));
