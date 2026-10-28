@@ -64,10 +64,12 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
       env: {
-        // The dev server proxies /netsim-api to the Python service, and the browser also talks
-        // to it directly on loopback, so either resolution path is exercised.
+        // The dev server proxies /netsim-api to the Python service via NETSIM_API_TARGET. Do NOT
+        // set VITE_NETSIM_API_URL here: when it is set, the browser client uses only the direct
+        // endpoint and the same-origin /netsim-api fallback (e2e test 2b) is never exercised.
+        // Without it the client's candidate list is [loopback, /netsim-api] and the harness
+        // exercises both resolution paths against the same authoritative service.
         NETSIM_API_TARGET: `http://127.0.0.1:${API_PORT}`,
-        VITE_NETSIM_API_URL: `http://127.0.0.1:${API_PORT}`,
       },
     },
   ],

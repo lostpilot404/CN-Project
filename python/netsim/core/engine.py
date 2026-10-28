@@ -8,6 +8,7 @@ from typing import Any
 
 from ..faults.model import fault_target_id, fault_type_label
 from ..models.link import Link, LinkStatus
+from ..models.node import Node, NodeType
 from ..models.packet import (
     AppHeader,
     DataLinkHeader,
@@ -19,12 +20,62 @@ from ..models.packet import (
     PhysicalLayerInfo,
     TransportHeader,
 )
+from ..routing.graph import MetricType, RoutingAlgorithm, RoutingGraph
 from .clock import SimTime
 from .delays import calculate_arrival_time_us, calculate_tx_delay_us
 from .events import SimEvent
 from .metrics import SimulationMetrics
+from .overhead import payload_bytes_for
 from .queue import LinkQueue
 from .rng import DeterministicRng
+
+# ---------------------------------------------------------------------------
+# Live packet-forwarding policy
+# ---------------------------------------------------------------------------
+# Packet forwarding is table-driven: at every hop the engine resolves the next hop
+# with the authoritative routing graph (`netsim.routing.graph.RoutingGraph`) using a
+# deterministic shortest-path lookup (the same Dijkstra relaxation and tie-breaking
+# used to build the routing tables shown in the Routing Studio).
+#
+#   algorithm : dijkstra  (deterministic single-source shortest path)
+#   metric    : hop_count (every usable link costs 1)
+#
+# These defaults are explicit so the application, the routing tables and the live
+# packet path agree. `set_forwarding_policy` can change them at runtime — the
+# algorithm may be 'dijkstra' or 'bellman_ford' (both minimise the metric with the
+# same deterministic tie-break, so the chosen policy never changes which path is
+# selected, only the computation that finds it). The active policy is reported in
+# `get_simulation_state`.
+FORWARDING_ALGORITHM_DEFAULT = "dijkstra"
+FORWARDING_METRIC_DEFAULT = MetricType.HOP_COUNT
+
+# Default IP time-to-live and the loop guard. The TTL decrements once per forwarding
+# decision; a packet whose TTL reaches 0 is dropped as `dropped_ttl_expired`. The loop
+# guard additionally drops a packet that revisits the same node more than
+# MAX_NODE_VISITS times (possible only while the topology is changing mid-flight).
+DEFAULT_PACKET_TTL = 64
+MAX_PACKET_TTL = 255
+MAX_NODE_VISITS = 3
+
+
+class ForwardingDecision:
+    """Outcome of a next-hop lookup for live packet forwarding."""
+
+    __slots__ = ("path", "next_link_id", "reachable", "drop_state", "reason")
+
+    def __init__(
+        self,
+        path: list[str] | None,
+        next_link_id: str | None,
+        reachable: bool,
+        drop_state: PacketState | None = None,
+        reason: str = "",
+    ) -> None:
+        self.path = path
+        self.next_link_id = next_link_id
+        self.reachable = reachable
+        self.drop_state = drop_state
+        self.reason = reason
 
 
 class SimulationStatus(str, Enum):
@@ -46,7 +97,10 @@ class SimulationEngine:
         self.rng = DeterministicRng(seed)
         self.next_event_id = 1
         self.next_packet_id = 1
+        self.nodes_cache: dict[str, Node] = {}
         self.links_cache: dict[str, Link] = {}
+        self.forwarding_algorithm: str = FORWARDING_ALGORITHM_DEFAULT
+        self.forwarding_metric: MetricType = FORWARDING_METRIC_DEFAULT
         self.pending_faults: dict[str, dict[str, Any]] = {}
         self.node_pre_fault_link_states: dict[str, dict[str, LinkStatus]] = {}
         self.failed_nodes: set[str] = set()
@@ -71,6 +125,11 @@ class SimulationEngine:
     def all_packets(self) -> list[Packet]:
         return list(self.packets.values())
 
+    def update_topology(self, nodes: list[Node], links: list[Link]) -> None:
+        """Install the authoritative node and link sets used for route resolution."""
+        self.nodes_cache = {node.id: node for node in nodes}
+        self.update_links(links)
+
     def update_links(self, links: list[Link]) -> None:
         self.links_cache.clear()
         current_ids = {lnk.id for lnk in links}
@@ -80,6 +139,66 @@ class SimulationEngine:
             self.links_cache[link.id] = link
             if link.id not in self.link_queues:
                 self.link_queues[link.id] = LinkQueue(link.id, link.queue_capacity)
+        # Register any link endpoints the caller did not describe explicitly so that
+        # route resolution never silently omits a node. First-party code calls
+        # `update_topology` with the real node list; these stubs only appear when the
+        # engine is driven directly with links alone.
+        for link in links:
+            for endpoint in (link.source, link.target):
+                if endpoint.node_id not in self.nodes_cache:
+                    self.nodes_cache[endpoint.node_id] = Node.create(
+                        endpoint.node_id, endpoint.node_id, NodeType.GENERIC, 0.0, 0.0
+                    )
+
+    def _routing_graph(self, include_unavailable: bool = False) -> RoutingGraph:
+        return RoutingGraph.from_topology(
+            list(self.nodes_cache.values()),
+            list(self.links_cache.values()),
+            self.forwarding_metric,
+            include_unavailable=include_unavailable,
+        )
+
+    def resolve_forwarding(self, current_node_id: str, dst_node_id: str) -> ForwardingDecision:
+        """Resolve the next hop toward ``dst_node_id`` from the current topology.
+
+        Uses the authoritative routing graph under the active forwarding policy
+        (algorithm: ``dijkstra`` or ``bellman_ford``; metric: the configured metric)
+        over links that are currently usable. Both algorithms minimise the metric with
+        the same deterministic tie-break, so the live path and the routing tables agree
+        whichever policy is selected. When no usable route exists, the decision records
+        *why*: a path that only exists across DOWN links is classified as
+        ``dropped_link_down``; a topology with no path at all (disconnected destination,
+        or no forward-capable transit node) is classified as ``dropped_no_route``. A
+        packet is never delivered just because no onward link was found.
+        """
+        if current_node_id == dst_node_id:
+            return ForwardingDecision(path=[current_node_id], next_link_id=None, reachable=True)
+        algorithm = RoutingAlgorithm(self.forwarding_algorithm)
+        result = self._routing_graph().find_path(current_node_id, dst_node_id, algorithm=algorithm)
+        if result is not None:
+            path, edges = result
+            if len(path) >= 2 and edges:
+                return ForwardingDecision(path=path, next_link_id=edges[0].link_id, reachable=True)
+            return ForwardingDecision(path=path, next_link_id=None, reachable=True)
+        # Diagnosis: would a route exist if unavailable links were usable?
+        if (
+            self._routing_graph(include_unavailable=True).find_path(current_node_id, dst_node_id, algorithm=algorithm)
+            is not None
+        ):
+            return ForwardingDecision(
+                path=None,
+                next_link_id=None,
+                reachable=False,
+                drop_state=PacketState.DROPPED_LINK_DOWN,
+                reason="Every path to the destination crosses an unavailable link",
+            )
+        return ForwardingDecision(
+            path=None,
+            next_link_id=None,
+            reachable=False,
+            drop_state=PacketState.DROPPED_NO_ROUTE,
+            reason="No route to destination in the current topology",
+        )
 
     def clear_fault_snapshot(self, link_id: str) -> None:
         """Drop a captured pre-fault snapshot.
@@ -137,19 +256,20 @@ class SimulationEngine:
         size_bytes: int,
         app_protocol: str,
         transport_protocol: str,
+        ttl: int = DEFAULT_PACKET_TTL,
     ) -> str:
         packet_id = f"pkt-{self.next_packet_id}"
         self.next_packet_id += 1
 
-        link = self._find_link_for_packet(src_node_id, dst_node_id)
-        if link:
-            target = link.target.node_id if link.source.node_id == src_node_id else link.source.node_id
-            if target == dst_node_id:
-                planned_route = [src_node_id, dst_node_id]
-            else:
-                planned_route = [src_node_id, target, dst_node_id]
-        else:
-            planned_route = [src_node_id, dst_node_id]
+        if ttl < 1 or ttl > MAX_PACKET_TTL:
+            raise ValueError(f"TTL must be between 1 and {MAX_PACKET_TTL} (received {ttl})")
+
+        # ``size_bytes`` is the total on-the-wire packet size; the useful payload is
+        # what remains after the documented network + transport headers (overhead.py).
+        payload_bytes = payload_bytes_for(size_bytes, transport_protocol)
+
+        decision = self.resolve_forwarding(src_node_id, dst_node_id)
+        planned_route = list(decision.path) if decision.path else []
 
         initial_hop = PacketHopRecord(
             hop_index=0,
@@ -172,7 +292,7 @@ class SimulationEngine:
             headers=EncapsulationStack(
                 application=AppHeader(
                     protocol=app_protocol,
-                    payload_preview=f"Data payload ({size_bytes} bytes)",
+                    payload_preview=f"Data payload ({payload_bytes} bytes)",
                     message_type=f"{app_protocol} Data",
                     session_id=None,
                     transaction_id=None,
@@ -187,7 +307,7 @@ class SimulationEngine:
                     ack_num=None,
                     window_size=65535,
                     flags=["ACK"] if transport_protocol == "TCP" else [],
-                    payload_length=size_bytes,
+                    payload_length=payload_bytes,
                     is_retransmission=False,
                     connection_state="ESTABLISHED" if transport_protocol == "TCP" else None,
                 ),
@@ -195,7 +315,7 @@ class SimulationEngine:
                     version=4,
                     src_ip=f"192.168.1.{self.next_packet_id + 10}",
                     dst_ip="10.0.0.100",
-                    ttl=64,
+                    ttl=ttl,
                     protocol_num=6 if transport_protocol == "TCP" else 17,
                     checksum=0xA4F2,
                 ),
@@ -237,10 +357,18 @@ class SimulationEngine:
             f"Packet {packet_id} ({size_bytes} bytes, {app_protocol}/{transport_protocol}) generated at node {src_node_id}",
         )
 
-        if link:
-            link_id = link.id
+        if src_node_id == dst_node_id:
+            # Local delivery: source and destination coincide.
+            self.schedule_event(
+                self.current_time.add_micros(5),
+                "packet_arrived",
+                {"packet_id": packet_id, "node_id": src_node_id, "link_id": None},
+                f"Packet {packet_id} delivered locally at node {src_node_id}",
+            )
+        elif decision.reachable and decision.next_link_id:
+            link_id = decision.next_link_id
             entry_time = self.current_time.add_micros(5)
-            queue_cap = link.queue_capacity
+            queue_cap = self.links_cache[link_id].queue_capacity
 
             self.schedule_event(
                 entry_time,
@@ -251,33 +379,29 @@ class SimulationEngine:
                     "queue_occupancy": self._get_queue_occupancy(link_id),
                     "queue_capacity": queue_cap,
                 },
-                f"Packet {packet_id} entered queue for link {link_id}",
+                f"Packet {packet_id} entered queue for link {link_id} (route: {' -> '.join(planned_route)})",
             )
         else:
+            # No usable route at injection time. This is an explicit failure, never a
+            # delivery: classify the cause (link down vs. no route) and drop exactly once.
+            drop_state = decision.drop_state or PacketState.DROPPED_NO_ROUTE
+            if drop_state == PacketState.DROPPED_LINK_DOWN:
+                self.metrics.record_dropped_link_down()
+            else:
+                self.metrics.record_dropped_no_route()
             self.schedule_event(
                 self.current_time.add_micros(10),
                 "packet_dropped",
                 {
                     "packet_id": packet_id,
-                    "reason": "No route or link available from node",
+                    "reason": decision.reason,
                     "location_id": src_node_id,
-                    "packet_state": PacketState.DROPPED_LINK_DOWN.value,
+                    "packet_state": drop_state.value,
                 },
-                f"Packet {packet_id} dropped: no link found",
+                f"Packet {packet_id} dropped at node {src_node_id}: {decision.reason}",
             )
 
         return packet_id
-
-    def _find_link_for_packet(self, src_node_id: str, dst_node_id: str) -> Link | None:
-        for link in self.links_cache.values():
-            if (link.source.node_id == src_node_id and link.target.node_id == dst_node_id) or (
-                link.target.node_id == src_node_id and link.source.node_id == dst_node_id
-            ):
-                return link
-        for link in self.links_cache.values():
-            if link.source.node_id == src_node_id or link.target.node_id == src_node_id:
-                return link
-        return None
 
     def _get_queue_occupancy(self, link_id: str) -> int:
         q = self.link_queues.get(link_id)
@@ -480,39 +604,97 @@ class SimulationEngine:
             if is_final:
                 if pkt:
                     pkt.state = PacketState.DELIVERED
-                self.metrics.record_delivered(size_bytes, latency_us)
+                # Throughput counts the delivered wire bytes (headers + payload);
+                # goodput counts only the useful payload inside them.
+                transport_proto = pkt.headers.transport.protocol if pkt and pkt.headers.transport else "TCP"
+                payload_bytes = payload_bytes_for(size_bytes, transport_proto)
+                self.metrics.record_delivered(size_bytes, latency_us, payload_bytes)
             else:
-                prev_node = None
-                if pkt and len(pkt.journey_hops) >= 2:
-                    prev_node = pkt.journey_hops[-2]
+                # Table-driven forwarding: resolve the next hop from the current
+                # topology at every transit node. A missing route is an explicit drop,
+                # never an implicit delivery.
+                decision = self.resolve_forwarding(node_id, dst_node_id)
 
-                next_link = None
-                for lnk in self.links_cache.values():
-                    if (lnk.source.node_id == node_id and lnk.target.node_id != prev_node) or (
-                        lnk.target.node_id == node_id and lnk.source.node_id != prev_node
-                    ):
-                        next_link = lnk
-                        break
-
-                if next_link:
-                    link_id = next_link.id
-                    queue_cap = next_link.queue_capacity
-                    occ = self._get_queue_occupancy(link_id)
+                if not decision.reachable or not decision.next_link_id:
+                    drop_state = decision.drop_state or PacketState.DROPPED_NO_ROUTE
+                    if drop_state == PacketState.DROPPED_LINK_DOWN:
+                        self.metrics.record_dropped_link_down()
+                    else:
+                        self.metrics.record_dropped_no_route()
+                    reason = decision.reason or "No onward route from transit node"
                     self.schedule_event(
-                        self.current_time.add_micros(1),
-                        "queue_entered",
+                        self.current_time,
+                        "packet_dropped",
                         {
                             "packet_id": packet_id,
-                            "link_id": link_id,
-                            "queue_occupancy": occ,
-                            "queue_capacity": queue_cap,
+                            "reason": reason,
+                            "location_id": node_id,
+                            "packet_state": drop_state.value,
                         },
-                        f"Packet {packet_id} forwarding: entered queue for link {link_id}",
+                        f"Packet {packet_id} dropped at node {node_id}: {reason}",
                     )
-                else:
-                    if pkt:
-                        pkt.state = PacketState.DELIVERED
-                    self.metrics.record_delivered(size_bytes, latency_us)
+                    return
+
+                # Loop protection: a packet that keeps revisiting the same node (only
+                # possible while the topology is changing mid-flight) is dropped before
+                # it can circulate indefinitely.
+                if pkt and pkt.journey_hops.count(node_id) > MAX_NODE_VISITS:
+                    self.metrics.record_dropped_ttl()
+                    self.schedule_event(
+                        self.current_time,
+                        "packet_dropped",
+                        {
+                            "packet_id": packet_id,
+                            "reason": f"Routing loop detected: node {node_id} visited more than {MAX_NODE_VISITS} times",
+                            "location_id": node_id,
+                            "packet_state": PacketState.DROPPED_TTL_EXPIRED.value,
+                        },
+                        f"Packet {packet_id} dropped: routing loop at node {node_id}",
+                    )
+                    return
+
+                # TTL decrements once per forwarding decision. A packet that runs out of
+                # TTL mid-path is dropped exactly like an IP packet with an expired TTL.
+                if pkt and pkt.headers.network is not None:
+                    pkt.headers.network.ttl = max(0, pkt.headers.network.ttl - 1)
+                    if pkt.headers.network.ttl <= 0:
+                        self.metrics.record_dropped_ttl()
+                        self.schedule_event(
+                            self.current_time,
+                            "packet_dropped",
+                            {
+                                "packet_id": packet_id,
+                                "reason": "TTL expired in transit (hop limit reached)",
+                                "location_id": node_id,
+                                "packet_state": PacketState.DROPPED_TTL_EXPIRED.value,
+                            },
+                            f"Packet {packet_id} dropped: TTL expired at node {node_id}",
+                        )
+                        return
+
+                # Keep the planned route equal to the route actually followed: the
+                # journey so far plus the remaining path just resolved.
+                if pkt and decision.path:
+                    new_planned = list(pkt.journey_hops[:-1]) + list(decision.path)
+                    if pkt.planned_route != new_planned:
+                        pkt.planned_route = new_planned
+
+                link_id = decision.next_link_id
+                next_link = self.links_cache.get(link_id)
+                queue_cap = next_link.queue_capacity if next_link else 1
+                occ = self._get_queue_occupancy(link_id)
+                next_hop = decision.path[1] if decision.path and len(decision.path) >= 2 else dst_node_id
+                self.schedule_event(
+                    self.current_time.add_micros(1),
+                    "queue_entered",
+                    {
+                        "packet_id": packet_id,
+                        "link_id": link_id,
+                        "queue_occupancy": occ,
+                        "queue_capacity": queue_cap,
+                    },
+                    f"Packet {packet_id} forwarding to next hop {next_hop}: entered queue for link {link_id}",
+                )
 
         elif evt_type == "packet_dropped":
             packet_id = evt_data.get("packet_id", "")
@@ -789,6 +971,11 @@ class SimulationEngine:
             "metrics": self.metrics.to_dict(),
             "queues": queues,
             "packets": [p.to_dict() for p in packets_list],
+            "forwarding_policy": {
+                "algorithm": self.forwarding_algorithm,
+                "metric_type": self.forwarding_metric.value,
+                "default_ttl": DEFAULT_PACKET_TTL,
+            },
         }
 
     get_state_snapshot = get_snapshot

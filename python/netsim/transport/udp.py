@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 
 from netsim.core.delays import calculate_tx_delay_us
+from netsim.core.overhead import packet_overhead_bytes
 from netsim.models.project import Project
 from netsim.transport import (
     ConnectionState,
@@ -169,9 +170,14 @@ def simulate_udp(
 
         curr_time_us += 5000
 
+    # Throughput (sender boundary) = every wire byte sent: datagram payload plus the
+    # per-datagram IP+UDP headers (overhead.py). UDP never retransmits.
+    # Goodput (receiver boundary)  = unique payload bytes of delivered datagrams.
     completion_time_us = max(1, curr_time_us)
-    throughput_bits_per_sec = (bytes_sent * 8.0 * 1_000_000.0) / float(completion_time_us)
-    throughput_bytes_per_sec = (bytes_sent * 1_000_000.0) / float(completion_time_us)
+    header_bytes_sent = segments_sent * packet_overhead_bytes("UDP")
+    wire_bytes_sent = bytes_sent + header_bytes_sent
+    throughput_bits_per_sec = (wire_bytes_sent * 8.0 * 1_000_000.0) / float(completion_time_us)
+    throughput_bytes_per_sec = (wire_bytes_sent * 1_000_000.0) / float(completion_time_us)
     goodput_bits_per_sec = (bytes_delivered * 8.0 * 1_000_000.0) / float(completion_time_us)
     total_attempts = segments_sent + segments_lost
     packet_loss_rate = float(segments_lost) / float(total_attempts) if total_attempts > 0 else 0.0
@@ -191,6 +197,9 @@ def simulate_udp(
         throughput_bits_per_sec=throughput_bits_per_sec,
         throughput_bytes_per_sec=throughput_bytes_per_sec,
         goodput_bits_per_sec=goodput_bits_per_sec,
+        retransmitted_payload_bytes=0,
+        header_bytes_sent=header_bytes_sent,
+        wire_bytes_sent=wire_bytes_sent,
         packet_loss_rate=packet_loss_rate,
         sender_window_occupancy_avg=0.0,
         receiver_window_occupancy_max=0,

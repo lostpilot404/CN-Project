@@ -11,14 +11,15 @@
  *     here; those shades were checked arithmetically against the WCAG contrast formula instead.
  *   - Automated rules cannot detect every WCAG criterion; passing this suite is necessary, not
  *     sufficient, for conformance.
- *   - Dialogs and transient states are not opened by the audit.
+ *   - Dialogs and transient states (keyboard help overlay, connect dialog, import confirmation
+ *     dialog, error toast) are opened and audited by test 3.
  */
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 const API = process.env.VITE_NETSIM_API_URL ?? process.env.NETSIM_API_URL ?? 'http://127.0.0.1:8765';
 
-/** The nine top-level workspaces, in sidebar order. */
+/** The ten top-level workspaces, in sidebar order. */
 const WORKSPACES = [
   'Topology Canvas',
   'Routing Studio',
@@ -27,6 +28,7 @@ const WORKSPACES = [
   'Algorithm Studio',
   'Transport Layer',
   'Application Layer',
+  'Circuit Switching',
   'QoS Performance',
   'Batch Experiments',
 ];
@@ -53,6 +55,7 @@ const SUB_VIEWS: { workspace: string; view: string; via?: string }[] = [
   { workspace: 'Transport Layer', view: 'TCP Studio' },
   { workspace: 'Transport Layer', view: 'UDP Studio' },
   { workspace: 'Transport Layer', view: 'Congestion Control' },
+  { workspace: 'Transport Layer', view: 'TCP vs UDP Comparison' },
   { workspace: 'Application Layer', view: 'DNS Studio' },
   { workspace: 'Application Layer', view: 'HTTP Studio' },
   { workspace: 'Application Layer', view: 'FTP Studio' },
@@ -136,5 +139,51 @@ test('2. every sub-view passes the WCAG A/AA audit', async ({ page }) => {
     await expect(control).toHaveAttribute('class', /bg-(indigo|brand|cyan|emerald|teal|amber)-/);
     findings.push(...(await audit(page, `${workspace} > ${view}`)));
   }
+  expect(findings, `\n${report(findings)}\n`).toEqual([]);
+});
+
+test('3. dialogs and transient states pass the WCAG A/AA audit', async ({ page }) => {
+  const findings: Finding[] = [];
+
+  // Keyboard help overlay on the topology canvas.
+  await page.keyboard.press('?');
+  const help = page.getByTestId('keyboard-help-overlay');
+  await expect(help).toBeVisible();
+  findings.push(...(await audit(page, 'Keyboard help overlay')));
+  await page.keyboard.press('Escape');
+  await expect(help).toBeHidden();
+
+  // Keyboard connect dialog on the topology canvas.
+  await page.getByTestId('connect-nodes').click();
+  const connectDialog = page.getByTestId('connect-dialog');
+  await expect(connectDialog).toBeVisible();
+  findings.push(...(await audit(page, 'Connect nodes dialog')));
+  await page.keyboard.press('Escape');
+  await expect(connectDialog).toBeHidden();
+
+  // Import confirmation dialog (confirmation is required before replacing a project).
+  await page.getByTestId('import-project-file').setInputFiles({
+    name: 'dialog-audit.netsim',
+    mimeType: 'application/json',
+    buffer: Buffer.from('{"schemaVersion": 1, "nodes": [], "links": []}'),
+  });
+  const dialog = page.getByTestId('confirm-dialog');
+  await expect(dialog).toBeVisible();
+  findings.push(...(await audit(page, 'Import confirmation dialog')));
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+
+  // Transient toast: a rejected import reports failure without replacing the project.
+  await page.getByTestId('import-project-file').setInputFiles({
+    name: 'broken.netsim',
+    mimeType: 'application/json',
+    buffer: Buffer.from('{not json'),
+  });
+  await expect(dialog).toBeVisible();
+  await page.getByTestId('confirm-dialog-confirm').click();
+  const toast = page.getByTestId('toast-notification');
+  await expect(toast).toBeVisible();
+  findings.push(...(await audit(page, 'Error toast (transient state)')));
+
   expect(findings, `\n${report(findings)}\n`).toEqual([]);
 });

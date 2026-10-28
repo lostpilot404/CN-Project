@@ -78,6 +78,9 @@ export interface TransportMetrics {
   throughput_bits_per_sec: number;
   throughput_bytes_per_sec: number;
   goodput_bits_per_sec: number;
+  retransmitted_payload_bytes: number;
+  header_bytes_sent: number;
+  wire_bytes_sent: number;
   packet_loss_rate: number;
   sender_window_occupancy_avg: number;
   receiver_window_occupancy_max: number;

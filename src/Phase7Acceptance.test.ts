@@ -44,12 +44,16 @@ describe('Phase 7: QoS Metrics, Fault Injection & Experimentation Acceptance Tes
     expect(categories.link_down).toBeGreaterThanOrEqual(0);
     expect(categories.bit_error).toBeGreaterThanOrEqual(0);
     expect(categories.stochastic_loss).toBeGreaterThanOrEqual(0);
+    expect(categories.ttl_expired).toBeGreaterThanOrEqual(0);
+    expect(categories.no_route).toBeGreaterThanOrEqual(0);
 
     const sumCategories =
       categories.queue_overflow +
       categories.link_down +
       categories.bit_error +
-      categories.stochastic_loss;
+      categories.stochastic_loss +
+      categories.ttl_expired +
+      categories.no_route;
     expect(sumCategories).toBe(qos.packets_lost);
   });
 

@@ -29,7 +29,7 @@ export const PacketMarker: React.FC<PacketMarkerProps> = ({
     created: { bg: 'bg-slate-900', border: 'border-slate-700', text: 'text-slate-300', icon: Package },
     queued: { bg: 'bg-amber-950/80', border: 'border-amber-700', text: 'text-amber-300', icon: Clock },
     transmitting: { bg: 'bg-cyan-950/90', border: 'border-cyan-500 animate-pulse', text: 'text-cyan-300', icon: Send },
-    in_flight: { bg: 'bg-indigo-950/80', border: 'border-indigo-600', text: 'text-indigo-300', icon: Send },
+    in_flight: { bg: 'bg-brand-950/80', border: 'border-brand-600', text: 'text-brand-300', icon: Send },
     arrived: { bg: 'bg-teal-950/80', border: 'border-teal-600', text: 'text-teal-300', icon: CheckCircle2 },
     delivered: { bg: 'bg-emerald-950/80', border: 'border-emerald-500', text: 'text-emerald-300', icon: CheckCircle2 },
     dropped_queue_full: { bg: 'bg-rose-950/80', border: 'border-rose-600', text: 'text-rose-300', icon: AlertOctagon },
@@ -58,7 +58,7 @@ export const PacketMarker: React.FC<PacketMarkerProps> = ({
         {protocol}
       </span>
       <span className="text-[10px] text-slate-400">{sizeBytes}B</span>
-      <span className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded ${currentCfg.text}`}>
+      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${currentCfg.text}`}>
         {normalizedState.replace(/_/g, ' ')}
       </span>
     </div>

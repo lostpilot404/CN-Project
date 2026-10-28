@@ -215,7 +215,7 @@ export const PropertyEditor: React.FC<PropertyEditorProps> = ({
                 <label className="block text-[11px] font-medium text-slate-400 mb-1">
                   Device Type
                 </label>
-                <div className="px-2.5 py-1.5 rounded-lg bg-slate-950/60 border border-slate-800/80 text-slate-300 font-mono text-[11px] uppercase">
+                <div className="px-2.5 py-1.5 rounded-lg bg-slate-950/60 border border-slate-800/80 text-slate-300 font-mono text-[11px]">
                   {selectedNode.node_type}
                 </div>
               </div>
@@ -236,7 +236,7 @@ export const PropertyEditor: React.FC<PropertyEditorProps> = ({
             {/* Interfaces List */}
             <div className="pt-2 border-t border-slate-800/80">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold tracking-wider text-slate-400 flex items-center gap-1.5">
                   <Layers className="w-3.5 h-3.5 text-slate-400" />
                   Interfaces ({selectedNode.interfaces.length})
                 </span>

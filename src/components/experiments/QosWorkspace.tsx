@@ -141,13 +141,10 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
       <div className="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur px-6 py-4 flex items-center justify-between">
         <div>
           <div className="flex items-center space-x-2.5">
-            <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+            <div className="p-1.5 rounded-lg bg-brand-500/10 text-brand-400 border border-brand-500/20">
               <BarChart3 className="w-5 h-5" />
             </div>
-            <h2 className="text-lg font-bold text-slate-100 tracking-tight">QoS Performance & Fault Studio</h2>
-            <span className="text-xs px-2.5 py-0.5 rounded-full font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-              Phase 7 Authoritative
-            </span>
+            <h2 className="text-lg font-bold text-slate-100 tracking-tight">QoS Performance</h2>
           </div>
           <p className="text-xs text-slate-400 mt-1">
             RFC 3393 educational IPDV jitter, throughput & goodput telemetry, category loss accounting, and runtime fault injection.
@@ -159,7 +156,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
           disabled={isLoading}
           className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-indigo-400' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-brand-400' : ''}`} />
           <span>Refresh Metrics</span>
         </button>
       </div>
@@ -187,16 +184,15 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Card 1: Throughput & Goodput */}
           <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 hover:border-slate-700/80 transition relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl group-hover:bg-indigo-700/10 transition" />
             <div className="flex items-center justify-between text-slate-400 text-xs font-medium mb-1">
-              <span>Throughput</span>
-              <Zap className="w-4 h-4 text-indigo-400" />
+              <span title="Gross delivered wire rate: packet/segment headers and payload together">Throughput (wire)</span>
+              <Zap className="w-4 h-4 text-brand-400" />
             </div>
             <div className="text-xl font-bold text-slate-100">
               {metrics ? formatBps(metrics.throughput_bits_per_sec) : '0 bps'}
             </div>
             <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
-              <span>Goodput: <strong className="text-emerald-400">{metrics ? formatBps(metrics.goodput_bits_per_sec) : '0 bps'}</strong></span>
+              <span title="Net useful payload rate: unique delivered payload only">Goodput (payload): <strong className="text-emerald-400">{metrics ? formatBps(metrics.goodput_bits_per_sec) : '0 bps'}</strong></span>
               <span>{metrics ? formatBytes(metrics.throughput_bytes_per_sec) : '0 B/s'}</span>
             </div>
           </div>
@@ -264,81 +260,35 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
             </div>
 
             <div className="space-y-3">
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-300">Queue Buffer Overflow</span>
-                  <span className="font-mono text-slate-200">{metrics?.loss_by_category.queue_overflow || 0} pkts</span>
+              {(
+                [
+                  ['Queue Buffer Overflow', 'queue_overflow', 'bg-amber-500'],
+                  ['Link Administratively Down', 'link_down', 'bg-rose-500'],
+                  ['Physical Bit Error Corruption', 'bit_error', 'bg-purple-500'],
+                  ['Stochastic Link Drop Probability', 'stochastic_loss', 'bg-blue-500'],
+                  ['TTL / Hop Limit Expired', 'ttl_expired', 'bg-cyan-500'],
+                  ['No Route to Destination', 'no_route', 'bg-slate-500'],
+                ] as const
+              ).map(([label, key, barColor]) => (
+                <div key={key}>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-slate-300">{label}</span>
+                    <span className="font-mono text-slate-200">{metrics?.loss_by_category[key] || 0} pkts</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div
+                      className={`h-full ${barColor} transition-all`}
+                      style={{
+                        width: `${
+                          metrics && metrics.packets_lost > 0
+                            ? ((metrics.loss_by_category[key] / metrics.packets_lost) * 100).toFixed(1)
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                  <div
-                    className="h-full bg-amber-500 transition-all"
-                    style={{
-                      width: `${
-                        metrics && metrics.packets_lost > 0
-                          ? ((metrics.loss_by_category.queue_overflow / metrics.packets_lost) * 100).toFixed(1)
-                          : 0
-                      }%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-300">Link Administratively Down</span>
-                  <span className="font-mono text-slate-200">{metrics?.loss_by_category.link_down || 0} pkts</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                  <div
-                    className="h-full bg-rose-500 transition-all"
-                    style={{
-                      width: `${
-                        metrics && metrics.packets_lost > 0
-                          ? ((metrics.loss_by_category.link_down / metrics.packets_lost) * 100).toFixed(1)
-                          : 0
-                      }%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-300">Physical Bit Error Corruption</span>
-                  <span className="font-mono text-slate-200">{metrics?.loss_by_category.bit_error || 0} pkts</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                  <div
-                    className="h-full bg-purple-500 transition-all"
-                    style={{
-                      width: `${
-                        metrics && metrics.packets_lost > 0
-                          ? ((metrics.loss_by_category.bit_error / metrics.packets_lost) * 100).toFixed(1)
-                          : 0
-                      }%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-300">Stochastic Link Drop Probability</span>
-                  <span className="font-mono text-slate-200">{metrics?.loss_by_category.stochastic_loss || 0} pkts</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                  <div
-                    className="h-full bg-blue-500 transition-all"
-                    style={{
-                      width: `${
-                        metrics && metrics.packets_lost > 0
-                          ? ((metrics.loss_by_category.stochastic_loss / metrics.packets_lost) * 100).toFixed(1)
-                          : 0
-                      }%`,
-                    }}
-                  />
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 
@@ -354,32 +304,32 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
-                <div className="text-[11px] text-slate-400">Avg Queue Occupancy</div>
-                <div className="text-lg font-bold text-slate-100 mt-0.5">
+            <dl className="grid grid-cols-2 gap-x-8 gap-y-4 pt-1">
+              <div>
+                <dt className="text-[11px] text-slate-400">Avg queue occupancy</dt>
+                <dd className="text-lg font-bold text-slate-100 mt-0.5">
                   {metrics?.queue_occupancy_average.toFixed(2) || '0.00'} pkts
-                </div>
+                </dd>
               </div>
-              <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
-                <div className="text-[11px] text-slate-400">Peak Queue Occupancy</div>
-                <div className="text-lg font-bold text-slate-100 mt-0.5">
+              <div>
+                <dt className="text-[11px] text-slate-400">Peak queue occupancy</dt>
+                <dd className="text-lg font-bold text-slate-100 mt-0.5">
                   {metrics?.queue_occupancy_max || 0} pkts
-                </div>
+                </dd>
               </div>
-              <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
-                <div className="text-[11px] text-slate-400">Retransmissions</div>
-                <div className="text-lg font-bold text-slate-100 mt-0.5">
+              <div>
+                <dt className="text-[11px] text-slate-400">Retransmissions</dt>
+                <dd className="text-lg font-bold text-slate-100 mt-0.5">
                   {metrics?.retransmissions || 0}
-                </div>
+                </dd>
               </div>
-              <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
-                <div className="text-[11px] text-slate-400">Average RTT</div>
-                <div className="text-lg font-bold text-slate-100 mt-0.5">
+              <div>
+                <dt className="text-[11px] text-slate-400">Average RTT</dt>
+                <dd className="text-lg font-bold text-slate-100 mt-0.5">
                   {metrics?.average_rtt_us != null ? formatMicro(metrics.average_rtt_us) : '—'}
-                </div>
+                </dd>
               </div>
-            </div>
+            </dl>
           </div>
         </div>
 
@@ -450,7 +400,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
               <h3 className="text-sm font-semibold text-slate-200">Runtime Fault Injection Panel</h3>
             </div>
             <span className="text-[11px] text-slate-400">
-              Authoritatively scheduled into discrete simulation clock
+              Scheduled on the discrete simulation clock
             </span>
           </div>
 
@@ -461,7 +411,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
               <select aria-label="Fault Action"
                 value={faultType}
                 onChange={(e) => setFaultType(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-brand-500"
               >
                 <option value="link_down">Link Down (Break link)</option>
                 <option value="link_restore">Link Restore (Repair link)</option>
@@ -479,7 +429,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
               <select aria-label="Target Resource"
                 value={targetId}
                 onChange={(e) => setTargetId(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-brand-500"
               >
                 {faultType.startsWith('node_') ? (
                   project?.nodes.map((n) => (
@@ -508,7 +458,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
                 step="1000"
                 value={faultTimestampUs}
                 onChange={(e) => setFaultTimestampUs(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-brand-500"
               />
             </div>
 
@@ -536,7 +486,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
                 }
                 value={faultParamValue}
                 onChange={(e) => setFaultParamValue(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-indigo-500 disabled:opacity-60"
+                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-brand-500 disabled:opacity-60"
               />
             </div>
           </div>
@@ -544,7 +494,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
           <div className="flex justify-end pt-2">
             <button
               onClick={handleScheduleFault}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/20 transition flex items-center space-x-2"
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-600/20 transition flex items-center space-x-2"
             >
               <Sliders className="w-3.5 h-3.5" />
               <span>Schedule Fault Event</span>
@@ -554,7 +504,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
           {/* Scheduled Faults History */}
           {scheduledFaults.length > 0 && (
             <div className="pt-3 border-t border-slate-800">
-              <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+              <h4 className="text-xs font-semibold text-slate-400 tracking-wider mb-2">
                 Scheduled Fault Pipeline
               </h4>
               <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
@@ -564,7 +514,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
                     className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800/80 flex items-center justify-between text-xs"
                   >
                     <div className="flex items-center space-x-2">
-                      <span className="font-mono text-indigo-400 font-semibold">{sf.fault_id}</span>
+                      <span className="font-mono text-brand-400 font-semibold">{sf.fault_id}</span>
                       <span className="text-slate-300">{sf.description}</span>
                     </div>
                     <span className="font-mono text-slate-400 text-[11px]">{sf.timestamp_us} µs</span>

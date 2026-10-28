@@ -10,6 +10,7 @@ import { ApplicationWorkspace } from './components/application/ApplicationWorksp
 import { SimulationStudio } from './components/simulation/SimulationStudio';
 import { QosWorkspace } from './components/experiments/QosWorkspace';
 import { ExperimentsWorkspace } from './components/experiments/ExperimentsWorkspace';
+import { SwitchingWorkspace } from './components/switching/SwitchingWorkspace';
 import { ControlBar } from './components/simulation/ControlBar';
 import { TimelineDrawer } from './components/timeline/TimelineDrawer';
 import { api, subscribeBackendStatus, checkBackendHealth } from './lib/api';
@@ -164,6 +165,20 @@ export function App() {
     }
   };
 
+  const handleLoadProject = async (jsonContent: string) => {
+    try {
+      // The service validates before it replaces anything: a rejected import leaves
+      // the current project untouched. Success is only reported after that reply.
+      const loaded = await api.loadProjectJson(jsonContent);
+      setProject(loaded);
+      await refreshProject();
+      await refreshSimulation();
+      showToast('Project imported', 'success');
+    } catch (err) {
+      showToast(`Import failed: ${describeError(err)}`, 'error');
+    }
+  };
+
   const handleResetProject = async () => {
     try {
       const snap = await api.resetSimulation();
@@ -210,15 +225,17 @@ export function App() {
     await refreshSimulation();
   };
 
-  const handleConnectNodes = async (sourceId: string, targetId: string) => {
+  const handleConnectNodes = async (sourceId: string, targetId: string): Promise<string | null> => {
     try {
       await api.addLink(sourceId, targetId);
       await refreshProject();
       await refreshSimulation();
       showToast('Connection created successfully', 'success');
+      return null;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       showToast(msg, 'error');
+      return msg;
     }
   };
 
@@ -352,6 +369,7 @@ export function App() {
         currentTimeUs={currentTimeUs}
         onNewProject={handleNewProject}
         onSaveProject={handleSaveProject}
+        onLoadProject={handleLoadProject}
         onResetProject={handleResetProject}
         backendStatus={backendStatus}
       />
@@ -391,6 +409,8 @@ export function App() {
             <TransportWorkspace project={project} />
           ) : activeTab === 'application' ? (
             <ApplicationWorkspace project={project} />
+          ) : activeTab === 'switching' ? (
+            <SwitchingWorkspace project={project} />
           ) : activeTab === 'qos' ? (
             <QosWorkspace project={project} />
           ) : activeTab === 'experiments' ? (
@@ -427,6 +447,8 @@ export function App() {
           {toast && (
             <div
               data-testid="toast-notification"
+              role={toast.type === 'error' ? 'alert' : 'status'}
+              aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
               className={`fixed bottom-16 right-6 z-50 px-4 py-2.5 rounded-xl shadow-2xl backdrop-blur-md border text-xs font-medium flex items-center space-x-2 transition-all duration-300 animate-in fade-in slide-in-from-bottom-2 ${
                 toast.type === 'error'
                   ? 'bg-rose-950/90 text-rose-200 border-rose-800/80 shadow-rose-950/50'

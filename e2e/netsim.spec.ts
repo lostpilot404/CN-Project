@@ -387,7 +387,7 @@ test.describe('NetSim full-stack end-to-end', () => {
   test('11. Algorithm studio: Hamming, CRC and checksum computed through the UI', async ({ page }) => {
     await resetProject(page, 'datalink');
     await page.getByRole('button', { name: 'Algorithm Studio' }).click();
-    await expect(page.locator('h1', { hasText: 'Data Link Layer Protocol & Algorithm Studio' })).toBeVisible();
+    await expect(page.locator('h1', { hasText: 'Algorithm Studio' })).toBeVisible();
 
     // --- Hamming: encode 1011 through the UI and read the rendered codeword -------------
     await page.getByRole('button', { name: 'Encode into Hamming Codeword' }).click();
@@ -595,7 +595,7 @@ test.describe('NetSim full-stack end-to-end', () => {
     await command(page, 'run_simulation_until_empty');
 
     await page.getByRole('button', { name: 'QoS Performance' }).click();
-    await expect(page.locator('h2', { hasText: 'QoS Performance & Fault Studio' })).toBeVisible();
+    await expect(page.locator('h2', { hasText: 'QoS Performance' })).toBeVisible();
     await expect(page.locator('text=Average Latency')).toBeVisible();
 
     const metrics = await command<{ packets_sent: number; packets_delivered: number; average_latency_us: number }>(
@@ -681,6 +681,9 @@ test.describe('NetSim full-stack end-to-end', () => {
       { width: 1440, height: 900 },
       { width: 1280, height: 720 },
       { width: 1024, height: 768 },
+      { width: 768, height: 900 },
+      { width: 375, height: 812 },
+      { width: 320, height: 700 },
     ];
     const workspaces = [
       'Topology Canvas',
@@ -690,6 +693,7 @@ test.describe('NetSim full-stack end-to-end', () => {
       'Algorithm Studio',
       'Transport Layer',
       'Application Layer',
+      'Circuit Switching',
       'QoS Performance',
       'Batch Experiments',
     ];
@@ -705,5 +709,60 @@ test.describe('NetSim full-stack end-to-end', () => {
         expect(overflow, `${workspace} overflows by ${overflow}px at ${viewport.width}x${viewport.height}`).toBeLessThanOrEqual(1);
       }
     }
+  });
+
+  test('22. Topology editor: create a connection through the keyboard workflow', async ({ page }) => {
+    await resetProject(page, 'connect-keyboard');
+    const before = await command<{ links: unknown[] }>(page, 'get_project');
+    expect(before.links).toHaveLength(2);
+
+    // The toolbar button is rendered (and disabled) while the project is still loading; its
+    // enabled state is the readiness signal for the 'c' shortcut, which also requires a loaded
+    // project with at least two nodes. keyboard.press has no actionability check, so assert it.
+    await expect(page.getByTestId('connect-nodes')).toBeEnabled();
+    // The 'c' shortcut opens the dialog without touching the pointer.
+    await page.keyboard.press('c');
+    const dialog = page.getByTestId('connect-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveAttribute('role', 'dialog');
+    // Focus lands on the first field, so the workflow is operable from the keyboard alone.
+    await expect(page.getByLabel('Source node')).toBeFocused();
+
+    // Defaults: source = first node, target = last node — node-1 -> node-3 is a new link.
+    await page.getByTestId('connect-dialog-confirm').click();
+    await expect(dialog).toBeHidden();
+
+    const after = await command<{ links: { source: { node_id: string }; target: { node_id: string } }[] }>(
+      page,
+      'get_project'
+    );
+    expect(after.links).toHaveLength(3);
+    const added = after.links.find(
+      (l) =>
+        (l.source.node_id === 'node-1' && l.target.node_id === 'node-3') ||
+        (l.source.node_id === 'node-3' && l.target.node_id === 'node-1')
+    );
+    expect(added, 'the keyboard workflow must create the node-1 <-> node-3 link').toBeTruthy();
+  });
+
+  test('23. Topology editor: the connection dialog validates choices and cancels cleanly', async ({ page }) => {
+    await resetProject(page, 'connect-validation');
+
+    // Open via the toolbar button this time (pointer and keyboard entry points both work).
+    await page.getByTestId('connect-nodes').click();
+    const dialog = page.getByTestId('connect-dialog');
+    await expect(dialog).toBeVisible();
+
+    // Connecting a node to itself is rejected before any backend call.
+    await page.getByLabel('Target node').selectOption('node-1');
+    await page.getByTestId('connect-dialog-confirm').click();
+    await expect(page.getByRole('alert')).toContainText('cannot connect to itself');
+    await expect(dialog).toBeVisible();
+
+    // Escape closes the dialog and changes nothing.
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    const project = await command<{ links: unknown[] }>(page, 'get_project');
+    expect(project.links).toHaveLength(2);
   });
 });

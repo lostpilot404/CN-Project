@@ -19,7 +19,17 @@ import {
   Interface,
   HistoryStatus,
 } from '../types/topology';
-import { SimulationStateSnapshot, SimEvent, Packet } from '../types/simulation';
+import {
+  SimulationStateSnapshot,
+  SimEvent,
+  Packet,
+  ForwardingPolicy,
+} from '../types/simulation';
+import {
+  Circuit,
+  CircuitRequestResult,
+  CircuitState,
+} from '../types/switching';
 import {
   MetricType,
   RoutingAlgorithm,
@@ -209,7 +219,8 @@ export const api = {
     dstNodeId: string,
     sizeBytes?: number,
     appProtocol?: string,
-    transportProtocol?: string
+    transportProtocol?: string,
+    ttl?: number
   ) =>
     callCommand<string>('inject_packet', {
       srcNodeId,
@@ -217,6 +228,7 @@ export const api = {
       sizeBytes,
       appProtocol,
       transportProtocol,
+      ttl,
     }),
   getPacketDetails: (packetId: string) =>
     callCommand<Packet | null>('get_packet_details', { packetId }),
@@ -341,6 +353,19 @@ export const api = {
   // Phase 7: QoS Performance & Experiments
   getCurrentQosMetrics: () =>
     callCommand<QosMetrics>('get_current_qos_metrics'),
+  setForwardingPolicy: (algorithm: string, metricType: string) =>
+    callCommand<ForwardingPolicy>('set_forwarding_policy', { algorithm, metricType }),
+  // Circuit switching (educational admission-control model)
+  requestCircuit: (sourceNodeId: string, targetNodeId: string, bandwidthBps: number, circuitId?: string) =>
+    callCommand<CircuitRequestResult>('request_circuit', {
+      sourceNodeId,
+      targetNodeId,
+      bandwidthBps,
+      circuitId,
+    }),
+  teardownCircuit: (circuitId: string) =>
+    callCommand<Circuit>('teardown_circuit', { circuitId }),
+  getCircuitState: () => callCommand<CircuitState>('get_circuit_state'),
   scheduleFault: (entry: FaultScheduleEntry) =>
     callCommand<void>('schedule_fault_command', { entry }),
   runParameterSweep: (config: SweepConfig) =>

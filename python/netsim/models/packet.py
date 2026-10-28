@@ -18,6 +18,7 @@ class PacketState(str, Enum):
     DROPPED_LINK_DOWN = "dropped_link_down"
     DROPPED_LINK_LOSS = "dropped_link_loss"
     DROPPED_TTL_EXPIRED = "dropped_ttl_expired"
+    DROPPED_NO_ROUTE = "dropped_no_route"
     RETRANSMITTED = "retransmitted"
 
     @classmethod
@@ -29,6 +30,7 @@ class PacketState(str, Enum):
             cls.DROPPED_LINK_DOWN,
             cls.DROPPED_LINK_LOSS,
             cls.DROPPED_TTL_EXPIRED,
+            cls.DROPPED_NO_ROUTE,
         )
 
     def is_terminal_drop(self) -> bool:
