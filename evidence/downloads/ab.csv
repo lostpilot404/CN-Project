@@ -1,7 +1,0 @@
-metric,scenario_a,scenario_b,absolute_delta,percent_change
-throughput_bps,800000,800000,0,0
-goodput_bps,800000,800000,0,0
-latency_us,5085,13005,7920,155.75221238938053
-jitter_us,0,0,0,
-loss_rate,0,0,0,
-retransmissions,0,0,0,

@@ -1,5 +1,10 @@
 # Final feature-branch verification and release gate
 
+> **Consolidation note (2026-10-28):** the binary evidence folders referenced below
+> (`audit-evidence/`, `evidence/`, `docs/evidence/`) were removed from HEAD when all
+> work branches were consolidated into `main` (project-only cleanup). The files remain
+> available in git history on the pre-consolidation branch commits merged by that PR.
+
 **Date:** 2026-10-27 (Asia/Calcutta). **Branch:** `arena/fd51edb2-cn-project`.
 Evidence is committed alongside the tested implementation. Resolve its containing commit with
 `git log -1 --format=%H -- docs/FINAL_VERIFICATION.md`; the final response reports the pushed SHA

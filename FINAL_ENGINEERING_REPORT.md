@@ -1,5 +1,10 @@
 # NetSim — Final Engineering Report
 
+> **Consolidation note (2026-10-28):** the binary evidence folders referenced below
+> (`audit-evidence/`, `evidence/`, `docs/evidence/`) were removed from HEAD when all
+> work branches were consolidated into `main` (project-only cleanup). The files remain
+> available in git history on the pre-consolidation branch commits merged by that PR.
+
 **Project:** NetSim — Interactive Computer Network Simulation and Performance Analysis Platform
 **Repository:** https://github.com/lostpilot404/CN-Project
 **Branch:** `arena/541edc3e-cn-project` (never merged into `main`; all work confined to this branch)

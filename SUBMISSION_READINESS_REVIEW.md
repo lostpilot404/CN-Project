@@ -1,5 +1,10 @@
 # NetSim — Submission Readiness Review
 
+> **Consolidation note (2026-10-28):** the binary evidence folders referenced below
+> (`audit-evidence/`, `evidence/`, `docs/evidence/`) were removed from HEAD when all
+> work branches were consolidated into `main` (project-only cleanup). The files remain
+> available in git history on the pre-consolidation branch commits merged by that PR.
+
 - **Date:** 2026-10-24
 - **Branch:** `arena/e7239da9-cn-project` (based on `d213648f3679b9c94b1326cc065d84640f1d5b9d` of `main`; `main` untouched, no force-push)
 - **Method:** genuine hands-on verification — Playwright (Chromium) against the Vite dev
