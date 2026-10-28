@@ -1,7 +1,7 @@
 name: CI
 
 # Full verification gate for NetSim. Every command here is one of the documented
-# verification steps in TESTING.md — CI runs exactly what a developer runs locally.
+# verification steps in docs/testing.md — CI runs exactly what a developer runs locally.
 #
 # Node is pinned to 22.22.2 (not '20'): the jsdom 30 / @testing-library/jest-dom 7
 # line requires ^22.22.2 || ^24.15.0 || >=26.0.0 and undici 8 requires >=22.19.0.

@@ -14,7 +14,7 @@ in `python/tests/test_independent_validation.py` were derived from them by hand.
 > Each section that involves modelling scope carries a **Status** line stating what the current
 > Python implementation actually does — *Implemented*, *Partial* (real behaviour with documented
 > boundaries), or *Illustrative* (model output that does not claim production protocol behaviour).
-> The consolidated scope table lives in `README.md` (§ Implementation scope).
+> The consolidated scope summary lives in the [README](../README.md) (§ Scope and limitations).
 
 ## 2. Routing
 

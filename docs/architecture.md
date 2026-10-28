@@ -1,13 +1,7 @@
 # NetSim — Architecture
 
 This document describes the architecture **as implemented today**. Python is the sole simulation
-authority; the front-end is a presentation layer. For setup and verification status see
-[`README.md`](README.md); for audit evidence see [`QUALITY_AUDIT_REPORT.md`](QUALITY_AUDIT_REPORT.md).
-
-> **Note for readers of earlier revisions.** This file previously described a Rust-first design with
-> a Tauri desktop shell and listed SQLite, CI pipelines and an optional Python toolkit as
-> components. None of those exist. The Rust engine was a complete second implementation of the
-> simulator and has been removed; §14 lists what was retired and why.
+authority; the front-end is a presentation layer. For setup see the [README](../README.md).
 
 ## 1. Architecture decision
 
@@ -216,7 +210,7 @@ configurations. A sweep returns `points[]`, each aggregating `runs[]` per seed w
 
 ## 13. Testing
 
-See [`TESTING.md`](TESTING.md) for the layers and commands. In summary: Python unit and API-contract
+See [testing.md](testing.md) for the layers and commands. In summary: Python unit and API-contract
 tests, front-end unit/component tests, integration tests against a running service, and Playwright
 browser tests against the real application.
 
@@ -232,11 +226,11 @@ The following no longer exist and must not be reintroduced:
 | `TAURI_ENV_*` build variables | Drove the Vite build target for the removed shell |
 | Front-end IPC fallback | Could silently switch the simulation engine away from Python when the service was unreachable |
 
-## Experiment execution boundary (targeted implementation update)
+## Experiment execution boundary
 
 `experiments/runner.py` explicitly dispatches `network` (legacy omitted target), `tcp` and `udp`.
 Only supported parameters pass validation. Dedicated flow-control, MAC and application studios
 remain separate and are not substituted through the general runner. Exported results include a
 versioned configuration/topology snapshot, per-run evidence and an engine-source fingerprint.
-See [the workflow contract](docs/EXPERIMENT_WORKFLOW.md) for model timing, metric limitations,
+See [the workflow contract](experiment-workflow.md) for model timing, metric limitations,
 replay and the supported parameter matrix. There is no new simulation engine in the frontend.

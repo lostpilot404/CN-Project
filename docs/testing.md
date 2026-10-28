@@ -1,12 +1,9 @@
 # NetSim — Testing Strategy
 
 This document describes the test strategy actually implemented in this repository and the commands
-that run it. For current measured results, see [final verification](docs/FINAL_VERIFICATION.md); the
-[`QUALITY_AUDIT_REPORT.md`](QUALITY_AUDIT_REPORT.md) is historical; for the
-architecture under test, see [`README.md`](README.md).
-
-> Earlier revisions of this file described a Rust test strategy. That engine has been removed;
-> Python is the sole simulation authority and the layers below are the ones that exist today.
+that run it. For the architecture under test, see [architecture.md](architecture.md) and the
+[README](../README.md). CI (`.github/workflows/ci.yml`) runs the same commands on every push and
+pull request.
 
 ## 1. Objective
 
@@ -236,7 +233,8 @@ browser you already have:
 NETSIM_CHROMIUM_PATH=/path/to/chromium npx playwright test
 ```
 
-`README.md` documents a self-contained npm-published Chromium for hosts with no browser at all.
+`NETSIM_CHROMIUM_PATH` also accepts a self-contained npm-published Chromium on hosts with no
+browser at all.
 When no browser can be obtained, the suite is **not run** and must be reported as not verified —
 selector inspection and TypeScript compilation are not browser tests.
 
@@ -261,11 +259,3 @@ selector inspection and TypeScript compilation are not browser tests.
    trusting the rendered label alone.
 6. To extend accessibility coverage, add the view to `WORKSPACES` or `SUB_VIEWS` in
    `e2e/a11y.spec.ts`; sub-views nested inside another sub-view need a `via` entry.
-
-## Final feature-branch acceptance (2026-10-27)
-
-Current counts: 277 Python tests (197 backend + 80 utility); 95 frontend tests with 11 default
-opt-in skips; 11 separately run live integration tests; 31 Chromium E2E tests. Lint/format, mypy,
-TypeScript and production build pass. See [final verification](docs/FINAL_VERIFICATION.md) for logs,
-warnings and precise limits. Six actual browser downloads (three targets × sweep/A-B) were replayed,
-not replaced by API/unit checks. Direct Packet Tracer execution remains unverified.
