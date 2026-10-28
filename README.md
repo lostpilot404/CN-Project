@@ -3,6 +3,28 @@
 NetSim is an educational computer-network simulator: a discrete-event simulation core written in
 **Python 3.11+** and a **React 18 + TypeScript** front-end that renders what the core returns.
 
+## Educational contribution and implementation audit
+
+NetSim targets students and instructors exploring how networking algorithms respond to controlled
+inputs. Its defensible contribution is an integrated, inspectable teaching workflow—not a new
+networking algorithm or demonstrated superiority over Packet Tracer.
+
+See the [implementation-aware novelty audit](docs/IMPLEMENTATION_NOVELTY_AUDIT.md) for the
+feature evidence, related-tool comparison, limitations and prioritized changes. The existing
+**Flow Control comparison mode** already compares Go-Back-N and Selective Repeat using matched
+inputs. A [reproducible example](examples/compare_flow_control.py) exports both traces and metrics:
+
+```bash
+PYTHONPATH=python python examples/compare_flow_control.py > flow-comparison.json
+```
+
+**Current boundary:** the general runner explicitly dispatches topology packets (`network`), TCP
+bulk transfer and UDP bulk transfer. Other targets and unsupported parameter combinations fail
+clearly. Sweep/A-B downloads include full configuration, topology and per-run evidence; see
+[the workflow and replay guide](docs/EXPERIMENT_WORKFLOW.md) for supported settings and model
+limitations. The [project report](PROJECT_REPORT.md) now describes the Python-backed runtime.
+The dated novelty audit records the pre-fix baseline, not the current completion status.
+
 ## Architecture and ownership
 
 **Python is the sole simulation authority.** All simulation state, protocol execution, packet
@@ -86,22 +108,40 @@ fails loudly with the operating system's bind error rather than silently serving
 
 ## Verification status
 
-Every count below was produced by running the command in this repository (2026-10-16). See
-[`QUALITY_AUDIT_REPORT.md`](QUALITY_AUDIT_REPORT.md) for the historical evidence and for the list
-of checks that could not be executed in earlier audit environments.
+Final verification date: **2026-10-27**. Current results and limitations are recorded in
+[the final release gate](docs/FINAL_VERIFICATION.md), with [committed logs and browser artifacts](docs/evidence/2026-10-27/).
+The older `QUALITY_AUDIT_REPORT.md` is a historical baseline, not the current test-count source.
 
-| Suite | Command | Result |
+| Suite | Command | Final-source result |
 |---|---|---|
-| Python tests | `.venv/bin/python -m pytest python/tests -q` | **217 passed** |
-| Utility tests (`python-tools/`) | `.venv/bin/pytest python-tools/tests -q` | **83 passed** |
-| Python lint + format | `.venv/bin/ruff check . && .venv/bin/ruff format --check python/ python-tools/` | clean (80 files) |
-| Python static types | `.venv/bin/mypy` | **clean** (67 files, no `# type: ignore`) |
-| Front-end typecheck | `npx tsc --noEmit` | clean |
-| Front-end unit/component tests | `npx vitest run` | **124 passed, 11 skipped** (live suite opt-in) |
-| Front-end ↔ service integration | `NETSIM_LIVE_API=1 npx vitest run src/integration` | **11 passed** (real service) |
-| Production build | `npm run build` | succeeds; split chunks (largest ≈ 375 kB, was 1115 kB); the bundle contains only the inert test-double stub, never the full double |
-| Browser end-to-end (cold start) | `npx playwright test` | **27 passed** in a real Chromium (24 functional + 3 axe-core accessibility, both servers started by the suite itself) |
-| Accessibility audit alone | `npx playwright test e2e/a11y.spec.ts` | **3 passed** — 10 workspaces, 24 sub-views, plus dialogs and transient states (keyboard help, Connect dialog, import confirmation, error toast) audited with axe-core (WCAG 2.0/2.1 A+AA) |
+| Python backend + utilities | `.venv/bin/python -m pytest python/tests python-tools/tests -q` | **277 passed** (197 + 80) |
+| Python lint + format | `.venv/bin/ruff check .` and format check | clean, 74 formatted Python files |
+| Python static types | `.venv/bin/mypy` | clean, 63 source files |
+| Frontend typecheck | `npm run typecheck` | clean |
+| Frontend unit/component | `npm test` | **95 passed, 11 skipped** (opt-in live suite) |
+| Frontend ↔ service integration | `npm run test:live` | **11 passed** |
+| Production build | `npm run build` | succeeds; large-bundle warning retained |
+| Real Chromium E2E | `npx playwright test` | **31 passed** (includes six actual download/replays and GBN/SR task) |
+
+### Evidence categories and novelty boundary
+
+- **Implemented and verified:** three supported experiment targets, bandwidth sweep/A-B browser
+  downloads and replay, matched-loss GBN/SR task; broader wiring is regression-tested.
+- **Implemented but not manually verified:** individual non-bandwidth browser sweeps, wider inputs,
+  human usability and cross-platform replay.
+- **Comparable capability found in Packet Tracer:** topology/packet inspection, routing/addressing,
+  saving/rerunning scenarios, established by official documentation—not a local application test.
+- **Candidate differentiator requiring further evidence:** the exact integrated GBN/SR and experiment
+  evidence workflow relative to a named Packet Tracer build; no verified exclusivity.
+- **Unsupported or out of scope:** other protocol targets in the general runner, full device
+  emulation and unsupported transport faults/loss/timed injection.
+
+Packet Tracer was unavailable; its advertised version 9.0.1 is established from official sources,
+but its exact installed build and direct workflow parity remain unverified. See the
+[source-backed comparison](docs/PACKET_TRACER_COMPARISON.md). NetSim's contribution is integration
+for selected educational tasks, not a first/unique/faster/more-accurate/superior claim. The release
+is **not unconditionally ready for exclusive novelty claims**. Live jsdom tests retain `act(...)`
+warnings; recorded download flows had no first-party console/service errors.
 
 ### Running the tests
 

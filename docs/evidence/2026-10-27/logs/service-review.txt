@@ -1,0 +1,11 @@
+Reviewed process-tool log tail after the final-source service restart and complete release gate.
+Actual log tail:
+
+Final-source acceptance server: 0.0.0.0:8765
+2026-10-27 11:57:39,679 [INFO] Rejected command 'simulate_dns': DNS query name must not be empty
+2026-10-27 11:58:21,731 [INFO] Rejected command 'add_node': Invalid node type 'quantum'. Expected one of: access_point, generic, pc, router, server, switch
+2026-10-27 11:58:21,736 [INFO] Rejected command 'simulate_dns': DNS query name must not be empty
+
+These are intentional negative tests (invalid DNS and node type); no internal traceback/500 appeared.
+The six browser download verification records separately show empty service-error arrays.
+Frontend process log showed Vite startup only; no dev-server runtime error appeared.

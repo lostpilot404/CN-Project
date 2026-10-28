@@ -1,307 +1,41 @@
-# NetSim --- Master Specification
+# NetSim — Current Implementation Specification
 
-> **Historical document (superseded).** This was written for an earlier design in which a Rust
-> engine was the simulation authority. That engine and its `src-tauri/` tree have since been
-> removed: **Python (`python/netsim/`) is the sole simulation authority**, reached over HTTP by the
-> React front-end. Parts of this document therefore describe components, layers and test commands
-> that no longer exist, and any statement naming Rust or Tauri as authoritative is obsolete.
-> See `README.md` for the current architecture and `QUALITY_AUDIT_REPORT.md` for audit evidence.
+This is the current submission index, replacing the obsolete desktop-engine design.
 
-## 1. Purpose
+## Runtime contract
 
-This is the single source of truth for the NetSim implementation.
-
-## 2. Architecture
-
-The application shall use:
-
-``` text
-Tauri 2.x
-    ↓
-React + TypeScript UI
-    ↓
-Tauri Commands
-    ↓
-Rust Core
-    ↓
-JSON / SQLite / CSV
-    ↓
-Optional Python Analysis Toolkit
+```text
+Browser React/TypeScript UI → HTTP JSON → Python simulation service
+                                         ├─ topology event engine
+                                         ├─ dedicated algorithm studios
+                                         └─ experiment dispatch: network / TCP / UDP
 ```
 
-## 3. Core Principle
-
-**Rust is authoritative.**
-
-All networking algorithms, simulation state, event processing and
-authoritative metrics must be implemented in Rust.
-
-The frontend must not independently calculate authoritative results.
-
-Python must not duplicate the networking engine.
-
-## 4. Python Principle
-
-Python is optional.
-
-It is intended for:
-
--   batch experiments
--   statistical analysis
--   advanced charting
--   data processing
--   report processing
-
-Python must not be required for:
-
--   application startup
--   topology editing
--   routing
--   ordinary simulation
--   packet inspection
--   core reporting
-
-## 5. Desktop
-
-Use Tauri 2.x.
-
-Target Windows 11.
-
-## 6. Frontend
-
-Use:
-
--   React
--   TypeScript
--   Vite
--   Tailwind CSS
--   XYFlow
--   Recharts
-
-## 7. Rust Core
-
-Use Rust for:
-
--   domain model
--   discrete-event simulation
--   routing
--   addressing
--   data-link algorithms
--   transport models
--   congestion
--   queues
--   metrics
--   fault injection
--   experiment execution
--   persistence
-
-## 8. Simulation Engine
-
-Use a priority event queue.
-
-Events include:
-
--   packet creation
--   queue entry
--   transmission
--   arrival
--   loss
--   ACK
--   timeout
--   retransmission
--   route update
--   fault injection
-
-Simulation time must be independent from wall-clock time.
-
-## 9. Deterministic RNG
-
-Every stochastic experiment must support a seed.
-
-The seed must be saved with experiment configuration.
-
-## 10. Network Model
-
-Support:
-
--   nodes
--   interfaces
--   links
--   IPv4
--   IPv6
--   queues
--   routing state
--   packets
--   protocol state
-
-## 11. Required Algorithms
-
-### Routing
-
--   Dijkstra / Link State
--   Bellman-Ford-style Distance Vector
-
-### Addressing
-
--   IPv4
--   CIDR
--   subnetting
--   NAT
--   basic IPv6
-
-### Error
-
--   Hamming
--   CRC
--   Checksum
-
-### Flow
-
--   Sliding Window
--   Go-Back-N
--   Selective Repeat
-
-### Multiple Access
-
--   ALOHA
--   Slotted ALOHA
--   CSMA
--   CSMA/CD
-
-### Switching
-
--   circuit switching
--   packet switching
-
-### Transport
-
--   educational TCP
--   UDP
-
-### Congestion
-
--   Slow Start
--   Congestion Avoidance
--   simplified loss response
-
-### Queueing
-
--   finite queues
--   overflow
-
-## 12. Required Visualization
-
--   topology
--   packet animation
--   packet inspector
--   OSI/TCP-IP encapsulation
--   routing tables
--   event timeline
--   queues
--   congestion window
--   QoS charts
--   experiment comparison
-
-## 13. Fault Injection
-
-Support:
-
--   packet loss
--   bit error
--   link failure
--   router failure
--   queue overflow
--   latency change
--   bandwidth change
-
-## 14. Experiments
-
-Support:
-
--   parameter sweeps
--   repeated runs
--   deterministic seeds
--   result storage
--   comparison charts
-
-## 15. Learning Mode
-
-Explain algorithm steps during simulation.
-
-## 16. Exam Mode
-
-Provide controlled exercises for syllabus topics.
-
-## 17. Persistence
-
-Use:
-
--   versioned JSON project files
--   SQLite for local application metadata/history
-
-## 18. Testing
-
-Require:
-
--   Rust unit tests
--   Rust integration tests
--   property-based tests where useful
--   frontend tests
--   Tauri integration tests
--   Playwright E2E
--   performance benchmarks
-
-## 19. Quality
-
-Do not:
-
--   fake results
--   hard-code rankings
--   duplicate algorithms in frontend
--   require Python for core functionality
--   require cloud services
--   expose unsafe filesystem/process commands
--   silently remove requirements
-
-## 20. Completion Workflow
-
-``` text
-Architecture
-→ Tauri shell
-→ Topology
-→ Rust domain model
-→ Event engine
-→ Routing
-→ Packet transmission
-→ Addressing
-→ Data Link
-→ Transport
-→ Congestion/QoS
-→ Faults
-→ Experiments
-→ Learning/Exam modes
-→ Reporting
-→ Testing
-→ Performance
-→ Documentation
-```
-
-## 21. Final Acceptance
-
-The complete demonstration must work:
-
-``` text
-Create topology
-→ Configure IPv4
-→ Calculate route
-→ Generate packet
-→ Run/step simulation
-→ Inspect packet
-→ Inject fault
-→ Observe protocol response
-→ View metrics
-→ Compare algorithms
-→ Save
-→ Reload
-→ Generate report
-```
+Python is the sole simulation authority. No Rust engine, Tauri bridge or SQLite persistence is
+part of the supported runtime. React does not calculate fallback simulation results. Project and
+experiment evidence are JSON. Optional Python analysis/chart scripts consume saved outputs.
+
+## Authoritative current documents
+
+- [README.md](README.md): setup, runtime and contribution boundary.
+- [ARCHITECTURE.md](ARCHITECTURE.md): component ownership and HTTP boundary.
+- [PROJECT_REPORT.md](PROJECT_REPORT.md): problem, objectives, implementation, measured demonstration,
+  limitations and novelty boundary.
+- [PRD.md](PRD.md): product scope, users and non-goals.
+- [SRS.md](SRS.md): execution, validation and evidence requirements.
+- [docs/EXPERIMENT_WORKFLOW.md](docs/EXPERIMENT_WORKFLOW.md): supported execution and replay contract.
+- [docs/IMPLEMENTATION_NOVELTY_AUDIT.md](docs/IMPLEMENTATION_NOVELTY_AUDIT.md): dated pre-fix findings,
+  source references and comparative-evidence gaps; not a claim that those gaps remain unchanged.
+
+## Implementation constraints
+
+Preserve working algorithms and inspectable model events. Unsupported general experiment requests
+must fail, not route to a different protocol. Broader studio integration is not required to make the
+current scope truthful. Add features only when a real teaching or correctness gap justifies them.
+
+## Submission evidence
+
+Use the controlled GBN/SR demonstration and exported experiment snapshots. Do not substitute
+wall-clock timing for simulated completion time, call repeatability a correctness proof, or assert
+comparative accuracy/novelty without directly collected evidence. Earlier design prompts and the
+historical quality audit describe their own dates and must not override current source behavior.

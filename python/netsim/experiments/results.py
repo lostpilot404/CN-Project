@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from netsim.faults.model import RouteChangeRecord
@@ -46,6 +46,8 @@ class SweepExperimentResult:
     total_runs: int
     seeds: list[int]
     execution_time_ms: int
+    provenance: dict[str, Any] = field(default_factory=dict)
+    run_evidence: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -55,6 +57,8 @@ class SweepExperimentResult:
             "total_runs": self.total_runs,
             "seeds": self.seeds,
             "execution_time_ms": self.execution_time_ms,
+            "provenance": self.provenance,
+            "run_evidence": self.run_evidence,
         }
 
 
@@ -88,6 +92,8 @@ class ComparativeExperimentResult:
     route_changes_b: list[RouteChangeRecord]
     runs_count_per_scenario: int
     execution_time_ms: int
+    provenance: dict[str, Any] = field(default_factory=dict)
+    run_evidence: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -101,4 +107,6 @@ class ComparativeExperimentResult:
             "route_changes_b": [r.to_dict() for r in self.route_changes_b],
             "runs_count_per_scenario": self.runs_count_per_scenario,
             "execution_time_ms": self.execution_time_ms,
+            "provenance": self.provenance,
+            "run_evidence": self.run_evidence,
         }

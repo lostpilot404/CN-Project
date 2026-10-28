@@ -41,7 +41,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
 
   // -- Sweep State --
   const [sweepName, setSweepName] = useState<string>('Bandwidth Sweep Analysis');
-  const [sweepTarget, setSweepTarget] = useState<ExperimentTarget>('tcp');
+  const [sweepTarget, setSweepTarget] = useState<ExperimentTarget>('network');
   const [sweepParamType, setSweepParamType] = useState<string>('link_bandwidth');
   const [sweepValuesStr, setSweepValuesStr] = useState<string>('1000000, 5000000, 10000000, 50000000, 100000000');
   const [sweepSeedsStr, setSweepSeedsStr] = useState<string>('42, 101, 202');
@@ -51,7 +51,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
 
   // -- Comparative State --
   const [compName, setCompName] = useState<string>('Capacity & Congestion A/B Test');
-  const [compTarget, setCompTarget] = useState<ExperimentTarget>('tcp');
+  const [compTarget, setCompTarget] = useState<ExperimentTarget>('network');
   const [scenarioAName, setScenarioAName] = useState<string>('High Bandwidth Baseline');
   const [scenarioBName, setScenarioBName] = useState<string>('Constrained Bandwidth Link');
   const [scenarioABw, setScenarioABw] = useState<number>(100000000); // 100M
@@ -60,9 +60,19 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
   const [compDurationUs, setCompDurationUs] = useState<number>(60000);
   const [compResult, setCompResult] = useState<ComparativeExperimentResult | null>(null);
 
+  const parseNumbers = (value: string, integers: boolean) => {
+    const parts = value.split(',');
+    const numbers = parts.map(Number);
+    if (parts.some((part) => !part.trim()) || numbers.some((n) => !Number.isFinite(n) || (integers && !Number.isInteger(n)))) {
+      throw new Error('Enter a comma-separated list of finite numbers; seeds must be integers');
+    }
+    return numbers;
+  };
+
   // Quick Presets for Sweeps
   const handleSweepPreset = (type: string) => {
     setSweepParamType(type);
+    if (['queue_capacity', 'bit_error_rate', 'traffic_interval_us'].includes(type)) setSweepTarget('network');
     if (type === 'link_bandwidth') {
       setSweepName('Bandwidth Impact Sweep');
       setSweepValuesStr('1000000, 10000000, 50000000, 100000000');
@@ -85,14 +95,8 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
     setIsRunning(true);
     setErrorMsg(null);
     try {
-      const rawValues = sweepValuesStr
-        .split(',')
-        .map((s) => parseFloat(s.trim()))
-        .filter((n) => !isNaN(n));
-      const rawSeeds = sweepSeedsStr
-        .split(',')
-        .map((s) => parseInt(s.trim(), 10))
-        .filter((n) => !isNaN(n));
+      const rawValues = parseNumbers(sweepValuesStr, false);
+      const rawSeeds = parseNumbers(sweepSeedsStr, true);
 
       if (rawValues.length === 0) {
         throw new Error('Please enter at least one valid parameter value');
@@ -140,6 +144,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
       const cfg: SweepConfig = {
         experiment_name: sweepName,
         target: sweepTarget,
+        base_project: project,
         parameter: param,
         parameter_values: rawValues,
         seeds: rawSeeds,
@@ -161,10 +166,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
     setIsRunning(true);
     setErrorMsg(null);
     try {
-      const rawSeeds = compSeedsStr
-        .split(',')
-        .map((s) => parseInt(s.trim(), 10))
-        .filter((n) => !isNaN(n));
+      const rawSeeds = parseNumbers(compSeedsStr, true);
 
       if (rawSeeds.length === 0) {
         throw new Error('Please enter at least one seed');
@@ -173,6 +175,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
       const cfg: ComparativeExperimentConfig = {
         experiment_name: compName,
         target: compTarget,
+        base_project: project,
         scenario_a: {
           name: scenarioAName,
           description: `Bandwidth configured to ${(scenarioABw / 1_000_000).toFixed(1)} Mbps`,
@@ -199,6 +202,17 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
     } finally {
       setIsRunning(false);
     }
+  };
+
+  const downloadResult = (name: string, result: unknown) => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `netsim-${name}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
   const formatBps = (bps: number) => {
@@ -233,6 +247,9 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
               <FlaskConical className="w-5 h-5" />
             </div>
             <h2 className="text-lg font-bold text-slate-100 tracking-tight">Batch Experiments</h2>
+            <span className="text-xs px-2.5 py-0.5 rounded-full font-medium bg-brand-500/20 text-brand-300 border border-brand-500/30">
+              Controlled model experiments
+            </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
             Execute deterministic parameter sweeps and comparative A/B studies across multiple pseudorandom seeds.
@@ -267,6 +284,19 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
       </div>
 
       <div className="p-6 space-y-6 max-w-7xl w-full mx-auto">
+        <p className="text-xs text-amber-200">
+          Topology packets use timed injection and a 100,000 µs drain. TCP/UDP run bulk transfers
+          to completion (duration is not a cutoff); they do not model scheduled faults or stochastic
+          link loss. Transport requires links ≥1 Mbps and delay ≥100 µs. Seeds do not randomize
+          transport runs. TCP latency is an RTT/2 estimate; UDP latency and jitter are unavailable
+          (zero placeholders), not measured zero delay. Other protocols use their dedicated studios.
+        </p>
+        <div className="flex gap-4">
+          <button disabled={!sweepResult} onClick={() => downloadResult('sweep', sweepResult)}
+            className="text-xs border rounded px-3 py-2 disabled:opacity-40">Download sweep JSON</button>
+          <button disabled={!compResult} onClick={() => downloadResult('comparison', compResult)}
+            className="text-xs border rounded px-3 py-2 disabled:opacity-40">Download A/B JSON</button>
+        </div>
         {errorMsg && (
           <div className="p-3 rounded-xl bg-rose-950/80 border border-rose-800 text-xs text-rose-200 flex items-center space-x-2">
             <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
@@ -330,14 +360,13 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   <label className="block text-slate-300 font-medium mb-1">Experiment Target</label>
                   <select aria-label="Experiment Target"
                     value={sweepTarget}
-                    onChange={(e) => setSweepTarget(e.target.value as ExperimentTarget)}
+                    onChange={(e) => { setSweepTarget(e.target.value as ExperimentTarget); handleSweepPreset('link_bandwidth'); }}
                     className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500"
                   >
-                    <option value="tcp">TCP (Transport & Flow Control)</option>
+                    <option value="network">Topology packets (timed injection)</option>
+                    <option value="tcp">TCP bulk transfer</option>
                     <option value="udp">UDP (Connectionless Datagram)</option>
-                    <option value="application">Application (HTTP / DNS / FTP / SNMP)</option>
-                    <option value="flow_control">Flow Control (Sliding Window)</option>
-                    <option value="mac">MAC (Medium Access Contention)</option>
+
                   </select>
                 </div>
 
@@ -350,14 +379,12 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   >
                     <option value="link_bandwidth">Link Bandwidth (bps)</option>
                     <option value="propagation_delay">Link Propagation Delay (µs)</option>
-                    <option value="queue_capacity">Buffer Queue Capacity (pkts)</option>
-                    <option value="bit_error_rate">Bit Error Rate (BER)</option>
+                    {sweepTarget === 'network' && <option value="queue_capacity">Buffer Queue Capacity (pkts)</option>}
+                    {sweepTarget === 'network' && <option value="bit_error_rate">Bit Error Rate (BER)</option>}
                     <option value="packet_size_bytes">Packet Size (bytes)</option>
-                    <option value="traffic_interval_us">Injection Interval (µs)</option>
+                    {sweepTarget === 'network' && <option value="traffic_interval_us">Injection Interval (µs)</option>}
                     <option value="packet_count">Total Packet Count</option>
-                    <option value="window_size">Window Size (pkts/bytes)</option>
-                    <option value="timeout_us">Timeout Duration (µs)</option>
-                    <option value="mac_persistence">MAC Persistence Probability</option>
+
                   </select>
                 </div>
 
@@ -367,6 +394,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     type="number"
                     min="1000"
                     step="5000"
+                    disabled={sweepTarget !== 'network'}
                     value={sweepDurationUs}
                     onChange={(e) => setSweepDurationUs(Number(e.target.value))}
                     className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500"
@@ -603,11 +631,10 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                     onChange={(e) => setCompTarget(e.target.value as ExperimentTarget)}
                     className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-emerald-500"
                   >
-                    <option value="tcp">TCP (Transport & Flow Control)</option>
+                    <option value="network">Topology packets (timed injection)</option>
+                    <option value="tcp">TCP bulk transfer</option>
                     <option value="udp">UDP (Connectionless Datagram)</option>
-                    <option value="application">Application (HTTP / DNS / FTP / SNMP)</option>
-                    <option value="flow_control">Flow Control (Sliding Window)</option>
-                    <option value="mac">MAC (Medium Access Contention)</option>
+
                   </select>
                 </div>
               </div>
@@ -686,6 +713,7 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   <label className="block text-slate-300 font-medium mb-1">Duration per run (µs)</label>
                   <input aria-label="Duration per run (µs)"
                     type="number"
+                    disabled={compTarget !== 'network'}
                     value={compDurationUs}
                     onChange={(e) => setCompDurationUs(Number(e.target.value))}
                     className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500"

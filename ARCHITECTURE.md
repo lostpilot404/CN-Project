@@ -231,3 +231,12 @@ The following no longer exist and must not be reintroduced:
 | `@tauri-apps/api`, `@tauri-apps/cli` | Runtime and CLI for the removed shell |
 | `TAURI_ENV_*` build variables | Drove the Vite build target for the removed shell |
 | Front-end IPC fallback | Could silently switch the simulation engine away from Python when the service was unreachable |
+
+## Experiment execution boundary (targeted implementation update)
+
+`experiments/runner.py` explicitly dispatches `network` (legacy omitted target), `tcp` and `udp`.
+Only supported parameters pass validation. Dedicated flow-control, MAC and application studios
+remain separate and are not substituted through the general runner. Exported results include a
+versioned configuration/topology snapshot, per-run evidence and an engine-source fingerprint.
+See [the workflow contract](docs/EXPERIMENT_WORKFLOW.md) for model timing, metric limitations,
+replay and the supported parameter matrix. There is no new simulation engine in the frontend.

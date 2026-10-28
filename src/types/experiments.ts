@@ -90,7 +90,7 @@ export interface RouteChangeRecord {
   timestamp_us: number;
 }
 
-export type ExperimentTarget = 'tcp' | 'udp' | 'application' | 'flow_control' | 'mac';
+export type ExperimentTarget = 'network' | 'tcp' | 'udp' | 'application' | 'flow_control' | 'mac';
 
 export type SweepParameter =
   | { type: 'link_bandwidth'; link_id?: string | null }
@@ -140,6 +140,8 @@ export interface SweepExperimentResult {
   total_runs: number;
   seeds: number[];
   execution_time_ms: number;
+  provenance?: Record<string, unknown>;
+  run_evidence?: Record<string, unknown>[];
 }
 
 export interface MetricDelta {
@@ -184,4 +186,6 @@ export interface ComparativeExperimentResult {
   route_changes_b: RouteChangeRecord[];
   runs_count_per_scenario: number;
   execution_time_ms: number;
+  provenance?: Record<string, unknown>;
+  run_evidence?: Record<string, unknown>[];
 }

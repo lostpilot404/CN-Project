@@ -1,239 +1,143 @@
-# NetSim --- Academic Project Report
+# NetSim — Academic Project Report
 
-> **Historical document (superseded).** This was written for an earlier design in which a Rust
-> engine was the simulation authority. That engine and its `src-tauri/` tree have since been
-> removed: **Python (`python/netsim/`) is the sole simulation authority**, reached over HTTP by the
-> React front-end. Parts of this document therefore describe components, layers and test commands
-> that no longer exist, and any statement naming Rust or Tauri as authoritative is obsolete.
-> See `README.md` for the current architecture and `QUALITY_AUDIT_REPORT.md` for audit evidence.
+## Abstract
 
-## 1. Abstract
+NetSim is a Python-backed, browser-based educational network simulator with a React/TypeScript
+interface. Its contribution is the integration of explicit algorithm inputs, intermediate-state
+inspection, controlled comparisons, and reproducible experiment evidence. It does not introduce
+new networking algorithms or demonstrate superiority over Cisco Packet Tracer.
 
-NetSim is an interactive computer-network simulation and
-performance-analysis platform developed for educational use. It combines
-a memory-safe Rust simulation core, a Tauri desktop application and a
-React/TypeScript interface. The platform allows users to construct
-network topologies, configure network parameters, simulate packet
-transmission, execute networking algorithms, inject controlled faults
-and analyze measured performance.
+## Problem and target users
 
-## 2. Introduction
+Undergraduate students often calculate algorithm steps separately from observing their effects.
+Instructors need short, repeatable tasks linking a controlled loss or parameter change to an
+explainable trace and calculated metrics. NetSim supports these exercises without physical lab
+hardware. Improved learning outcomes have not been measured.
 
-Computer networking involves multiple interacting mechanisms across
-layered architectures. NetSim provides a single environment for
-demonstrating and experimenting with these mechanisms.
+## Objectives and scope
 
-## 3. Problem Statement
+- Preserve dedicated algorithm studios and their inspectable intermediate states.
+- Compare settings under common inputs and explain the metrics actually calculated.
+- Ensure experiment targets dispatch to the selected model rather than substituting another one.
+- Save enough configuration and per-run evidence to repeat a result.
 
-Networking topics are frequently learned as separate theoretical
-concepts. Students require an environment where routing, addressing,
-error control, flow control, transport and congestion can be observed
-together.
+NetSim is a collection of simplified educational models, not a hardware emulator or a claim of
+research-grade fidelity. Standalone studios are not automatically integrated into the topology engine.
 
-## 4. Objectives
+## Implemented architecture
 
-1.  Build an interactive topology editor.
-2.  Implement a deterministic network simulation engine.
-3.  Implement routing algorithms.
-4.  Implement error and flow-control mechanisms.
-5.  Simulate TCP and UDP behavior.
-6.  Demonstrate congestion and QoS.
-7.  Provide controlled fault injection.
-8.  Provide reproducible experiments.
-9.  Generate academic reports.
-
-## 5. Proposed Architecture
-
-``` text
-Tauri
-├── React/TypeScript UI
-└── Rust Core
-      ├── Network Model
-      ├── Discrete-Event Engine
-      ├── Routing
-      ├── Protocols
-      ├── Metrics
-      └── Persistence
-
-Optional Python Toolkit
-      └── Analysis / Batch Experiments
+```text
+React / TypeScript / Tailwind / xyflow / Recharts
+                     │ HTTP JSON commands
+                     ▼
+Python service (python/netsim/server.py)
+  ├── topology models, discrete-event engine, queues, faults, QoS
+  ├── routing and addressing algorithms
+  ├── dedicated data-link, transport and application studios
+  └── experiment runner → network packets | TCP model | UDP model
 ```
 
-## 6. Technologies
+Python owns simulation state and outputs; React gathers inputs and renders responses. Projects
+and experiment snapshots use JSON. There is no active Rust engine, Tauri shell or SQLite store.
 
--   Rust
--   Tauri 2.x
--   React
--   TypeScript
--   Tailwind CSS
--   XYFlow
--   Recharts
--   SQLite
--   JSON
--   Python
--   pandas/NumPy/matplotlib where required
--   Vitest
--   Playwright
--   Rust testing ecosystem
+## Trustworthy experiment workflow
 
-## 7. Modules
+The general runner supports:
 
-### 7.1 Topology
+| Target | Execution | Sweep parameters |
+|---|---|---|
+| `network` (also the legacy omitted target) | Timed topology-packet injection, duration plus 100,000 μs drain | bandwidth, propagation delay, queue capacity, BER, packet size, injection interval, packet count |
+| `tcp` | Existing TCP bulk-transfer model to completion | bandwidth, propagation delay, segment size, segment count |
+| `udp` | Existing UDP bulk-transfer model to completion | bandwidth, propagation delay, segment size, segment count |
 
-Describe nodes, links and configuration.
+Application, MAC and flow-control requests to the general runner are rejected with a dedicated-studio
+message. Window, timeout and persistence sweeps are rejected rather than silently ignored. Transport
+experiments reject scheduled faults, stochastic topology loss/BER and explicit injection intervals.
+They require links at least 1 Mbps and 100 μs to avoid silent model-floor clamping. Duration is not a
+transport cutoff; the UI disables that field for bulk transfers. Seeds are recorded but do not
+randomize transport models. A parameter can change model inputs without changing an output in a
+particular scenario; sensitivity is not guaranteed.
 
-### 7.2 Simulation
+A/B comparisons use the same seed list and common traffic settings, with explicit scenario overrides.
+Exports contain the request and topology snapshot, per-run evidence, effective model inputs,
+per-seed QoS, source fingerprint, Python version, timing notes and aggregate results. Downloads use
+the completed backend result, not the current editable form. See
+[replay instructions](docs/EXPERIMENT_WORKFLOW.md).
 
-Describe the discrete-event engine and simulation clock.
+## Controlled demonstration: Go-Back-N versus Selective Repeat
 
-### 7.3 Data Link
+The dedicated Flow Control comparison uses matched inputs: window 4, sequence space 8,
+8 frames, frame transmit time 1,000 μs, propagation 2,000 μs, ACK transmit time 100 μs,
+timeout 10,000 μs, initial frame index 2 dropped, no ACK drops. Seed 42 is recorded but is not
+used for random loss in this deterministic module.
 
-Describe:
+```sh
+PYTHONPATH=python python examples/compare_flow_control.py > flow-comparison.json
+```
 
--   Hamming
--   CRC
--   Checksum
--   Sliding Window
--   Go-Back-N
--   Selective Repeat
--   ALOHA
--   CSMA/CD
+| Calculated output | Go-Back-N | Selective Repeat |
+|---|---:|---:|
+| Completed frames | 8 | 8 |
+| Transmissions | 12 | 9 |
+| Retransmissions | 4 | 1 |
+| Virtual completion time (μs) | 26,200 | 21,100 |
+| Useful-time utilization | 0.305344 | 0.379147 |
+| Maximum receiver buffer (frames) | 0 | 3 |
 
-### 7.4 Network Layer
+The trace shows GBN recovering an outstanding group, whereas SR buffers out-of-order frames and
+retransmits the missing one. For this case SR saves transmissions and virtual time, with receiver
+buffering. This is not a universal ranking. Utilization here is completed frames × frame transmission
+time / completion time, not hardware utilization. No bit-rate throughput is inferred from this model.
+Complete event traces are in the generated JSON; no values are fabricated by the example.
 
-Describe:
+## Metric interpretation and limitations
 
--   IPv4
--   subnetting
--   CIDR
--   NAT
--   IPv6
+- Network throughput and goodput currently share the delivered-byte formula. Do not claim they
+  isolate header overhead. Its measurement interval includes the drain period.
+- Transport throughput/goodput come from transport model metrics and completion-time semantics.
+  TCP latency in the shared QoS display is an RTT/2 estimate. UDP one-way latency and transport
+  jitter are unavailable; zero fields are compatibility placeholders, not measured zero delay.
+- Matched seeds do not prove matched random-loss events after changed event ordering.
+- Protocol models have bounded recovery and simplified behavior. Byte-identical replay is evidence
+  of repeatability under those inputs, not independent proof of correctness.
+- No direct Packet Tracer run, learning-outcome study or comparative runtime benchmark was performed.
+  Packet Tracer was unavailable; official sources establish advertised 9.0.1 but not an installed build.
 
-### 7.5 Routing
+## Related work, explicit evidence categories and novelty boundary
 
-Describe:
+The [Packet Tracer comparison](docs/PACKET_TRACER_COMPARISON.md) compares matched educational tasks
+using official documentation for Packet Tracer and source/browser evidence for NetSim. It records
+version, OS, retrieval date and model differences; no Packet Tracer application was available.
 
--   Dijkstra
--   Distance Vector
+| Category | Evidence-based conclusion |
+|---|---|
+| Implemented and verified | Network/TCP/UDP dispatch; bandwidth sweep and A/B downloads/replay for all three targets in real Chromium; dedicated matched-loss GBN/SR task; recorded topology/event/routing/addressing tests. |
+| Implemented but not manually verified | Every non-bandwidth browser sweep, broader topology/input combinations, cross-platform replay and human usability; parameter wiring is regression-tested, not a substitute for these manual checks. |
+| Comparable capability found in Packet Tracer | Official help documents topology/event inspection, IP/routing workflows, saved networks and scheduled-PDU scenarios/reruns. These are overlapping capabilities, not unique NetSim features. |
+| Candidate differentiator requiring further evidence | The exact direct GBN/SR task and integrated multi-seed config/metric export workflow relative to a named Packet Tracer build. Direct verification is outstanding; unmentioned features are not presumed absent. |
+| Unsupported or out of scope | Other studio protocols as general-runner targets, full device emulation, unsupported transport fault/loss/timing settings, exclusive novelty and comparative accuracy/speed/learning gains. |
 
-### 7.6 Transport
+The integration is observable; exclusive novelty is not established. The
+[reconciled implementation audit](docs/IMPLEMENTATION_NOVELTY_AUDIT.md) links code findings and
+current acceptance evidence. Seeded studies and metric collection are established simulator practices.
 
-Describe:
+## Final-source validation
 
--   TCP model
--   UDP model
--   RTT
--   retransmission
--   congestion
+**197 backend + 80 utility = 277 Python tests passed; 95 frontend tests passed** (11 opt-in skips
+in default suite), **11 live integration tests passed**, and **31 Chromium E2E tests passed**.
+The browser suite includes six real download/replay cases and a dedicated GBN/SR comparison task,
+as well as existing topology, packet, routing/addressing and accessibility checks. Lint/format,
+Python/TypeScript types and production build pass. Vite's large-bundle warning and live jsdom
+`act(...)` warnings remain recorded. The six download flows had no console/service errors.
 
-### 7.7 QoS
+[Final verification](docs/FINAL_VERIFICATION.md) records precise inputs, output paths, excluded
+wall-clock field, test logs, source fingerprints and remaining limitations. Deterministic replay
+uses the actual browser downloads, not a replacement API export. These are browser-driven automated
+acceptance checks, not a human usability evaluation. The direct Packet Tracer comparison remains
+unverified, so unconditional academic readiness for an exclusive novelty claim is not asserted.
 
-Describe:
+## Conclusion
 
--   throughput
--   latency
--   jitter
--   packet loss
--   utilization
--   queue delay
-
-### 7.8 Fault Injection
-
-Describe controlled:
-
--   loss
--   errors
--   link failure
--   router failure
--   queue overflow
--   bandwidth/latency changes
-
-## 8. Experiments
-
-Recommended experiments:
-
-### Experiment 1
-
-Distance Vector vs Link State.
-
-### Experiment 2
-
-CRC under controlled bit errors.
-
-### Experiment 3
-
-Go-Back-N vs Selective Repeat.
-
-### Experiment 4
-
-TCP vs UDP under packet loss.
-
-### Experiment 5
-
-Packet loss versus throughput.
-
-### Experiment 6
-
-Queue size versus packet loss.
-
-## 9. Results
-
-Insert actual measured results.
-
-Do not fabricate benchmark or simulation values.
-
-For each experiment include:
-
--   topology
--   parameters
--   seed
--   algorithm
--   results
--   graph
--   observation
-
-## 10. Testing
-
-Document:
-
--   Rust unit tests
--   integration tests
--   property-based tests
--   frontend tests
--   E2E tests
--   performance benchmarks
--   deterministic replay
-
-## 11. Limitations
-
-Only document limitations present in the actual implementation.
-
-Potential examples:
-
--   simplified physical layer
--   educational TCP model
--   limited IPv6 behavior
--   limited application-layer protocol behavior
-
-## 12. Future Work
-
-Potential extensions:
-
--   additional routing protocols
--   richer IPv6
--   larger-scale simulation
--   packet capture integration
--   more application protocols
--   advanced statistical analysis
-
-## 13. Conclusion
-
-NetSim provides an integrated environment for learning and
-experimentally analyzing computer-network concepts through an
-interactive, deterministic simulation platform.
-
-## 14. References
-
-Use the institution's prescribed Computer Networks textbook and
-reference books, plus official technical documentation for libraries and
-frameworks actually used.
+The useful contribution is an explainable educational experiment workflow. Keeping the working
+models, correcting dispatch and validation, and preserving reproducibility evidence is more valuable
+than expanding the feature count or changing the visual design solely to appear different.
