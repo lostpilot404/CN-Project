@@ -16,11 +16,10 @@ pnpm-debug.log*
 .DS_Store
 *.sw?
 
-# Tooling scratch directories
-.seer/
-.codegraph/
-codegraph.json
-.serena/
+# Environment files
+.env
+.env.*
+!.env.example
 
 # Python
 __pycache__/

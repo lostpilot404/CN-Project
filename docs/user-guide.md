@@ -100,7 +100,7 @@ Select a packet to inspect it. The inspector shows the five protocol layers the 
 produced for that packet — L1 through L5 — with header fields: addresses, ports, TTL, MAC
 addresses, EtherType, and the link the frame travelled over. Addresses and ports are packet
 identity for the simulation; MAC addresses in the frame view are illustrative identifiers (there
-is no ARP or MAC learning — see the scope table in `README.md`).
+is no ARP or MAC learning — see the scope notes in [the README](../README.md)).
 
 Two tabs accompany it:
 
