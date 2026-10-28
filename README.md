@@ -108,20 +108,24 @@ fails loudly with the operating system's bind error rather than silently serving
 
 ## Verification status
 
-Final verification date: **2026-10-27**. Current results and limitations are recorded in
-[the final release gate](docs/FINAL_VERIFICATION.md), with [committed logs and browser artifacts](docs/evidence/2026-10-27/).
-The older `QUALITY_AUDIT_REPORT.md` is a historical baseline, not the current test-count source.
+Verified **2026-10-28** on the consolidated `main` (all work branches merged; binary audit
+evidence removed — see the consolidation notes in the audit reports). Detailed historical
+results and limitations are recorded in [the final release gate](docs/FINAL_VERIFICATION.md),
+[`FINAL_ENGINEERING_REPORT.md`](FINAL_ENGINEERING_REPORT.md) and
+[`SUBMISSION_READINESS_REVIEW.md`](SUBMISSION_READINESS_REVIEW.md). The older
+`QUALITY_AUDIT_REPORT.md` is a historical baseline, not the current test-count source.
 
-| Suite | Command | Final-source result |
+| Suite | Command | Consolidated result (2026-10-28) |
 |---|---|---|
-| Python backend + utilities | `.venv/bin/python -m pytest python/tests python-tools/tests -q` | **277 passed** (197 + 80) |
-| Python lint + format | `.venv/bin/ruff check .` and format check | clean, 74 formatted Python files |
-| Python static types | `.venv/bin/mypy` | clean, 63 source files |
+| Python backend tests | `.venv/bin/python -m pytest python/tests -q` | **267 passed** |
+| Utility tests (`python-tools/`) | `.venv/bin/pytest python-tools/tests -q` | **83 passed** |
+| Python lint + format | `.venv/bin/ruff check .` and format check | clean, 81 formatted Python files |
+| Python static types | `.venv/bin/mypy` | clean, 67 source files |
 | Frontend typecheck | `npm run typecheck` | clean |
-| Frontend unit/component | `npm test` | **95 passed, 11 skipped** (opt-in live suite) |
-| Frontend ↔ service integration | `npm run test:live` | **11 passed** |
-| Production build | `npm run build` | succeeds; large-bundle warning retained |
-| Real Chromium E2E | `npx playwright test` | **31 passed** (includes six actual download/replays and GBN/SR task) |
+| Frontend unit/component | `npm test` | **126 passed, 11 skipped** (opt-in live suite) |
+| Frontend ↔ service integration | `npm run test:live` | **11 passed** (real service) |
+| Production build | `npm run build` | succeeds; code-split chunks, largest ≈ 379 kB; bundle contains only the inert test-double stub |
+| Real Chromium E2E | `npx playwright test` | run by CI (`e2e-gate`: functional + accessibility, cold start) on every PR |
 
 ### Evidence categories and novelty boundary
 
