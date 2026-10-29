@@ -28,10 +28,21 @@ Persistent across all six audit sections. Do not delete entries; update status i
 | D-004 | P3 | QoS notification timer overlap dismisses a newer message early | QoS Performance | **FIXED + MANUAL re-verified** |
 | D-005 | **P1** | SECDED is encode-only: a double-bit error is "corrected" into silently wrong data | Algorithm Studio → Error Control → Hamming | **FIXED + MANUAL re-verified** |
 | D-006 | **P1** | Published Python regression suite cannot be collected on a clean checkout | Test infrastructure | **FIXED (pre-existing at base commit)** |
-| D-007 | P3 | Stale Rust/Tauri references survive in source comments and a test name | Docs / code hygiene | OPEN |
+| D-007 | P3 | Stale Rust/Tauri references survive in source comments and a test name | Docs / code hygiene | **FIXED (comment/test-name drift removed; grep re-scan clean)** |
 | D-008 | P3 | `hamming_decode` always reported `has_error=True`, including for valid codewords | Python API surface | **FIXED** |
 | D-009 | P3 | Hard runtime dependency on `fonts.googleapis.com` | Global | OPEN (environment-dependent) |
 | D-010 | P3 | `/health` is probed before every single API command (2× round-trips) | Transport layer | OPEN (performance) |
+| D-011 | P2 | Changing the Experiment Target silently destroys the user's sweep name, parameter and values | Batch Experiments | **FIXED + MANUAL re-verified** |
+| D-012 | **P1** | UDP throughput/completion ignored link bandwidth; reported 1.64 Mbps over a 1 Mbps link | Transport (UDP model, `udp.py`) | **FIXED + MANUAL + TEST** |
+| D-013 | P2 | Variable-Parameter dropdown displays one parameter while submitting another | Batch Experiments | **FIXED + MANUAL re-verified** |
+| D-014 | P2 | DNS merged the client's copy of the default zone over identical defaults: duplicate answers, inflated payload | Application Layer → DNS | **FIXED + MANUAL re-verified** |
+| D-015 | P2 | Batch Experiments tab switcher pushed off-screen at phone widths | Responsive layout (≤430 px) | **FIXED + MANUAL re-verified** |
+| D-016 | P2 | Transport results column and its primary Run button collapsed to a sliver at phone widths | Responsive layout (≤430 px) | **FIXED + MANUAL re-verified** |
+| D-017 | P3 | Circuit-switching model attribution truncated mid-phrase at phone widths | Responsive layout (≤430 px) | **FIXED + MANUAL re-verified** |
+
+Table totals (cross-checked against the detailed entries below): **17 recorded — 15 FIXED, 2 OPEN
+(D-009, D-010, both P3); severities 3×P1 (D-005, D-006, D-012), 8×P2, 6×P3.** Every row above has a
+matching detailed section in this file; no detailed section exists without a row.
 
 ---
 

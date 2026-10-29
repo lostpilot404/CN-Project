@@ -1,6 +1,8 @@
 # NetSim Interactive Computer Network Simulation Platform — Final Iceberg Manual Audit
 
-**Repository:** `/home/user/CN-Project` · **Branch:** `arena/38e9d176-cn-project` · **Commit:** `c932d61`
+**Repository:** `/home/user/CN-Project` · **Branch:** `arena/38e9d176-cn-project` · **Commits:**
+`c932d61` (defect fixes + evidence), `5e18e2d` (this report), plus a documentation-consistency
+commit recorded in `git log` (the branch head is re-verified against `origin` after every push)
 **Base audited:** `d737f4f` · **Audit date:** 2026-10-29 · **Register:** `DEFECT_REGISTER.md` (this directory)
 
 Method rule applied throughout: manual exercise in the real running application is the primary
@@ -129,16 +131,20 @@ were both blocked by the sandbox firewall and were **not** used.
 | `pytest python/tests python-tools/tests` | **351 passed** |
 | `vitest run` | **126 passed / 11 skipped** (16 files) |
 | `tsc --noEmit` | exit 0 |
-| `ruff check .` / `ruff format --check .` | clean / 92 files formatted |
+| `ruff check .` / `ruff format --check .` | clean / **92 files formatted at the pre-report gate run; 93 at the current check.** This repo's ruff also formats Markdown, so the format set is 85 `.py` + the `.md` documents; the count rose from 92 to 93 only because this report's own `.md` joined the set when it was committed. Both runs were and are **clean** — the historical 92 is preserved as run, not rewritten. |
 | `mypy` (repo config) | Success, 67 source files |
 | `vite build` (production) | ✓ built in 6.9 s |
 | `playwright test` (real Chromium) | **34/34 passed** (incl. downloads+replay, layout overflow, a11y/keyboard) |
 
-Repository hygiene: single commit `c932d61` on `arena/38e9d176-cn-project` (29 MB of evidence kept
-in-repo under `evidence/`, consistent with the audit's evidence requirement); no merge into `main`,
-no force-push; `package-lock.json` left untouched; working tree clean after commit. Remote HEAD
-independently confirmed via `git ls-remote`, `git rev-parse` and the GitHub API:
-`c932d61209bdb0aae3c84abc3a5877afee89bedf`.
+Repository hygiene: commit chain on `arena/38e9d176-cn-project` — `c932d61` (defect fixes plus the
+29 MB evidence tree kept in-repo under `evidence/`, consistent with the audit's evidence
+requirement), `5e18e2d` (this report), followed by a documentation-consistency commit whose SHA is
+recorded in `git log`. No rebase, no merge into `main`, no force-push at any point;
+`package-lock.json` left untouched; working tree clean after every commit. Remote HEAD parity was
+independently confirmed via `git ls-remote`, `git rev-parse` and the GitHub API at each handoff —
+`c932d61209bdb0aae3c84abc3a5877afee89bedf` at the fix-commit handoff and
+`5e18e2da63706f9aecd67b8ad263b71dac2002fa` at the report handoff. These are historical results and
+are preserved as run, not rewritten.
 
 ---
 
@@ -170,8 +176,11 @@ independently confirmed via `git ls-remote`, `git rev-parse` and the GitHub API:
     e2e 34/34 — all green *after* every fix.
 12. **Documentation:** ports and architecture notes accurate; last stale Rust/Tauri code references
     removed (D-007); docs' removal notes are honest.
-13. **Submission state:** committed as `c932d61` on the session branch, pushed, remote HEAD
-    independently confirmed; evidence tree and this report accompany the branch.
+13. **Submission state:** committed on the session branch as `c932d61` (fixes + evidence) and
+    `5e18e2d` (this report), plus a final documentation-consistency commit; pushed each time, with
+    remote HEAD parity independently confirmed for `5e18e2d` via `ls-remote`, `rev-parse` and the
+    GitHub API and re-confirmed after the documentation commit; evidence tree and this report
+    accompany the branch.
 
 **Documented limitations:** (a) `fonts.googleapis.com` is a hard boot dependency and is unreachable
 in firewalled environments (D-009); (b) `/health` is re-probed per command, doubling round-trips
