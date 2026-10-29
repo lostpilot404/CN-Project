@@ -217,7 +217,31 @@ def encode_hamming(data_bits: str, parity_mode: ParityMode) -> HammingEncodeResu
     )
 
 
-def verify_and_correct_hamming(codeword_str: str, parity_mode: ParityMode) -> HammingVerifyResult:
+def verify_and_correct_hamming(
+    codeword_str: str,
+    parity_mode: ParityMode,
+    secded: bool = False,
+) -> HammingVerifyResult:
+    """Syndrome-decode a Hamming codeword, optionally using the SECDED overall-parity bit.
+
+    ``secded=False`` (the default, and the historical behaviour) decodes a plain Hamming
+    codeword. That is a genuine single-error-correcting code, but it is *not* able to tell a
+    double-bit error apart from a single-bit one: two flips simply produce a different nonzero
+    syndrome, which plain decoding then "corrects" into a third, wrong codeword.
+
+    ``secded=True`` expects the extended word produced by :func:`encode_hamming` --
+    ``encoded_bits_secded``, i.e. the overall parity bit P0 followed by the Hamming codeword.
+    Combining the syndrome with the overall-parity check is what actually delivers SECDED:
+
+    ==========================  =========================================
+    syndrome / overall parity   diagnosis
+    ==========================  =========================================
+    S == 0, parity ok           no error
+    S == 0, parity bad          single error in P0 itself (correctable)
+    S != 0, parity bad          single error at position S (correctable)
+    S != 0, parity ok           DOUBLE-bit error: detected, NOT correctable
+    ==========================  =========================================
+    """
     clean_code = "".join(c for c in codeword_str if not c.isspace())
     if not clean_code:
         raise ValueError("Hamming verify error: codeword cannot be empty")
@@ -225,11 +249,20 @@ def verify_and_correct_hamming(codeword_str: str, parity_mode: ParityMode) -> Ha
         if ch not in ("0", "1"):
             raise ValueError(f"Hamming verify error: invalid character '{ch}' at index {i}. Must be '0' or '1'.")
 
-    n = len(clean_code)
+    if secded:
+        if len(clean_code) < 4:
+            raise ValueError("SECDED codeword must have at least 4 bits (overall parity P0 plus Hamming(3,1))")
+        payload_str = clean_code[1:]
+        overall_bit = int(clean_code[0])
+    else:
+        payload_str = clean_code
+        overall_bit = None
+
+    n = len(payload_str)
     if n < 3:
         raise ValueError("Hamming codeword must have at least 3 bits (e.g. Hamming(3,1))")
 
-    bits = [0] + [int(ch) for ch in clean_code]
+    bits = [0] + [int(ch) for ch in payload_str]
 
     r = 0
     while (1 << r) <= n:
@@ -269,6 +302,89 @@ def verify_and_correct_hamming(codeword_str: str, parity_mode: ParityMode) -> Ha
         )
 
     syndrome_bits = "".join(str(b) for b in reversed(syndrome_bits_vec))
+
+    # SECDED: fold in the overall-parity bit so an even number of flips is distinguishable from
+    # an odd one. For a valid extended word the XOR of *all* n+1 bits is 0 under even parity and
+    # 1 under odd parity (that is exactly how encode_hamming builds P0), so `overall_check` is the
+    # parity of the number of flipped bits.
+    if secded and overall_bit is not None:
+        expected_overall = 0 if parity_mode == ParityMode.EVEN else 1
+        actual_overall = overall_bit
+        for pos in range(1, n + 1):
+            actual_overall ^= bits[pos]
+        overall_check = actual_overall ^ expected_overall
+
+        if syndrome_value != 0 and overall_check == 0:
+            return HammingVerifyResult(
+                received_bits=clean_code,
+                parity_mode=parity_mode,
+                syndrome_bits=syndrome_bits,
+                syndrome_value=syndrome_value,
+                has_error=True,
+                is_correctable=False,
+                error_type="double_bit_detected",
+                error_position=None,
+                corrected_bits=None,
+                extracted_data_bits=None,
+                syndrome_details=syndrome_details,
+                status_message=(
+                    "Double-bit error detected by SECDED and NOT corrected: the Hamming syndrome is "
+                    f"nonzero ({syndrome_value}) while the overall parity check is clean, which means an "
+                    "even number of bits flipped. Correcting anyway would silently produce wrong data, "
+                    "so no corrected codeword is reported."
+                ),
+            )
+
+        if syndrome_value == 0 and overall_check == 1:
+            corrected_payload = "".join(str(bits[i]) for i in range(1, n + 1))
+            extracted = "".join(str(bits[pos]) for pos in range(1, n + 1) if not is_power_of_two(pos))
+            return HammingVerifyResult(
+                received_bits=clean_code,
+                parity_mode=parity_mode,
+                syndrome_bits=syndrome_bits,
+                syndrome_value=0,
+                has_error=True,
+                is_correctable=True,
+                error_type="single_bit_overall_parity",
+                error_position=0,
+                corrected_bits=f"{1 - overall_bit}{corrected_payload}",
+                extracted_data_bits=extracted,
+                syndrome_details=syndrome_details,
+                status_message=(
+                    "Single-bit error detected in the SECDED overall parity bit (P0) and corrected: the "
+                    "Hamming syndrome is zero but the overall parity check failed."
+                ),
+            )
+
+        # Single-bit error inside the payload: fall through to the standard correction below, but
+        # return the corrected *extended* word so it can be compared with what was received.
+        if syndrome_value != 0:
+            corrected_vec = list(bits)
+            corrected_vec[syndrome_value] ^= 1
+            corrected_payload = "".join(str(corrected_vec[i]) for i in range(1, n + 1))
+            extracted = "".join(str(corrected_vec[pos]) for pos in range(1, n + 1) if not is_power_of_two(pos))
+            expected_p0 = 0 if parity_mode == ParityMode.EVEN else 1
+            for pos in range(1, n + 1):
+                expected_p0 ^= corrected_vec[pos]
+            return HammingVerifyResult(
+                received_bits=clean_code,
+                parity_mode=parity_mode,
+                syndrome_bits=syndrome_bits,
+                syndrome_value=syndrome_value,
+                has_error=True,
+                is_correctable=True,
+                error_type="single_bit",
+                error_position=syndrome_value + 1,
+                corrected_bits=f"{expected_p0}{corrected_payload}",
+                extracted_data_bits=extracted,
+                syndrome_details=syndrome_details,
+                status_message=(
+                    f"Single-bit error detected by SECDED and corrected at payload position "
+                    f"{syndrome_value} (1-indexed within the Hamming codeword; bit "
+                    f"{syndrome_value + 1} of the extended word)."
+                ),
+            )
+
     has_error = syndrome_value != 0
 
     if not has_error:
@@ -335,16 +451,33 @@ class HammingDecodeResult:
     decoded_data_bits: str
 
 
-def hamming_encode(data_bits: str, even_parity: bool = True) -> HammingEncodeResult:
-    mode = ParityMode.EVEN if even_parity else ParityMode.ODD
-    return encode_hamming(data_bits, mode)
+def _coerce_parity_mode(even_parity: bool | ParityMode) -> ParityMode:
+    """Accept either a bool or an explicit ParityMode.
+
+    The parameter is documented as a bool, so passing ``ParityMode.ODD`` used to be silently
+    treated as *even* parity (a non-empty string enum is truthy) and produced a codeword that did
+    not match the caller's stated mode with no error at all. Accept the enum explicitly instead.
+    """
+    if isinstance(even_parity, ParityMode):
+        return even_parity
+    return ParityMode.EVEN if even_parity else ParityMode.ODD
 
 
-def hamming_decode(codeword_str: str, even_parity: bool = True) -> HammingDecodeResult:
-    mode = ParityMode.EVEN if even_parity else ParityMode.ODD
-    res = verify_and_correct_hamming(codeword_str, mode)
+def hamming_encode(data_bits: str, even_parity: bool | ParityMode = True) -> HammingEncodeResult:
+    return encode_hamming(data_bits, _coerce_parity_mode(even_parity))
+
+
+def hamming_decode(
+    codeword_str: str,
+    even_parity: bool | ParityMode = True,
+    secded: bool = False,
+) -> HammingDecodeResult:
+    res = verify_and_correct_hamming(codeword_str, _coerce_parity_mode(even_parity), secded=secded)
     return HammingDecodeResult(
-        has_error=(res.error_type != "no_error"),
+        # `verify_and_correct_hamming` reports the clean case as error_type == "none"; this used to
+        # compare against "no_error", which is never produced, so hamming_decode claimed an error
+        # for every codeword including valid ones.
+        has_error=res.has_error,
         corrected_bit_position=res.error_position,
         decoded_data_bits=res.extracted_data_bits or "",
     )

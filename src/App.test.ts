@@ -17,7 +17,7 @@ describe('Utility formatting functions', () => {
   });
 });
 
-describe('Tauri mock API bridge', () => {
+describe('client API bridge', () => {
   it('loads default project', async () => {
     const project = await api.getProject();
     expect(project).toBeDefined();

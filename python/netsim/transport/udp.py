@@ -40,6 +40,11 @@ def simulate_udp(
 
     link_next_free_us: list[int] = [0] * len(hop_links)
     link_queue_occupancy: list[int] = [0] * len(hop_links)
+    # Latest moment any datagram finished traversing the modelled hops. The per-hop tx_delay
+    # below is derived from each link's bandwidth, so this is what makes the reported completion
+    # time (and therefore throughput) respond to the topology instead of only to the sender's
+    # fixed pacing.
+    last_transit_us = 0
 
     client_node = config.source_node_id
     server_node = config.destination_node_id
@@ -168,12 +173,18 @@ def simulate_udp(
             )
             step_index += 1
 
+        last_transit_us = max(last_transit_us, transit_time)
         curr_time_us += 5000
 
     # Throughput (sender boundary) = every wire byte sent: datagram payload plus the
     # per-datagram IP+UDP headers (overhead.py). UDP never retransmits.
     # Goodput (receiver boundary)  = unique payload bytes of delivered datagrams.
-    completion_time_us = max(1, curr_time_us)
+    # Completion is when the transfer is actually finished on the network, not merely when the
+    # sender emitted its last datagram. Using the send schedule alone made completion_time_us
+    # (5000 us x N) independent of every link's bandwidth, so a bandwidth sweep produced a flat
+    # curve and -- on a 1 Mbps link -- reported ~1.64 Mbps of throughput, i.e. more than the link
+    # can physically carry. The sender still paces datagrams at 5000 us; the network now bounds it.
+    completion_time_us = max(1, curr_time_us, last_transit_us)
     header_bytes_sent = segments_sent * packet_overhead_bytes("UDP")
     wire_bytes_sent = bytes_sent + header_bytes_sent
     throughput_bits_per_sec = (wire_bytes_sent * 8.0 * 1_000_000.0) / float(completion_time_us)

@@ -34,6 +34,19 @@ interface ExperimentsWorkspaceProps {
   project: Project | null;
 }
 
+/**
+ * Sweep parameters that only mean something to the topology packet engine.
+ *
+ * The Python runner rejects these for the transport targets ("Parameter 'queue_capacity' is not
+ * supported for target 'tcp'"), and the Variable Parameter `<select>` hides their `<option>`s
+ * accordingly -- so this list must stay in step with the conditional options rendered below.
+ */
+const NETWORK_ONLY_SWEEP_PARAMS = ['queue_capacity', 'bit_error_rate', 'traffic_interval_us'];
+
+/** True when `param` is a legal sweep parameter for `target`. */
+const isSweepParamValidForTarget = (param: string, target: ExperimentTarget): boolean =>
+  target === 'network' || !NETWORK_ONLY_SWEEP_PARAMS.includes(param);
+
 export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<'sweep' | 'comparative'>('sweep');
   const [isRunning, setIsRunning] = useState<boolean>(false);
@@ -69,7 +82,17 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
     return numbers;
   };
 
-  // Quick Presets for Sweeps
+  /**
+   * Quick presets for sweeps, driven by the **Variable Parameter** control only.
+   *
+   * This used to also run when the *Experiment Target* changed, which silently overwrote the
+   * user's experiment label, the selected variable parameter and the whole sweep-values list with
+   * the `link_bandwidth` preset -- configuring a queue-capacity study and then switching the target
+   * to TCP destroyed the entire configuration. The target now only changes the target; parameter
+   * presets stay a property of the parameter dropdown. Incompatible target/parameter combinations
+   * are rejected by the Python service with an explicit message ("Parameter 'queue_capacity' is not
+   * supported for target 'tcp'"), which the error banner surfaces.
+   */
   const handleSweepPreset = (type: string) => {
     setSweepParamType(type);
     if (['queue_capacity', 'bit_error_rate', 'traffic_interval_us'].includes(type)) setSweepTarget('network');
@@ -240,7 +263,10 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
   return (
     <div className="flex-1 flex flex-col bg-slate-950 text-slate-100 overflow-y-auto">
       {/* Top Header */}
-      <div className="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur px-6 py-4 flex items-center justify-between">
+      {/* Stacking the header below sm: keeps the two-tab switcher fully on screen at phone widths;
+          side by side it needed ~470px and pushed "Comparative A/B" off the right edge behind a
+          horizontal scroller with no visible affordance. */}
+      <div className="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur px-6 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center space-x-2.5">
             <div className="p-1.5 rounded-lg bg-brand-500/10 text-brand-400 border border-brand-500/20">
@@ -360,7 +386,20 @@ export function ExperimentsWorkspace({ project }: ExperimentsWorkspaceProps) {
                   <label className="block text-slate-300 font-medium mb-1">Experiment Target</label>
                   <select aria-label="Experiment Target"
                     value={sweepTarget}
-                    onChange={(e) => { setSweepTarget(e.target.value as ExperimentTarget); handleSweepPreset('link_bandwidth'); }}
+                    onChange={(e) => {
+                      const nextTarget = e.target.value as ExperimentTarget;
+                      setSweepTarget(nextTarget);
+                      // The Variable Parameter <select> filters its options by target. Leaving a
+                      // network-only parameter selected under TCP/UDP rendered a `value` with no
+                      // matching <option>: the browser displayed the first option ("Link Bandwidth")
+                      // while React state still held e.g. "queue_capacity", so the sweep that was
+                      // submitted was not the one on screen. Reconcile it explicitly -- but only
+                      // when the current parameter genuinely cannot be used, so switching target no
+                      // longer discards a valid configuration.
+                      if (!isSweepParamValidForTarget(sweepParamType, nextTarget)) {
+                        handleSweepPreset('link_bandwidth');
+                      }
+                    }}
                     className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-brand-500"
                   >
                     <option value="network">Topology packets (timed injection)</option>

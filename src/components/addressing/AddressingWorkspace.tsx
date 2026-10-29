@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Hash,
   Sliders,
@@ -81,6 +81,31 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
   const [dnatDesc, setDnatDesc] = useState<string>('Web Server Forwarding');
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  /**
+   * The prefix the user has actually asked for, parsed from the CIDR field.
+   *
+   * The prefix slider used to be bound to `subnetInfo.prefix_length` -- the result of the last
+   * *completed* backend calculation. Because that value lags one async round-trip behind the
+   * keystroke, two rapid ArrowRight presses both incremented from the same stale value and one
+   * increment was silently swallowed (reproduced 7/8 trials). Binding the slider to the requested
+   * prefix makes it reflect user intent immediately; the result panel below still renders only
+   * what Python returned.
+   */
+  const requestedPrefix = useMemo<number>(() => {
+    const text = ipv4Input.trim();
+    const cidr = text.match(/\/\s*(\d{1,2})\s*$/);
+    if (cidr) return Number(cidr[1]);
+    // "10.0.0.1 255.255.255.0" form: count the mask's set bits.
+    const dotted = text.match(/(?:^|\s)(\d{1,3}(?:\.\d{1,3}){3})\s*$/);
+    if (dotted) {
+      const octets = dotted[1].split('.').map(Number);
+      if (octets.length === 4 && octets.every((o) => Number.isInteger(o) && o >= 0 && o <= 255)) {
+        return octets.reduce((bits, o) => bits + (o.toString(2).match(/1/g)?.length ?? 0), 0);
+      }
+    }
+    return subnetInfo?.prefix_length ?? 24;
+  }, [ipv4Input, subnetInfo]);
 
   // Calculate IPv4 subnet
   const calculateIpv4 = useCallback(async () => {
@@ -343,14 +368,14 @@ export const AddressingWorkspace: React.FC<AddressingWorkspaceProps> = ({ projec
             {subnetInfo && (
               <div className="w-full md:w-64">
                 <label className="block text-[11px] font-semibold text-slate-400 tracking-wider mb-1">
-                  Prefix Slider: /{subnetInfo.prefix_length}
+                  Prefix Slider: /{requestedPrefix}
                 </label>
                 <input
                   aria-label="Prefix Slider"
                   type="range"
                   min="0"
                   max="32"
-                  value={subnetInfo.prefix_length}
+                  value={requestedPrefix}
                   onChange={(e) => {
                     const newP = e.target.value;
                     const ipOnly = ipv4Input.split('/')[0].split(' ')[0];

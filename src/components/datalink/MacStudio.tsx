@@ -50,7 +50,7 @@ export const MacStudio: React.FC = () => {
   const [sweepPoints, setSweepPoints] = useState<SweepPoint[]>([]);
   const [sweeping, setSweeping] = useState<boolean>(false);
 
-  // Format persistence object for Tauri DTO
+  // Format the CSMA persistence setting for the saved-session DTO.
   const getPersistenceDto = (): CsmaPersistence => {
     if (persistenceMode === 'one_persistent') return 'one_persistent';
     if (persistenceMode === 'non_persistent') return 'non_persistent';

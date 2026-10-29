@@ -968,11 +968,19 @@ def dispatch_command(cmd: str, args: dict[str, Any]) -> Any:
         parity_mode = str(arg(args, "parity_mode", "parityMode", default="even")).lower()
         if parity_mode not in ("even", "odd"):
             raise CommandError(f"Unsupported parity mode '{parity_mode}'. Expected 'even' or 'odd'")
+        # When the caller supplies the extended word (overall parity P0 + Hamming codeword) the
+        # decoder can honour the SECDED claim and report a double-bit error as detected-but-
+        # uncorrectable instead of silently "correcting" it into a different, wrong codeword.
+        secded = bool(arg(args, "secded", default=False))
         try:
             # Return the full verification result: the client contract (see
             # `HammingVerifyResult` in src/types/datalink.ts) includes the syndrome, the corrected
             # codeword and the status message, which `hamming_decode` does not carry.
-            result = verify_and_correct_hamming(codeword, ParityMode.EVEN if parity_mode == "even" else ParityMode.ODD)
+            result = verify_and_correct_hamming(
+                codeword,
+                ParityMode.EVEN if parity_mode == "even" else ParityMode.ODD,
+                secded=secded,
+            )
             return result.to_dict()
         except ValueError as exc:
             raise CommandError(str(exc)) from exc

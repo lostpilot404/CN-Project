@@ -36,7 +36,13 @@ export interface HammingVerifyResult {
   syndrome_value: number;
   has_error: boolean;
   is_correctable: boolean;
-  error_type: 'none' | 'single_bit' | 'multiple_bit_unrecoverable' | string;
+  error_type:
+    | 'none'
+    | 'single_bit'
+    | 'single_bit_overall_parity'
+    | 'double_bit_detected'
+    | 'multiple_bit_unrecoverable'
+    | string;
   error_position: number | null;
   corrected_bits: string | null;
   extracted_data_bits: string | null;

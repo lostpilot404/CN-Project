@@ -1,0 +1,40 @@
+=== A) INVALID INPUTS: must be rejected honestly, never clamped-and-succeeded ===
+  bit_error               typed=5      HTTP=not sent  sent=null
+      visible msg: Bit error rate must be between 0.0 and 1.0 (received 5)
+  bit_error               typed=-1     HTTP=not sent  sent=null
+      visible msg: Bit error rate must be between 0.0 and 1.0 (received -1)
+  queue_capacity_change   typed=0      HTTP=not sent  sent=null
+      visible msg: Queue capacity must be a whole number >= 1 (received 0)
+  queue_capacity_change   typed=-7     HTTP=not sent  sent=null
+      visible msg: Queue capacity must be a whole number >= 1 (received -7)
+  queue_capacity_change   typed=2.5    HTTP=not sent  sent=null
+      visible msg: Queue capacity must be a whole number >= 1 (received 2.5)
+  bandwidth_degradation   typed=0      HTTP=not sent  sent=null
+      visible msg: New bandwidth must be >= 1 bps (received 0)
+  bandwidth_degradation   typed=-100   HTTP=not sent  sent=null
+      visible msg: New bandwidth must be >= 1 bps (received -100)
+
+=== B) VALID INPUTS: must still schedule (regression) ===
+  bit_error               typed=0.01   HTTP=200       sent={"type":"bit_error","link_id":"link-1","error_rate":0.01}
+      visible msg: Fault fault-7707 scheduled successfully at 5000 µs!
+  bit_error               typed=0      HTTP=200       sent={"type":"bit_error","link_id":"link-1","error_rate":0}
+      visible msg: Fault fault-8939 scheduled successfully at 5000 µs!
+  bit_error               typed=1      HTTP=200       sent={"type":"bit_error","link_id":"link-1","error_rate":1}
+      visible msg: Fault fault-0156 scheduled successfully at 5000 µs!
+  queue_capacity_change   typed=8      HTTP=200       sent={"type":"queue_capacity_change","link_id":"link-1","new_capacity":8}
+      visible msg: Fault fault-1390 scheduled successfully at 5000 µs!
+  bandwidth_degradation   typed=1000000 HTTP=200       sent={"type":"bandwidth_degradation","link_id":"link-1","new_bandwidth_bps":1000000}
+      visible msg: Fault fault-2623 scheduled successfully at 5000 µs!
+  link_down               typed=null   HTTP=200       sent={"type":"link_down","link_id":"link-1"}
+      visible msg: Fault fault-3839 scheduled successfully at 5000 µs!
+  link_restore            typed=null   HTTP=200       sent={"type":"link_restore","link_id":"link-1"}
+      visible msg: Fault fault-5056 scheduled successfully at 5000 µs!
+  node_failure            typed=null   HTTP=200       sent={"type":"node_failure","node_id":"node-1"}
+      visible msg: Fault fault-6273 scheduled successfully at 5000 µs!
+  node_recovery           typed=null   HTTP=200       sent={"type":"node_recovery","node_id":"node-1"}
+      visible msg: Fault fault-7489 scheduled successfully at 5000 µs!
+
+=== VERDICT ===
+  all invalid inputs blocked with a visible honest message: true
+  all valid inputs still scheduled successfully (HTTP 200): true
+  BER=0.01 forwarded verbatim (not clamped): {"type":"bit_error","link_id":"link-1","error_rate":0.01}

@@ -1,0 +1,46 @@
+=== SILENT NORMALIZATION PROOF (request bodies captured in the real browser) ===
+  user typed bit_error=5      -> SENT {"entry":{"fault_id":"fault-7781","timestamp_us":5000,"fault_type":{"type":"bit_error","link_id":"link-1","error_rate":1},"description":"Injected bit 
+                        HTTP 200  toast: "Fault fault-7781 scheduled successfully at 5000 µs!"
+  user typed bit_error=-1     -> SENT {"entry":{"fault_id":"fault-9447","timestamp_us":5000,"fault_type":{"type":"bit_error","link_id":"link-1","error_rate":0},"description":"Injected bit 
+                        HTTP 200  toast: "Fault fault-9447 scheduled successfully at 5000 µs!"
+  user typed queue_capacity_change=0      -> SENT {"entry":{"fault_id":"fault-1130","timestamp_us":5000,"fault_type":{"type":"queue_capacity_change","link_id":"link-1","new_capacity":1},"description":
+                        HTTP 200  toast: ""
+  user typed queue_capacity_change=-7     -> SENT {"entry":{"fault_id":"fault-2815","timestamp_us":5000,"fault_type":{"type":"queue_capacity_change","link_id":"link-1","new_capacity":1},"description":
+                        HTTP 200  toast: ""
+
+=== Scheduled-fault history panel text ===
+QoS Performance
+
+RFC 3393 educational IPDV jitter, throughput & goodput telemetry, category loss accounting, and runtime fault injection.
+
+Refresh Metrics
+Throughput (wire)
+0 bps
+Goodput (payload): 0 bps
+0 B/s
+Average Latency
+0.0 µs
+Min: —
+Max: —
+IPDV Jitter (RFC 3393)
+0.0 µs
+Samples evaluated: 0
+Packet Loss Rate
+0.00%
+Lost: 0
+Delivered: 0
+Loss Accounting by Root Cause
+Total Drops: 0
+Queue Buffer Overflow
+0 pkts
+Link Administratively Down
+0 pkts
+Physical Bit Error Corruption
+0 pkts
+Stochastic Link Drop Probability
+0 pkts
+TTL / Hop Limit Expired
+0 pkts
+No Route to Destination
+0 pkts
+Queue Buffe

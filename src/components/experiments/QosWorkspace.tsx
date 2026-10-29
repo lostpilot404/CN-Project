@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -34,6 +34,31 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
   const [faultTimestampUs, setFaultTimestampUs] = useState<number>(50000);
   const [faultParamValue, setFaultParamValue] = useState<number>(1000000);
   const [notification, setNotification] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const notifyTimer = useRef<number | null>(null);
+
+  /**
+   * Show a transient notification with exactly one dismissal timer.
+   *
+   * The previous code scheduled a fresh `setTimeout(() => setNotification(null), 3500)` per
+   * message and never cancelled the pending one, so two actions in quick succession left an
+   * older timer alive that wiped the *newer* message early -- an error could vanish before the
+   * user read it. Mirrors the single-timer guard App.tsx already uses for its toasts.
+   */
+  const notify = useCallback((msg: string, type: 'success' | 'error') => {
+    setNotification({ msg, type });
+    if (notifyTimer.current !== null) window.clearTimeout(notifyTimer.current);
+    notifyTimer.current = window.setTimeout(() => {
+      notifyTimer.current = null;
+      setNotification(null);
+    }, 3500);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (notifyTimer.current !== null) window.clearTimeout(notifyTimer.current);
+    },
+    [],
+  );
 
   const fetchMetrics = useCallback(async () => {
     setIsLoading(true);
@@ -62,7 +87,42 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
 
   const handleScheduleFault = async () => {
     if (!targetId) {
-      setNotification({ msg: 'Please select a valid target node or link', type: 'error' });
+      notify('Please select a valid target node or link', 'error');
+      return;
+    }
+
+    // Validate the parameter instead of silently clamping it. Clamping used to rewrite an
+    // out-of-range value before it left the browser (bit-error rate 5 became 1.0, -1 became 0.0,
+    // queue capacity 0 or -7 became 1) and then report "scheduled successfully" -- so the user got
+    // a success toast for a fault that was not the one they configured, and in the BER = 0 case a
+    // fault that does nothing at all. Python stays the authority: in-range values are forwarded
+    // untouched and the service re-validates them (it already answers 400 for bad bandwidth).
+    const needsParam =
+      faultType === 'bandwidth_degradation' ||
+      faultType === 'queue_capacity_change' ||
+      faultType === 'bit_error';
+    const reject = (msg: string) => notify(msg, 'error');
+    if (!Number.isFinite(faultTimestampUs) || faultTimestampUs < 0) {
+      reject(`Execution SimTime must be a number >= 0 µs (received ${faultTimestampUs})`);
+      return;
+    }
+    if (needsParam && !Number.isFinite(faultParamValue)) {
+      reject('Fault parameter must be a finite number');
+      return;
+    }
+    if (faultType === 'bit_error' && (faultParamValue < 0 || faultParamValue > 1)) {
+      reject(`Bit error rate must be between 0.0 and 1.0 (received ${faultParamValue})`);
+      return;
+    }
+    if (
+      faultType === 'queue_capacity_change' &&
+      (!Number.isInteger(faultParamValue) || faultParamValue < 1)
+    ) {
+      reject(`Queue capacity must be a whole number >= 1 (received ${faultParamValue})`);
+      return;
+    }
+    if (faultType === 'bandwidth_degradation' && faultParamValue < 1) {
+      reject(`New bandwidth must be >= 1 bps (received ${faultParamValue})`);
       return;
     }
 
@@ -80,7 +140,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
         ft = { type: 'bandwidth_degradation', link_id: targetId, new_bandwidth_bps: faultParamValue };
         break;
       case 'queue_capacity_change':
-        ft = { type: 'queue_capacity_change', link_id: targetId, new_capacity: Math.max(1, Math.round(faultParamValue)) };
+        ft = { type: 'queue_capacity_change', link_id: targetId, new_capacity: faultParamValue };
         break;
       case 'node_failure':
         ft = { type: 'node_failure', node_id: targetId };
@@ -89,7 +149,7 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
         ft = { type: 'node_recovery', node_id: targetId };
         break;
       case 'bit_error':
-        ft = { type: 'bit_error', link_id: targetId, error_rate: Math.min(1.0, Math.max(0.0, faultParamValue)) };
+        ft = { type: 'bit_error', link_id: targetId, error_rate: faultParamValue };
         break;
       case 'packet_drop':
         ft = { type: 'packet_drop', packet_id: targetId };
@@ -102,17 +162,18 @@ export function QosWorkspace({ project }: QosWorkspaceProps) {
       fault_id: fId,
       timestamp_us: faultTimestampUs,
       fault_type: ft,
-      description: `Injected ${faultType.replace('_', ' ')} on ${targetId} at ${faultTimestampUs} µs`,
+      description: `Injected ${faultType.replace(/_/g, ' ')} on ${targetId} at ${faultTimestampUs} µs${
+        needsParam ? ` (parameter ${faultParamValue})` : ''
+      }`,
     };
 
     try {
       await api.scheduleFault(entry);
       setScheduledFaults((prev) => [...prev, entry]);
-      setNotification({ msg: `Fault ${fId} scheduled successfully at ${faultTimestampUs} µs!`, type: 'success' });
-      setTimeout(() => setNotification(null), 3500);
+      notify(`Fault ${fId} scheduled successfully at ${faultTimestampUs} µs!`, 'success');
       fetchMetrics();
     } catch (err) {
-      setNotification({ msg: `Failed to schedule fault: ${err}`, type: 'error' });
+      notify(`Failed to schedule fault: ${err instanceof Error ? err.message : String(err)}`, 'error');
     }
   };
 

@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import http.client
 
-from conftest import API_PORT
+# Import from the uniquely named helper rather than `conftest`: python-tools/tests/ has a
+# conftest.py too and neither directory is a package, so the bare name was ambiguous.
+from _api_port import API_PORT
 from netsim.server import MAX_REQUEST_BYTES
 
 

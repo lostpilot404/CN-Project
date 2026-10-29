@@ -238,9 +238,13 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
       </div>
 
       {/* Main Studio Body */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Narrow screens: a fixed w-80 config panel plus a results panel whose min-content is ~0
+          (it wraps its content in an overflow-x-auto scroller) left the results column -- and the
+          primary Run button inside it -- collapsed to a ~17px sliver at phone widths. Stack the two
+          panels vertically below md: and let the whole body scroll instead. */}
+      <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
         {/* Left Config Panel */}
-        <aside className="w-80 border-r border-slate-800 bg-slate-900/30 p-4 overflow-y-auto space-y-4">
+        <aside className="w-full md:w-80 md:shrink-0 border-r border-slate-800 bg-slate-900/30 p-4 md:overflow-y-auto space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-slate-800">
             <span className="text-xs font-semibold text-slate-300">
               Simulation parameters
@@ -511,7 +515,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({ project 
         </aside>
 
         {/* Center / Right Content Panel */}
-        <section className="flex-1 flex flex-col overflow-y-auto p-6 space-y-6">
+        <section className="flex-1 min-w-0 flex flex-col md:overflow-y-auto p-6 space-y-6">
           {/* Active Studio Rendering */}
           {activeStudio === 'tcp' && (
             <TcpStudioView

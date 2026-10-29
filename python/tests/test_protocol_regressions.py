@@ -312,3 +312,52 @@ def test_qos_metrics_on_an_idle_project_are_zero_and_finite(api):
     for key, value in metrics.items():
         if isinstance(value, float):
             assert value == value, f"{key} is NaN"
+
+
+def test_udp_throughput_responds_to_link_bandwidth_and_never_exceeds_it(api):
+    """UDP is bounded by the topology it actually runs over.
+
+    The sender paces datagrams at a fixed 5000 us, but `completion_time_us` is when the transfer
+    finished on the network -- i.e. when the last datagram cleared the final hop. It used to be
+    taken from the send schedule alone (5000 us x N), which made UDP throughput identical at every
+    bandwidth and, on a 1 Mbps link, reported ~1.64 Mbps: more than the link can physically carry.
+    TCP already responded correctly, so any TCP-vs-UDP comparison was systematically biased.
+
+    Hand calculation for 4 x 1000 B datagrams over two hops with 1000 us propagation each:
+
+    * 1 Mbps   -> serialisation 8000 us/hop. The hops pipeline, so the 4th datagram is delivered
+                  at 42000 us; the send schedule ends at 20000 us. completion = 42000 us and
+                  throughput = (4000 + 4*28) * 8 / 42000 us = 783238 bps  (< 1 Mbps).
+    * 100 Mbps -> serialisation 80 us/hop, so the network drains faster than the sender paces:
+                  completion stays at the 20000 us send schedule and throughput = 1644800 bps.
+    """
+    measured: dict[int, dict] = {}
+    for bandwidth in (1_000_000, 100_000_000):
+        _two_hop(api, bandwidth_bps=bandwidth, propagation_us=1000)
+        result = api.result(
+            "simulate_udp",
+            {
+                "config": {
+                    "source_node_id": "node-1",
+                    "destination_node_id": "node-3",
+                    "payload_bytes": 4000,
+                    "segment_size_bytes": 1000,
+                    "seed": 42,
+                }
+            },
+        )
+        measured[bandwidth] = result["metrics"]
+
+    slow, fast = measured[1_000_000], measured[100_000_000]
+
+    assert slow["segments_delivered"] == 4 and fast["segments_delivered"] == 4, "no loss expected"
+    assert slow["completion_time_us"] == 42000
+    assert fast["completion_time_us"] == 20000
+    assert slow["throughput_bits_per_sec"] == pytest.approx(783238.0952380952, rel=1e-9)
+    assert fast["throughput_bits_per_sec"] == pytest.approx(1644800.0, rel=1e-9)
+
+    assert slow["completion_time_us"] > fast["completion_time_us"], "the slower link must take longer"
+    assert slow["throughput_bits_per_sec"] < fast["throughput_bits_per_sec"], "throughput must rise with bandwidth"
+    assert slow["throughput_bits_per_sec"] <= 1_000_000, (
+        "reported UDP throughput must not exceed the capacity of the link it traverses"
+    )

@@ -118,6 +118,36 @@ export function App() {
     refreshSimulation();
   }, [refreshProject, refreshSimulation]);
 
+  // Recovery re-probe. The simulation refresh below is gated on `backendStatus === 'online'`, so
+  // once the service drops out (or the page is opened before it starts) nothing polls it again:
+  // the indicator stayed pinned at OFFLINE even after the Python service came back, and only a
+  // manual action would notice. Re-probe on a slower cadence while disconnected and pull fresh
+  // state as soon as the service answers.
+  useEffect(() => {
+    if (backendStatus === 'online' || backendStatus === 'connecting') return;
+
+    const reprobe = () => {
+      // notify=false: checkBackendHealth would otherwise flip the status to 'connecting' first,
+      // which tears this effect down and stops the recovery loop after a single attempt.
+      void checkBackendHealth(false).then((health) => {
+        if (health) {
+          void refreshProject();
+          void refreshSimulation({ silent: true });
+        }
+      });
+    };
+    const timer = window.setInterval(reprobe, 3000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') reprobe();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [backendStatus, refreshProject, refreshSimulation]);
+
   // The protocol studios drive the engine directly, so nothing else updates this component
   // after a step, burst, run or inject. Without a periodic refresh the virtual clock in the
   // header stays frozen at the value it had when the page loaded.
