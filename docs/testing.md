@@ -2,8 +2,8 @@
 
 This document describes the test strategy actually implemented in this repository and the commands
 that run it. For the architecture under test, see [architecture.md](architecture.md) and the
-[README](../README.md). CI (`.github/workflows/ci.yml`) runs the same commands on every push and
-pull request.
+[README](../README.md). CI (`.github/workflows/ci.yml`) runs on pushes to `main`, pull requests and manual dispatch.
+The separate live-integration command below is not a CI step.
 
 ## 1. Objective
 
@@ -35,10 +35,10 @@ Accessibility audit          axe-core over every workspace + sub-view e2e/a11y.s
 Each layer is independent of the one above it. A lower layer failing is never masked by a higher
 layer passing.
 
-Continuous integration (`.github/workflows/ci.yml`) runs this same ladder on every push and pull
-request: the Python tests and utility tests with ruff and mypy; the front-end typecheck, unit
+Continuous integration (`.github/workflows/ci.yml`) runs the configured gate on pushes to `main`,
+pull requests and manual dispatch: the Python tests and utility tests with ruff and mypy; the front-end typecheck, unit
 tests and a production build (plus a check that the bundle contains only the inert test-double
-stub); and both browser suites from a cold start — Playwright's `webServer` starts the Python
+stub); and all three browser suites from a cold start — Playwright's `webServer` starts the Python
 service and the dev server itself, which is exactly the cold-start path that must stay green.
 CI pins **Node 22.22.2** and `package.json` declares `^22.22.2` (22.x LTS, 22.22.2+ within the
 22.x line — verified on 22.22.2/22.22.3; other majors are untested and Node 23.x/25.x are
@@ -220,7 +220,7 @@ What it does *not* establish, and what is therefore still unverified in the repo
 
 - axe analyses the **rendered state**. Hover, focus and active styling is not audited by a tool;
   those colours were checked against the WCAG contrast formula instead.
-- Dialogs and transient states are not opened by the audit.
+- Selected dialogs and an error toast are audited; other transient states are not exhaustively covered.
 - Automated rules are necessary but not sufficient for WCAG conformance: this suite passing is not
   a claim of conformance, and no manual screen-reader testing is possible in this environment.
 

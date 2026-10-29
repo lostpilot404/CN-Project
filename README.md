@@ -62,7 +62,7 @@ See [docs/architecture.md](docs/architecture.md) for component detail.
 ### Prerequisites
 
 - **Python 3.11+**
-- **Node.js 22.22.2+ (22.x LTS)** with npm — `package.json` declares `^22.22.2`; the front-end
+- **Node.js 22.22.2 or later within 22.x (LTS)** with npm — `package.json` declares `^22.22.2`; the front-end
   test stack does not run on Node 20.
 - A Chromium browser for the browser tests (Playwright can install one).
 
@@ -134,9 +134,10 @@ npx playwright install chromium   # or: NETSIM_CHROMIUM_PATH=/path/to/chromium
 npx playwright test
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same gate on every push and pull request — Python
+CI (`.github/workflows/ci.yml`) runs on pushes to `main`, pull requests, and manual dispatch — Python
 tests, ruff, mypy, typecheck, unit tests, production build (verified free of the test
-double), and the Playwright suites from a cold start. The 11 live-integration tests report
+double), and the Playwright suites from a cold start. The separate live-integration command is not a CI step.
+The 11 live-integration tests report
 as skipped unless `NETSIM_LIVE_API=1` is set. See [docs/testing.md](docs/testing.md).
 
 ## Scope and limitations
@@ -181,7 +182,8 @@ Additional notes:
 | `python-tools/` | Standalone analysis of exported experiment JSON, with its own tests |
 | `examples/` | Reproducible command-line examples |
 | `docs/` | Architecture, testing, user guide, algorithms, experiment workflow |
-| `.github/workflows/ci.yml` · `ci/` | CI gate (matches the commands above) |
+| `evidence/final-iceberg-audit/` | Historical audit report, defect register and retained captures (see provenance note) |
+| `.github/workflows/ci.yml` · `ci/` | CI gate and reporting helper |
 
 ## Documentation
 
@@ -190,3 +192,4 @@ Additional notes:
 - [Algorithms](docs/algorithms.md)
 - [Experiment workflow](docs/experiment-workflow.md)
 - [Testing](docs/testing.md)
+- [Cleanup inventory](docs/cleanup-inventory.md)
