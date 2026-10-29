@@ -1,0 +1,31 @@
+=== POST-FIX: invalid values must be REJECTED honestly, not clamped+success ===
+  bit_error               typed=5       sent=NO  HTTP=-  UI: Bit error rate must be between 0.0 and 1.0 (received 5)
+  bit_error               typed=-1      sent=NO  HTTP=-  UI: Bit error rate must be between 0.0 and 1.0 (received -1)
+  queue_capacity_change   typed=0       sent=NO  HTTP=-  UI: (no message)
+  queue_capacity_change   typed=-7      sent=NO  HTTP=-  UI: (no message)
+  queue_capacity_change   typed=2.5     sent=NO  HTTP=-  UI: (no message)
+  bandwidth_degradation   typed=0       sent=NO  HTTP=-  UI: (no message)
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+locator.fill: Error: Cannot type text into input[type=number]
+Call log:
+  - waiting for locator('#qos-fault-param-value')
+    - locator resolved to <input value="0" type="number" id="qos-fault-param-value" class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-brand-500 disabled:opacity-60"/>
+    - fill("x")
+  - attempting fill action
+    - waiting for element to be visible, enabled and editable
+
+    at run (/home/user/audit-scratch/s12_clamp_retest.mjs:14:41)
+    at async file:///home/user/audit-scratch/s12_clamp_retest.mjs:31:1 {
+  log: [
+    "  - waiting for locator('#qos-fault-param-value')",
+    '    - locator resolved to <input value="0" type="number" id="qos-fault-param-value" class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-brand-500 disabled:opacity-60"/>',
+    '    - fill("x")',
+    '  - attempting fill action',
+    '    - waiting for element to be visible, enabled and editable'
+  ]
+}
+
+Node.js v22.22.3

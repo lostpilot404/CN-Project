@@ -18,12 +18,13 @@ from typing import Any
 
 import pytest
 
-# Add the python directory to the path so `netsim` can be imported directly.
+# Add the python directory to the path so `netsim` can be imported directly, and this directory
+# so the sibling `_api_port` module resolves regardless of which test root pytest prepended first.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
+from _api_port import API_PORT  # noqa: E402
 from netsim.server import HTTPServer, NetSimRequestHandler  # noqa: E402
-
-API_PORT = 8798
 
 
 @pytest.fixture(scope="session")

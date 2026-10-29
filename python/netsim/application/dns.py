@@ -193,7 +193,16 @@ def get_default_dns_zone() -> list[DnsRecord]:
 
 def simulate_dns(config: DnsConfig, project: Project | None = None) -> DnsSimResult:
     zone = get_default_dns_zone()
-    zone.extend(config.custom_records)
+    # Merge the caller's records without duplicating the defaults. The browser client sends its own
+    # copy of the default zone as `custom_records`, so a blind `zone.extend(...)` put every default
+    # record in the zone twice: a single A query for www.example.com then returned two identical
+    # answers, and because payload_bytes_received is len(answers) * 32 + 64 the reported response
+    # size was inflated by 32 bytes. Exact duplicates are skipped, but genuinely distinct records
+    # are kept -- so real round-robin answers (same name and type, different value) still resolve to
+    # multiple records, and a caller can still add or override entries.
+    for record in config.custom_records:
+        if record not in zone:
+            zone.append(record)
 
     events: list[AppProtocolEvent] = []
     packets: list[Packet] = []

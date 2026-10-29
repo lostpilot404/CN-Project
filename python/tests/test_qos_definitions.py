@@ -14,6 +14,7 @@ Expected values are hand calculations from the documented header sizes
 
 from __future__ import annotations
 
+import pytest
 from netsim.core.engine import SimulationEngine
 from netsim.core.metrics import SimulationMetrics
 from netsim.core.overhead import (
@@ -233,10 +234,20 @@ def test_udp_service_results_report_headers_in_throughput_only(api):
     assert m["bytes_delivered"] == 8000
 
     t = m["completion_time_us"]
-    assert m["throughput_bits_per_sec"] == (8224 * 8.0 * 1_000_000.0) / t
-    assert m["goodput_bits_per_sec"] == (8000 * 8.0 * 1_000_000.0) / t
-    # The difference is exactly the header overhead rate.
-    assert m["throughput_bits_per_sec"] - m["goodput_bits_per_sec"] == (224 * 8.0 * 1_000_000.0) / t
+    assert m["throughput_bits_per_sec"] == pytest.approx((8224 * 8.0 * 1_000_000.0) / t, rel=1e-12)
+    assert m["goodput_bits_per_sec"] == pytest.approx((8000 * 8.0 * 1_000_000.0) / t, rel=1e-12)
+    # The difference is the header overhead rate. Compared with approx because it is a
+    # subtraction of two large floats: the identity is exact in real arithmetic but not in binary
+    # floating point for every completion time (it happened to be exact at the old t = 40000 and
+    # is off by ~1.2e-10 at t = 46600).
+    assert m["throughput_bits_per_sec"] - m["goodput_bits_per_sec"] == pytest.approx(
+        (224 * 8.0 * 1_000_000.0) / t, rel=1e-9
+    )
+
+    # completion_time_us is when the transfer actually finished on the network, not merely when
+    # the sender emitted its last datagram (8 x 5000 us pacing = 40000 us). The 8th datagram is
+    # still in flight after that, so completion must exceed the send schedule.
+    assert t > 8 * 5000
 
 
 def test_udp_with_loss_counts_only_delivered_payload_as_goodput(api):

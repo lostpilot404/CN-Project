@@ -56,7 +56,8 @@ class Node:
             self.interfaces = self.generate_default_interfaces()
 
     def generate_default_interfaces(self) -> list[Interface]:
-        # Hash matches Rust: fold 0u32 wrapping_mul 31 + b as u32
+        # 32-bit FNV-style fold: h = (h * 31 + byte) mod 2**32, matching the documented
+        # interface-naming hash so generated MAC/interface ids stay stable across runs.
         h = 0
         for b in self.id.encode("utf-8"):
             h = ((h * 31) + b) & 0xFFFFFFFF

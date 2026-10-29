@@ -307,8 +307,8 @@ export const api = {
     }),
   calculateHammingEncode: (dataBits: string, parityMode: ParityMode) =>
     callCommand<HammingEncodeResult>('calculate_hamming_encode', { dataBits, parityMode }),
-  verifyAndCorrectHamming: (codeword: string, parityMode: ParityMode) =>
-    callCommand<HammingVerifyResult>('verify_and_correct_hamming', { codeword, parityMode }),
+  verifyAndCorrectHamming: (codeword: string, parityMode: ParityMode, secded = false) =>
+    callCommand<HammingVerifyResult>('verify_and_correct_hamming', { codeword, parityMode, secded }),
   calculateCrc: (dataBits: string, polynomial: string, polyName?: string) =>
     callCommand<CrcCalculationResult>('calculate_crc', { dataBits, polynomial, polyName }),
   verifyCrc: (codeword: string, polynomial: string, polyName?: string) =>

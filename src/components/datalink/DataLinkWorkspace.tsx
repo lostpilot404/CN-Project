@@ -74,7 +74,10 @@ export const DataLinkWorkspace: React.FC = () => {
     try {
       const res = await api.calculateHammingEncode(hammingData, hammingParityMode);
       setHammingEncodeRes(res);
-      setHammingTestCodeword(res.encoded_bits);
+      // Drive the error-injection tester with the extended SECDED word (P0 + Hamming codeword).
+      // Using the plain codeword here meant the verifier had no overall-parity bit to consult,
+      // so a double-bit flip was reported as a corrected single-bit error with wrong data.
+      setHammingTestCodeword(res.encoded_bits_secded);
       setHammingVerifyRes(null);
     } catch (err: unknown) {
       setHammingEncodeRes(null);
@@ -90,7 +93,7 @@ export const DataLinkWorkspace: React.FC = () => {
     setHammingLoading(true);
     setHammingError(null);
     try {
-      const res = await api.verifyAndCorrectHamming(code, hammingParityMode);
+      const res = await api.verifyAndCorrectHamming(code, hammingParityMode, true);
       setHammingVerifyRes(res);
     } catch (err: unknown) {
       setHammingVerifyRes(null);
@@ -517,7 +520,7 @@ export const DataLinkWorkspace: React.FC = () => {
                   <div className="flex flex-wrap gap-2">
                     {hammingTestCodeword.split('').map((bit, idx) => {
                       const pos = idx + 1;
-                      const isCleanBit = bit === hammingEncodeRes.encoded_bits[idx];
+                      const isCleanBit = bit === hammingEncodeRes.encoded_bits_secded[idx];
                       return (
                         <button
                           key={pos}
@@ -528,7 +531,9 @@ export const DataLinkWorkspace: React.FC = () => {
                               : 'bg-slate-950 border-slate-700 text-slate-200 hover:border-brand-400'
                           }`}
                         >
-                          <span className="text-[10px] text-slate-400">pos {pos}</span>
+                          <span className="text-[10px] text-slate-400">
+                            {idx === 0 ? 'P0 (SECDED)' : `pos ${pos - 1}`}
+                          </span>
                           <span className="text-base font-bold">{bit}</span>
                           {!isCleanBit && (
                             <span className="text-[9px] text-rose-400 font-sans font-bold">

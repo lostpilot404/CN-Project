@@ -100,7 +100,10 @@ export const SwitchingWorkspace = ({ project }: SwitchingWorkspaceProps) => {
   return (
     <div className="h-full overflow-y-auto px-6 py-5 space-y-5" data-testid="switching-workspace">
       {/* Workspace header */}
-      <header className="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
+      {/* Below sm: the shrink-0 model attribution on the right kept its full width and pushed past
+          the viewport, truncating "Model: hop-count shortest path" / "Reservations: shared per link"
+          mid-phrase at phone widths. Stack the two blocks so the attribution stays readable. */}
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 border-b border-slate-800 pb-4">
         <div>
           <h1 className="text-lg font-bold text-slate-100 flex items-center gap-2">
             <Cable className="w-5 h-5 text-brand-400" aria-hidden="true" />
@@ -113,7 +116,7 @@ export const SwitchingWorkspace = ({ project }: SwitchingWorkspaceProps) => {
             engine, where each packet is forwarded independently.
           </p>
         </div>
-        <div className="text-[11px] text-slate-400 text-right shrink-0">
+        <div className="text-[11px] text-slate-400 sm:text-right sm:shrink-0">
           <div>Model: hop-count shortest path</div>
           <div>Reservations: shared per link</div>
         </div>

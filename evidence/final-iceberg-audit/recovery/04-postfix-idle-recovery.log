@@ -1,0 +1,26 @@
+baseline pid: 2603 status: ONLINE
+after kill pid: null status: OFFLINE
+backend restarted, pid: 2693
+backend /health reachable from node? true
+  idle t+2s status: ONLINE
+  idle t+4s status: ONLINE
+  idle t+6s status: ONLINE
+  idle t+8s status: ONLINE
+  idle t+10s status: ONLINE
+  idle t+12s status: ONLINE
+  idle t+14s status: ONLINE
+  idle t+16s status: ONLINE
+  idle t+18s status: ONLINE
+  idle t+20s status: ONLINE
+  idle t+22s status: ONLINE
+  idle t+24s status: ONLINE
+  idle t+26s status: ONLINE
+  idle t+28s status: ONLINE
+  idle t+30s status: ONLINE
+  idle t+32s status: ONLINE
+  idle t+34s status: ONLINE
+  idle t+36s status: ONLINE
+  idle t+38s status: ONLINE
+  idle t+40s status: ONLINE
+FINAL IDLE STATUS: ONLINE
+AFTER ONE USER ACTION status: ONLINE

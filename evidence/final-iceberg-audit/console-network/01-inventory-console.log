@@ -1,0 +1,365 @@
+ENGINE STATUS IN UI: ONLINE
+CORE VERSION BANNER: Python core v0.9.0
+BACKEND /health: {"status":"ok","backend":"python","authority":"python-simulation-core","version":"0.9.0","status_detail":"ready","current_time_us":0}
+
+=== WORKSPACE topology ("Topology Canvas") ===
+TABS: []
+BUTTONS (21): ["Add Workstation PC","Add Core Router","Add L2 Switch","Add Web Server","Add Wireless AP","Add Generic Host","Undo","Redo","Snap On","Connect","Keyboard shortcuts","Zoom In","Zoom Out","Fit View","Toggle Interactivity","Collapse the event timeline","Run 50ms","Run All","Step Event","Reset","Inject Packet"]
+TEXT HEAD:
+Add Devices
+Workstation PC
+Core Router
+L2 Switch
+Web Server
+Wireless AP
+Generic Host
+Undo
+Redo
+Snap On
+Connect
+Keys ?
+3 Nodes
+2 Links
+10 Mbps · 5.0ms
+10 Mbps · 5.0ms
+Workstation PC1
+192.168.1.10
+Core Router R1
+192.168.1.1
+Server S1
+10.0.0.100
+React Flow
+Discrete event timeline
+0 events logged
+No events matching the active filter criteria.
+Run a simulation burst or adjust filters.
+Run 50ms
+Run All
+Step Event
+Reset
+Inject Packet
+Delivered:
+0
+Dropped:
+0
+Queue: 0 / 0 done
+ready
+
+=== WORKSPACE routing ("Routing Studio") ===
+TABS: []
+BUTTONS (3): ["Recalculate Routes","Dijkstra (Link-State)","Bellman-Ford (DV)"]
+TEXT HEAD:
+Routing Studio
+Dijkstra link-state and Bellman-Ford distance-vector computation, routing tables and convergence rounds
+Recalculate Routes
+Source Device (Router)
+Core Router R1 (node-2)
+Routing Algorithm
+Dijkstra (Link-State)
+Bellman-Ford (DV)
+Live forwarding policy
+The routing tables above and real packet forwarding share this policy. Both algorithms select the same minimum-cost path with the same deterministic tie-break.
+Dijkstra
+Bellman-Ford
+Hop count
+Propagation delay
+Inverse bandwidth
+Cost Metric
+Hop Count (1 per link)
+Propagation Delay (µs)
+Inverse Bandwidth (Ceil(1G / bw))
+Routing Table for Core Router R1
+3 routes computed
+Destination	Next Hop	Interface	Metric	Reachable	Protocol
+Workst
+
+=== WORKSPACE addressing ("Addressing & NAT") ===
+TABS: []
+BUTTONS (7): ["IPv4 & CIDR Subnetting","True VLSM Allocator","Topology IP Auditor","IPv6 Inspector","NAT / NAPT Translation","Calculate","Generate Subnets"]
+TEXT HEAD:
+Addressing & NAT
+IPv4/CIDR calculations, true VLSM allocation, duplicate IP auditing, IPv6 RFC 5952, and stateful NAT/NAPT
+IPv4 & CIDR Subnetting
+True VLSM Allocator
+Topology IP Auditor
+IPv6 Inspector
+NAT / NAPT Translation
+IPv4 Address with CIDR Prefix or Subnet Mask
+Calculate
+Prefix Slider: /24
+Network Address
+192.168.1.0
+/24
+Broadcast Address
+192.168.1.255
+Wildcard: 0.0.0.255
+Usable Host Range
+192.168.1.1 - 192.168.1.254
+254 usable (256 total)
+Classification & Scope
+Class C
+Private (RFC 1918 192.168.0.0/16)
+Binary Dotted Notation
+IP Address Binary:
+11000000.10101000.00000001.00000000
+Subnet Mask Binary:
+11111111.11111111.11111111.00000000
+Equal-Prefix Subnet Splitting
+Splits base CIDR blo
+
+=== WORKSPACE simulation ("Simulation & Events") ===
+TABS: []
+BUTTONS (8): ["Run 50ms","Step Event","Run All","Reset","Inject Packet","Reset","5-Layer Encapsulation","Packet Inspector"]
+TEXT HEAD:
+Simulation & Events
+Discrete-event playback, packet injection and the full event timeline
+Run 50ms
+Step Event
+Run All
+Reset
+Inject Packet
+SimTime:
+0 µs
+Delivered: 0
+Dropped: 0
+Queue: 0
+Reset
+Layer
+All Layers
+Application
+Transport
+Network
+Data Link
+Physical
+Protocol
+All Protocols
+TCP
+UDP
+HTTP
+IPv4
+Ethernet
+Routing
+Event Type
+All Events
+Packet Created
+Queue Entered
+Transmission Started
+Transmission Finished
+Packet Arrived
+Packet Dropped
+Route Updated
+Fault Injected
+Timer Expired
+Application Event
+Status
+All Statuses
+Success / Delivered
+Dropped
+Error / Corrupted
+Retransmissions
+Node
+All Nodes
+node-1
+node-2
+node-3
+Link
+All Links
+link-1
+link-2
+Chronological Event Trace
+0 logged
+No events matching
+
+=== WORKSPACE algorithms ("Algorithm Studio") ===
+TABS: []
+BUTTONS (13): ["Error Control","Flow Control","Multiple Access","Hamming Code","CRC Polynomial","Internet Checksum","1011","1100101","1111","010101","Even Parity","Odd Parity","Encode into Hamming Codeword"]
+TEXT HEAD:
+Algorithm Studio
+Deterministic Python implementations of error control, flow control and multiple access
+Error Control
+Flow Control
+Multiple Access
+Hamming Code
+CRC Polynomial
+Internet Checksum
+Hamming Code Configuration
+Quick Data Presets:
+1011
+1100101
+1111
+010101
+Input Data Bits (Raw Binary)
+Configurable data bit width: Parity bits are placed dynamically at powers of two (positions 1, 2, 4, 8, ...).
+Parity Mode
+Even Parity
+Odd Parity
+Encode into Hamming Codeword
+
+=== WORKSPACE transport ("Transport Layer") ===
+TABS: []
+BUTTONS (6): ["TCP Studio","UDP Studio","Congestion Control","TCP vs UDP Comparison","Simulate TCP Transfer","Run Default TCP Simulation"]
+TEXT HEAD:
+Transport Layer
+TCP/UDP end-to-end simulation with Jacobson/Karn RTT estimation and Reno congestion control
+TCP Studio
+UDP Studio
+Congestion Control
+TCP vs UDP Comparison
+Simulation parameters
+L4 Endpoints
+Source Endpoint (Host A)
+Workstation PC1 (node-1)
+Core Router R1 (node-2)
+Server S1 (node-3)
+Destination Endpoint (Host B)
+Workstation PC1 (node-1)
+Core Router R1 (node-2)
+Server S1 (node-3)
+Src Port
+Dst Port
+Payload Size (Bytes)
+MSS (Bytes)
+Initial Seq
+Initial cwnd (MSS)
+ssthresh (MSS)
+Receive Window (rwnd Bytes)
+Initial RTO (µs)
+Seed
+Controlled Drops (0-indexed)
+Injects loss to trigger timeout/fast-retransmit
+Simulate TCP Transfer
+TCP Studio Ready
+Configure initial window sizes and click
+
+=== WORKSPACE application ("Application Layer") ===
+TABS: []
+BUTTONS (16): ["DNS Studio","HTTP Studio","FTP Studio","SMTP Studio","SNMP Studio","A Record","AAAA (IPv6)","CNAME","MX","NXDOMAIN","Recursive","Iterative","Simulate DNS Query","Headers","Encapsulation","Journey"]
+TEXT HEAD:
+Application Layer
+L7 workflows (DNS and HTTP) executed over the simulated TCP/UDP transport and link queues.
+DNS Studio
+HTTP Studio
+FTP Studio
+SMTP Studio
+SNMP Studio
+Query presets
+A Record
+AAAA (IPv6)
+CNAME
+MX
+NXDOMAIN
+Client Node
+Workstation PC1 (node-1)
+Core Router R1 (node-2)
+Server S1 (node-3)
+Local DNS Resolver
+Workstation PC1 (node-1)
+Core Router R1 (node-2)
+Server S1 (node-3)
+Query Domain Name
+Record Type
+A (IPv4 Address)
+AAAA (IPv6 Address)
+CNAME (Canonical Alias)
+MX (Mail Exchange)
+Query Resolution Mode
+Recursive
+Iterative
+Transaction ID (query_id)
+Simulate DNS Query
+5-Layer Packet Inspector
+Headers
+Encapsulation
+Journey
+No Packet Selected
+Inject a packet or click an event in the t
+
+=== WORKSPACE switching ("Circuit Switching") ===
+TABS: []
+BUTTONS (1): ["Establish Circuit"]
+TEXT HEAD:
+Circuit Switching
+Connection-oriented switching: setup reserves a dedicated data rate on every link of the routed path, admission control blocks requests that cannot be fully satisfied, and teardown releases the capacity. Distinct from the packet engine, where each packet is forwarded independently.
+Model: hop-count shortest path
+Reservations: shared per link
+Connection Setup
+Source node
+Workstation PC1 (node-1)
+Core Router R1 (node-2)
+Server S1 (node-3)
+Destination node
+Workstation PC1 (node-1)
+Core Router R1 (node-2)
+Server S1 (node-3)
+Reserved capacity (Mbps)
+Circuit ID (optional)
+Establish Circuit
+A request is admitted only when every link on the path can carry the full reserved rate. Re
+
+=== WORKSPACE qos ("QoS Performance") ===
+TABS: []
+BUTTONS (2): ["Refresh Metrics","Schedule Fault Event"]
+TEXT HEAD:
+QoS Performance
+RFC 3393 educational IPDV jitter, throughput & goodput telemetry, category loss accounting, and runtime fault injection.
+Refresh Metrics
+Throughput (wire)
+0 bps
+Goodput (payload): 0 bps
+0 B/s
+Average Latency
+0.0 µs
+Min: —
+Max: —
+IPDV Jitter (RFC 3393)
+0.0 µs
+Samples evaluated: 0
+Packet Loss Rate
+0.00%
+Lost: 0
+Delivered: 0
+Loss Accounting by Root Cause
+Total Drops: 0
+Queue Buffer Overflow
+0 pkts
+Link Administratively Down
+0 pkts
+Physical Bit Error Corruption
+0 pkts
+Stochastic Link Drop Probability
+0 pkts
+TTL / Hop Limit Expired
+0 pkts
+No Route to Destination
+0 pkts
+Queue Buffer & Flow Scope
+Interval: 0.0 µs
+Avg queue occupancy
+0.00 pkts
+Peak queue occupancy
+0 pkts
+Retransmissi
+
+=== WORKSPACE experiments ("Batch Experiments") ===
+TABS: []
+BUTTONS (9): ["Parameter Sweep","Comparative A/B","Download sweep JSON","Download A/B JSON","Bandwidth","Delay","Queue","Packet Size","Execute Parameter Sweep"]
+TEXT HEAD:
+Batch Experiments
+Controlled model experiments
+Execute deterministic parameter sweeps and comparative A/B studies across multiple pseudorandom seeds.
+Parameter Sweep
+Comparative A/B
+Topology packets use timed injection and a 100,000 µs drain. TCP/UDP run bulk transfers to completion (duration is not a cutoff); they do not model scheduled faults or stochastic link loss. Transport requires links ≥1 Mbps and delay ≥100 µs. Seeds do not randomize transport runs. TCP latency is an RTT/2 estimate; UDP latency and jitter are unavailable (zero placeholders), not measured zero delay. Other protocols use their dedicated studios.
+Download sweep JSON
+Download A/B JSON
+Sweep Design Configuration
+Presets:
+
+=== RECORDER SUMMARY ===
+{
+  "consoleErrors": 1,
+  "pageErrors": 0,
+  "failedRequests": 1,
+  "non2xx": [],
+  "apiCalls": 29
+}
