@@ -1,5 +1,12 @@
 # NetSim Interactive Computer Network Simulation Platform — Final Iceberg Manual Audit
 
+> **Evidence availability:** This is a historical audit. The checkout retains the captures in
+> this directory, but some cited one-off scripts (including `verify_algo.py`,
+> `verify_routing.py` and `s*.mjs`), `routing-hopcount.json`, downloaded exports and `/tmp`
+> replay files are not present in this checkout. Their original results cannot be independently
+> reproduced from those artifacts here; references to them below record the original audit, not
+> available repository files. No missing artifact was removed during this cleanup.
+
 **Repository:** `/home/user/CN-Project` · **Branch:** `arena/38e9d176-cn-project` · **Commits:**
 `c932d61` (defect fixes + evidence), `5e18e2d` (this report), plus a documentation-consistency
 commit recorded in `git log` (the branch head is re-verified against `origin` after every push)

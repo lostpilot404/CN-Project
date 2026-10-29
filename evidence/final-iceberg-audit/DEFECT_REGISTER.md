@@ -1,5 +1,12 @@
 # NetSim Iceberg Audit — Defect Register
 
+> **Evidence availability:** This is a historical audit. The checkout retains the captures in
+> this directory, but some cited one-off scripts (including `verify_algo.py`,
+> `verify_routing.py` and `s*.mjs`), `routing-hopcount.json`, downloaded exports and `/tmp`
+> replay files are not present in this checkout. Their original results cannot be independently
+> reproduced from those artifacts here; references to them below record the original audit, not
+> available repository files. No missing artifact was removed during this cleanup.
+
 Persistent across all six audit sections. Do not delete entries; update status in place.
 
 - **Repository:** `lostpilot404/CN-Project`
